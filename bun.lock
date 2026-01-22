@@ -41,6 +41,7 @@
         "@elysiajs/trpc": "^1.1.0",
         "@gloss/api": "workspace:*",
         "@gloss/auth": "workspace:*",
+        "@gloss/curius": "workspace:*",
         "@gloss/db": "workspace:*",
         "@gloss/env": "workspace:*",
         "@hono/trpc-server": "^0.4.0",
@@ -48,6 +49,7 @@
         "better-auth": "catalog:",
         "dotenv": "catalog:",
         "elysia": "catalog:",
+        "nanoid": "^5.1.5",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -64,6 +66,7 @@
         "@base-ui/react": "^1.0.0",
         "@gloss/api": "workspace:*",
         "@gloss/auth": "workspace:*",
+        "@gloss/db": "workspace:*",
         "@gloss/env": "workspace:*",
         "@hookform/resolvers": "^5.1.1",
         "@tailwindcss/vite": "^4.0.15",
@@ -77,6 +80,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "dotenv": "catalog:",
+        "drizzle-orm": "^0.45.1",
         "lucide-react": "^0.473.0",
         "next-themes": "^0.4.6",
         "react": "19.2.3",
@@ -106,11 +110,13 @@
       "name": "@gloss/api",
       "dependencies": {
         "@gloss/auth": "workspace:*",
+        "@gloss/curius": "workspace:*",
         "@gloss/db": "workspace:*",
         "@gloss/env": "workspace:*",
         "@trpc/client": "catalog:",
         "@trpc/server": "catalog:",
         "dotenv": "catalog:",
+        "nanoid": "^5.1.5",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -1308,7 +1314,7 @@
 
     "nano-spawn": ["nano-spawn@1.0.3", "", {}, "sha512-jtpsQDetTnvS2Ts1fiRdci5rx0VYws5jGyC+4IYOTnIQ/wwdf6JdomlHBwqC3bJYOvaKu0C2GSZ1A60anrYpaA=="],
 
-    "nanoid": ["nanoid@3.3.11", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w=="],
+    "nanoid": ["nanoid@5.1.6", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-c7+7RQ+dMB5dPwwCp4ee1/iV/q2P6aK1mTZcfr1BTuVlyW9hJYiMPybJCcnBlQtuSmTIWNeazm/zqNoZSSElBg=="],
 
     "nanostores": ["nanostores@1.1.0", "", {}, "sha512-yJBmDJr18xy47dbNVlHcgdPrulSn1nhSE6Ns9vTG+Nx9VPT6iV1MD6aQFp/t52zpf82FhLLTXAXr30NuCnxvwA=="],
 
@@ -1915,6 +1921,8 @@
     "npm-run-path/path-key": ["path-key@4.0.0", "", {}, "sha512-haREypq7xkM7ErfgIyA0z+Bj4AGKlMSdlQE2jvJo6huWD1EdkKYV+G/T4nq0YEF2vgTT8kqMFKo1uHn950r4SQ=="],
 
     "parse-json/type-fest": ["type-fest@3.13.1", "", {}, "sha512-tLq3bSNx+xSpwvAJnzrK0Ep5CLNWjvFTOp71URMaAEWBfRb9nnJiBoUe0tF8bI4ZFO3omgBR6NvnbzVUT3Ly4g=="],
+
+    "postcss/nanoid": ["nanoid@3.3.11", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w=="],
 
     "prompts/kleur": ["kleur@3.0.3", "", {}, "sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w=="],
 

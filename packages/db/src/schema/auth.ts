@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { curiusCredentials } from "./curius";
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -73,9 +74,10 @@ export const verification = pgTable(
 	(table) => [index("verification_identifier_idx").on(table.identifier)]
 );
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ many, one }) => ({
 	sessions: many(session),
 	accounts: many(account),
+	curiusCredentials: one(curiusCredentials),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

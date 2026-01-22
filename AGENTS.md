@@ -81,7 +81,6 @@ Define in `packages/api/src/routers/index.ts`:
 ### Server (`apps/server/.env`)
 ```
 DATABASE_URL=postgresql://...
-DATABASE_HOST, DATABASE_USERNAME, DATABASE_PASSWORD
 BETTER_AUTH_SECRET=<min 32 chars>
 BETTER_AUTH_URL=http://localhost:3000
 CORS_ORIGIN=http://localhost:3001

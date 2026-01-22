@@ -174,7 +174,7 @@ export class CuriusClient {
 	 * Get the current authenticated user's profile
 	 */
 	async getUser(): Promise<CuriusUser> {
-		return this.request(
+		return await this.request(
 			ENDPOINTS.GET_USER,
 			{ method: "GET" },
 			getUserResponseSchema
@@ -206,7 +206,7 @@ export class CuriusClient {
 		highlightText?: string;
 		highlightPosition?: HighlightPosition;
 	}): Promise<CuriusLink> {
-		return this.request(
+		return await this.request(
 			ENDPOINTS.ADD_LINK,
 			{
 				method: "POST",
@@ -241,7 +241,7 @@ export class CuriusClient {
 	 * Get friend/network links for a URL (highlights from people you follow)
 	 */
 	async getNetworkLinks(url: string): Promise<NetworkLink[]> {
-		return this.request(
+		return await this.request(
 			ENDPOINTS.GET_NETWORK_LINKS,
 			{
 				method: "POST",
@@ -281,7 +281,7 @@ export class CuriusClient {
 		linkId: string,
 		position: HighlightPosition
 	): Promise<CuriusHighlight> {
-		return this.request(
+		return await this.request(
 			ENDPOINTS.ADD_HIGHLIGHT(linkId),
 			{
 				method: "POST",

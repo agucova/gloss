@@ -9,11 +9,14 @@ COPY turbo.json ./
 
 # Copy workspace package.json files for dependency resolution
 COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
+COPY apps/extension/package.json ./apps/extension/
 COPY packages/api/package.json ./packages/api/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/db/package.json ./packages/db/
 COPY packages/env/package.json ./packages/env/
 COPY packages/config/package.json ./packages/config/
+COPY packages/curius/package.json ./packages/curius/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

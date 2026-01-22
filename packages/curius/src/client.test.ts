@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { CuriusClient } from "./client";
 import {
 	CuriusAuthError,
@@ -8,50 +8,44 @@ import {
 	CuriusValidationError,
 } from "./errors";
 
-// Mock fetch globally
-const originalFetch = globalThis.fetch;
+describe("CuriusClient", () => {
+	let client: CuriusClient;
+	let fetchSpy: ReturnType<typeof spyOn>;
 
-function mockFetch(
-	response: unknown,
-	options: { status?: number; headers?: Record<string, string> } = {}
-) {
-	const { status = 200, headers = {} } = options;
-	const mockFn = mock(() =>
-		Promise.resolve(
-			new Response(JSON.stringify(response), {
+	function mockFetchResponse(
+		body: unknown,
+		options: { status?: number; headers?: Record<string, string> } = {}
+	) {
+		const { status = 200, headers = {} } = options;
+		fetchSpy.mockResolvedValue(
+			new Response(JSON.stringify(body), {
 				status,
 				headers: { "Content-Type": "application/json", ...headers },
 			})
-		)
-	);
-	globalThis.fetch = mockFn as unknown as typeof fetch;
-}
+		);
+	}
 
-function mockFetchError(
-	status: number,
-	body?: unknown,
-	headers?: Record<string, string>
-) {
-	const mockFn = mock(() =>
-		Promise.resolve(
+	function mockFetchError(
+		status: number,
+		body?: unknown,
+		headers?: Record<string, string>
+	) {
+		fetchSpy.mockResolvedValue(
 			new Response(body ? JSON.stringify(body) : null, {
 				status,
 				headers: headers ?? {},
 			})
-		)
-	);
-	globalThis.fetch = mockFn as unknown as typeof fetch;
-}
+		);
+	}
 
-describe("CuriusClient", () => {
-	let client: CuriusClient;
-
+	// Setup fresh client and spy for each test
 	beforeEach(() => {
 		client = new CuriusClient({ token: "test-token-123" });
+		fetchSpy = spyOn(globalThis, "fetch");
 	});
 
 	afterEach(() => {
-		globalThis.fetch = originalFetch;
+		fetchSpy.mockRestore();
 	});
 
 	// =========================================================================
@@ -66,7 +60,7 @@ describe("CuriusClient", () => {
 				lastName: "User",
 				userLink: "testuser",
 			};
-			mockFetch(mockUser);
+			mockFetchResponse(mockUser);
 
 			const user = await client.getUser();
 
@@ -79,13 +73,13 @@ describe("CuriusClient", () => {
 		test("throws CuriusAuthError on 401", async () => {
 			mockFetchError(401);
 
-			expect(client.getUser()).rejects.toThrow(CuriusAuthError);
+			await expect(client.getUser()).rejects.toThrow(CuriusAuthError);
 		});
 
 		test("throws CuriusValidationError on invalid response", async () => {
-			mockFetch({ invalid: "data" }); // Missing required fields
+			mockFetchResponse({ invalid: "data" }); // Missing required fields
 
-			expect(client.getUser()).rejects.toThrow(CuriusValidationError);
+			await expect(client.getUser()).rejects.toThrow(CuriusValidationError);
 		});
 
 		test("sends correct authorization header", async () => {
@@ -95,11 +89,11 @@ describe("CuriusClient", () => {
 				lastName: "User",
 				userLink: "testuser",
 			};
-			mockFetch(mockUser);
+			mockFetchResponse(mockUser);
 
 			await client.getUser();
 
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/user",
 				expect.objectContaining({
 					headers: expect.objectContaining({
@@ -128,7 +122,7 @@ describe("CuriusClient", () => {
 					},
 				],
 			};
-			mockFetch(mockResponse);
+			mockFetchResponse(mockResponse);
 
 			const following = await client.getFollowing();
 
@@ -151,7 +145,7 @@ describe("CuriusClient", () => {
 				highlights: [],
 				nHighlights: 0,
 			};
-			mockFetch(mockLink);
+			mockFetchResponse(mockLink);
 
 			const link = await client.addLink({ url: "https://example.com" });
 
@@ -167,11 +161,11 @@ describe("CuriusClient", () => {
 				highlights: [],
 				nHighlights: 0,
 			};
-			mockFetch(mockLink);
+			mockFetchResponse(mockLink);
 
 			await client.addLink({ url: "https://example.com", title: "My Title" });
 
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links",
 				expect.objectContaining({
 					method: "POST",
@@ -192,7 +186,7 @@ describe("CuriusClient", () => {
 				highlights: [],
 				nHighlights: 0,
 			};
-			mockFetch(mockLink);
+			mockFetchResponse(mockLink);
 
 			const link = await client.getLinkByUrl("https://example.com");
 
@@ -229,7 +223,7 @@ describe("CuriusClient", () => {
 					},
 				},
 			];
-			mockFetch(mockResponse);
+			mockFetchResponse(mockResponse);
 
 			const links = await client.getNetworkLinks("https://example.com");
 
@@ -239,7 +233,7 @@ describe("CuriusClient", () => {
 		});
 
 		test("returns empty array when no network links", async () => {
-			mockFetch([]);
+			mockFetchResponse([]);
 
 			const links = await client.getNetworkLinks("https://example.com");
 
@@ -249,11 +243,11 @@ describe("CuriusClient", () => {
 
 	describe("deleteLink", () => {
 		test("calls correct endpoint", async () => {
-			mockFetch({});
+			mockFetchResponse({});
 
 			await client.deleteLink("link-123");
 
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links/link-123",
 				expect.objectContaining({ method: "DELETE" })
 			);
@@ -270,7 +264,7 @@ describe("CuriusClient", () => {
 				id: "h-123",
 				highlight: "Selected text",
 			};
-			mockFetch(mockHighlight);
+			mockFetchResponse(mockHighlight);
 
 			const position = {
 				rawHighlight: "Selected text",
@@ -281,7 +275,7 @@ describe("CuriusClient", () => {
 			const highlight = await client.addHighlight("link-123", position);
 
 			expect(highlight.id).toBe("h-123");
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links/link-123/highlights",
 				expect.objectContaining({
 					method: "POST",
@@ -293,11 +287,11 @@ describe("CuriusClient", () => {
 
 	describe("deleteHighlight", () => {
 		test("sends highlight text in body", async () => {
-			mockFetch({});
+			mockFetchResponse({});
 
 			await client.deleteHighlight("link-123", "text to delete");
 
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links/link-123/highlights",
 				expect.objectContaining({
 					method: "DELETE",
@@ -315,13 +309,13 @@ describe("CuriusClient", () => {
 		test("throws CuriusAuthError on 401", async () => {
 			mockFetchError(401);
 
-			expect(client.getUser()).rejects.toThrow(CuriusAuthError);
+			await expect(client.getUser()).rejects.toThrow(CuriusAuthError);
 		});
 
 		test("throws CuriusNotFoundError on 404", async () => {
 			mockFetchError(404);
 
-			expect(client.deleteLink("nonexistent")).rejects.toThrow(
+			await expect(client.deleteLink("nonexistent")).rejects.toThrow(
 				CuriusNotFoundError
 			);
 		});
@@ -369,7 +363,7 @@ describe("CuriusClient", () => {
 
 	describe("verifyToken", () => {
 		test("returns true for valid token", async () => {
-			mockFetch({
+			mockFetchResponse({
 				id: "user-123",
 				firstName: "Test",
 				lastName: "User",
@@ -392,7 +386,7 @@ describe("CuriusClient", () => {
 		test("throws on other errors", async () => {
 			mockFetchError(500);
 
-			expect(client.verifyToken()).rejects.toThrow(CuriusError);
+			await expect(client.verifyToken()).rejects.toThrow(CuriusError);
 		});
 	});
 
@@ -406,7 +400,7 @@ describe("CuriusClient", () => {
 				token: "test",
 				baseUrl: "https://custom.curius.app",
 			});
-			mockFetch({
+			mockFetchResponse({
 				id: "user-123",
 				firstName: "Test",
 				lastName: "User",
@@ -415,7 +409,7 @@ describe("CuriusClient", () => {
 
 			await customClient.getUser();
 
-			expect(globalThis.fetch).toHaveBeenCalledWith(
+			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://custom.curius.app/api/user",
 				expect.anything()
 			);

@@ -12,11 +12,13 @@
   "scripts": {},
   "dependencies": {
     "@gloss/auth": "workspace:*",
+    "@gloss/curius": "workspace:*",
     "@gloss/db": "workspace:*",
     "@gloss/env": "workspace:*",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "dotenv": "catalog:",
+    "nanoid": "^5.1.5",
     "zod": "catalog:"
   },
   "devDependencies": {
