@@ -1,0 +1,39 @@
+# Dependencies (will be installed fresh in container)
+node_modules
+
+# Build outputs
+dist
+.output
+.turbo
+
+# Environment files (secrets should come from Railway)
+.env
+.env.*
+!.env.example
+
+# IDE and editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Extension build outputs
+apps/extension/.output
+apps/extension/.wxt
+
+# Web build outputs (not needed for server)
+apps/web/dist
+
+# Test and dev files
+*.test.ts
+*.spec.ts
+coverage
+.nyc_output

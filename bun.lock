@@ -137,6 +137,17 @@
       "name": "@gloss/config",
       "version": "0.0.0",
     },
+    "packages/curius": {
+      "name": "@gloss/curius",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@gloss/config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/db": {
       "name": "@gloss/db",
       "dependencies": {
@@ -374,6 +385,8 @@
     "@gloss/auth": ["@gloss/auth@workspace:packages/auth"],
 
     "@gloss/config": ["@gloss/config@workspace:packages/config"],
+
+    "@gloss/curius": ["@gloss/curius@workspace:packages/curius"],
 
     "@gloss/db": ["@gloss/db@workspace:packages/db"],
 

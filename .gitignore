@@ -36,6 +36,9 @@ lerna-debug.log*
 # Turbo
 .turbo
 
+# WXT (browser extension generated files)
+.wxt
+
 # Better-T-Stack
 .alchemy
 

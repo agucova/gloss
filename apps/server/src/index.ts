@@ -6,7 +6,7 @@ import { env } from "@gloss/env/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Elysia } from "elysia";
 
-const app = new Elysia()
+export const app = new Elysia()
 	.use(
 		cors({
 			origin: env.CORS_ORIGIN,
@@ -32,6 +32,6 @@ const app = new Elysia()
 		return res;
 	})
 	.get("/", () => "OK")
-	.listen(3000, () => {
-		console.log("Server is running on http://localhost:3000");
+	.listen(env.PORT, () => {
+		console.log(`Server is running on port ${env.PORT}`);
 	});
