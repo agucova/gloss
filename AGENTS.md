@@ -49,27 +49,42 @@ apps/
   extension/    # Browser extension (WXT)
 
 packages/
-  api/          # tRPC router definitions and procedures
+  api/          # Shared API types and utilities
   auth/         # Better-Auth configuration
+  curius/       # Curius API client (reverse-engineered API for highlight import)
   db/           # Drizzle schema and database connection
   env/          # Environment variable validation (@t3-oss/env-core)
   config/       # Shared TypeScript config
 ```
 
 ### Data Flow
-1. **Web/Extension → Server**: tRPC client (`@trpc/client`) calls to `/trpc/*` endpoint
+1. **Web/Extension → Server**: Eden Treaty client (`@elysiajs/eden`) for end-to-end type-safe API calls
 2. **Authentication**: Better-Auth handles `/api/auth/*`, stores sessions in PostgreSQL
 3. **Database**: Drizzle ORM with PostgreSQL, schema in `packages/db/src/schema/`
 
 ### Key Type-Safety Patterns
-- **tRPC**: `AppRouter` type exported from `packages/api/src/routers/index.ts` enables end-to-end type inference
+- **Eden Treaty**: Server exports `App` type from `apps/server/src/index.ts`, clients import it for full type inference
 - **Environment**: Validated via Zod schemas in `packages/env/` - server vars in `server.ts`, client (VITE_) vars in `web.ts`
-- **Auth context**: `createContext()` in `packages/api/src/context.ts` extracts session from request headers
+- **Auth**: Session derived via `.derive()` middleware, available as `session` in route handlers
 
-### Adding tRPC Procedures
-Define in `packages/api/src/routers/index.ts`:
-- `publicProcedure` - no auth required
-- `protectedProcedure` - requires valid session, provides `ctx.session.user`
+### Adding API Routes
+Define routes in `apps/server/src/routes/` using Elysia:
+```typescript
+export const myRoutes = new Elysia({ prefix: "/my-prefix" })
+  .derive(async ({ request }) => {
+    // Derive session or other context
+    const session = await auth.api.getSession({ headers: request.headers });
+    return { session };
+  })
+  .get("/endpoint", ({ session, set }) => {
+    if (!session) { set.status = 401; return { error: "Auth required" }; }
+    return { data: "..." };
+  })
+  .post("/endpoint", ({ body, session }) => { ... }, {
+    body: t.Object({ field: t.String() })  // Validation with Elysia's t
+  });
+```
+Then mount in `apps/server/src/index.ts` with `.use(myRoutes)`.
 
 ### Adding Database Tables
 1. Create schema in `packages/db/src/schema/`

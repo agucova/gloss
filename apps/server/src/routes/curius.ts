@@ -1,9 +1,9 @@
+import { auth } from "@gloss/auth";
 import { CuriusAuthError, CuriusClient, CuriusError } from "@gloss/curius";
 import { db, eq } from "@gloss/db";
 import { curiusCredentials } from "@gloss/db/schema";
-import type { Session } from "better-auth";
+import { createId } from "@paralleldrive/cuid2";
 import { Elysia, t } from "elysia";
-import { nanoid } from "nanoid";
 
 /**
  * Get or create a Curius client for a user.
@@ -26,24 +26,19 @@ async function getCuriusClient(userId: string): Promise<CuriusClient | null> {
  * Uses Eden Treaty for type-safe client consumption
  */
 export const curiusRoutes = new Elysia({ prefix: "/curius" })
-	// Derive session from parent context
-	.derive(({ store }) => {
-		const session = (store as { session?: Session }).session;
+	// Derive session for all curius routes
+	.derive(async ({ request }) => {
+		const session = await auth.api.getSession({
+			headers: request.headers,
+		});
 		return { session };
-	})
-	// Guard all routes - require authentication
-	.guard({
-		beforeHandle: ({ session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
-			}
-		},
 	})
 
 	// Get connection status
-	.get("/status", async ({ session, error }) => {
-		if (!session?.user) {
-			return error(401, { message: "Authentication required" });
+	.get("/status", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
 		}
 
 		const credentials = await db.query.curiusCredentials.findFirst({
@@ -65,27 +60,30 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Connect Curius account
 	.post(
 		"/connect",
-		async ({ body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = new CuriusClient({ token: body.token });
 
 			// Verify the token and get user info
-			let curiusUser;
+			let curiusUser: Awaited<ReturnType<typeof client.getUser>>;
 			try {
 				curiusUser = await client.getUser();
 			} catch (err) {
 				if (err instanceof CuriusAuthError) {
-					return error(401, { message: "Invalid Curius token" });
+					set.status = 401;
+					return { error: "Invalid Curius token" };
 				}
-				return error(500, {
-					message:
+				set.status = 500;
+				return {
+					error:
 						err instanceof CuriusError
 							? err.message
 							: "Failed to verify Curius token",
-				});
+				};
 			}
 
 			// Upsert the credentials
@@ -105,7 +103,7 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 					.where(eq(curiusCredentials.userId, session.user.id));
 			} else {
 				await db.insert(curiusCredentials).values({
-					id: nanoid(),
+					id: createId(),
 					userId: session.user.id,
 					token: body.token,
 					curiusUserId: curiusUser.id,
@@ -128,9 +126,10 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	)
 
 	// Disconnect Curius account
-	.delete("/disconnect", async ({ session, error }) => {
-		if (!session?.user) {
-			return error(401, { message: "Authentication required" });
+	.delete("/disconnect", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
 		}
 
 		await db
@@ -141,35 +140,40 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	})
 
 	// Get Curius user profile
-	.get("/user", async ({ session, error }) => {
-		if (!session?.user) {
-			return error(401, { message: "Authentication required" });
+	.get("/user", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
 		}
 
 		const client = await getCuriusClient(session.user.id);
 		if (!client) {
-			return error(412, { message: "Curius account not connected" });
+			set.status = 412;
+			return { error: "Curius account not connected" };
 		}
 
 		try {
 			return await client.getUser();
 		} catch (err) {
 			if (err instanceof CuriusAuthError) {
-				return error(401, { message: "Curius token expired or invalid" });
+				set.status = 401;
+				return { error: "Curius token expired or invalid" };
 			}
 			throw err;
 		}
 	})
 
 	// Get following list
-	.get("/following", async ({ session, error }) => {
-		if (!session?.user) {
-			return error(401, { message: "Authentication required" });
+	.get("/following", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
 		}
 
 		const client = await getCuriusClient(session.user.id);
 		if (!client) {
-			return error(412, { message: "Curius account not connected" });
+			set.status = 412;
+			return { error: "Curius account not connected" };
 		}
 
 		return await client.getFollowing();
@@ -178,14 +182,16 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Get link by URL
 	.post(
 		"/links/by-url",
-		async ({ body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = await getCuriusClient(session.user.id);
 			if (!client) {
-				return error(412, { message: "Curius account not connected" });
+				set.status = 412;
+				return { error: "Curius account not connected" };
 			}
 
 			return await client.getLinkByUrl(body.url);
@@ -200,14 +206,16 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Get network highlights for a URL
 	.post(
 		"/links/network",
-		async ({ body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = await getCuriusClient(session.user.id);
 			if (!client) {
-				return error(412, { message: "Curius account not connected" });
+				set.status = 412;
+				return { error: "Curius account not connected" };
 			}
 
 			return await client.getNetworkLinks(body.url);
@@ -222,14 +230,16 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Add a link
 	.post(
 		"/links",
-		async ({ body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = await getCuriusClient(session.user.id);
 			if (!client) {
-				return error(412, { message: "Curius account not connected" });
+				set.status = 412;
+				return { error: "Curius account not connected" };
 			}
 
 			return await client.addLink(body);
@@ -245,14 +255,16 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Add a highlight to a link
 	.post(
 		"/links/:linkId/highlights",
-		async ({ params, body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ params, body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = await getCuriusClient(session.user.id);
 			if (!client) {
-				return error(412, { message: "Curius account not connected" });
+				set.status = 412;
+				return { error: "Curius account not connected" };
 			}
 
 			return await client.addHighlight(params.linkId, body.position);
@@ -275,14 +287,16 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 	// Delete a highlight from a link
 	.delete(
 		"/links/:linkId/highlights",
-		async ({ params, body, session, error }) => {
-			if (!session?.user) {
-				return error(401, { message: "Authentication required" });
+		async ({ params, body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
 			}
 
 			const client = await getCuriusClient(session.user.id);
 			if (!client) {
-				return error(412, { message: "Curius account not connected" });
+				set.status = 412;
+				return { error: "Curius account not connected" };
 			}
 
 			await client.deleteHighlight(params.linkId, body.highlightText);

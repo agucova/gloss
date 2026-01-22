@@ -11,18 +11,15 @@
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",
-    "@elysiajs/trpc": "^1.1.0",
     "@gloss/api": "workspace:*",
     "@gloss/auth": "workspace:*",
     "@gloss/curius": "workspace:*",
     "@gloss/db": "workspace:*",
     "@gloss/env": "workspace:*",
-    "@hono/trpc-server": "^0.4.0",
-    "@trpc/server": "catalog:",
+    "@paralleldrive/cuid2": "^3.0.6",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "elysia": "catalog:",
-    "nanoid": "^5.1.5",
     "zod": "catalog:"
   },
   "devDependencies": {

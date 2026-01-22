@@ -1,25 +1,20 @@
-import { initTRPC, TRPCError } from "@trpc/server";
+import { Elysia } from "elysia";
+import { bookmarks } from "./routes/bookmarks";
+import { feed } from "./routes/feed";
+import { friendships } from "./routes/friendships";
+import { highlights } from "./routes/highlights";
 
-import type { Context } from "./context";
+/**
+ * Main API router that composes all route plugins.
+ * Mount this on the server under /api prefix.
+ */
+export const api = new Elysia({ prefix: "/api" })
+	.use(highlights)
+	.use(friendships)
+	.use(bookmarks)
+	.use(feed);
 
-export const t = initTRPC.context<Context>().create();
-
-export const router = t.router;
-
-export const publicProcedure = t.procedure;
-
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-	if (!ctx.session) {
-		throw new TRPCError({
-			code: "UNAUTHORIZED",
-			message: "Authentication required",
-			cause: "No session",
-		});
-	}
-	return next({
-		ctx: {
-			...ctx,
-			session: ctx.session,
-		},
-	});
-});
+/**
+ * Export the API type for Eden Treaty clients.
+ */
+export type Api = typeof api;

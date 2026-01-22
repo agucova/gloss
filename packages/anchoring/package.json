@@ -1,0 +1,26 @@
+{
+  "name": "@gloss/anchoring",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "test": "bun test",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "approx-string-match": "^2.0.0"
+  },
+  "devDependencies": {
+    "@gloss/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:",
+    "happy-dom": "^17.4.4"
+  }
+}

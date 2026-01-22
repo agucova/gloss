@@ -12,18 +12,14 @@
   "scripts": {},
   "dependencies": {
     "@gloss/auth": "workspace:*",
-    "@gloss/curius": "workspace:*",
     "@gloss/db": "workspace:*",
     "@gloss/env": "workspace:*",
-    "@trpc/client": "catalog:",
-    "@trpc/server": "catalog:",
+    "@paralleldrive/cuid2": "^3.0.6",
     "dotenv": "catalog:",
-    "nanoid": "^5.1.5",
-    "zod": "catalog:"
+    "elysia": "catalog:"
   },
   "devDependencies": {
     "@gloss/config": "workspace:*",
-    "elysia": "catalog:",
     "typescript": "catalog:"
   }
 }

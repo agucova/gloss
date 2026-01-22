@@ -1,9 +1,7 @@
 import { cors } from "@elysiajs/cors";
-import { createContext } from "@gloss/api/context";
-import { appRouter } from "@gloss/api/routers/index";
+import { api } from "@gloss/api";
 import { auth } from "@gloss/auth";
 import { env } from "@gloss/env/server";
-import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Elysia } from "elysia";
 import { curiusRoutes } from "./routes/curius";
 
@@ -11,37 +9,23 @@ export const app = new Elysia()
 	.use(
 		cors({
 			origin: env.CORS_ORIGIN,
-			methods: ["GET", "POST", "DELETE", "OPTIONS"],
+			methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
 			allowedHeaders: ["Content-Type", "Authorization"],
 			credentials: true,
 		})
 	)
 	.all("/api/auth/*", async (context) => {
-		const { request, status } = context;
+		const { request, set } = context;
 		if (["POST", "GET"].includes(request.method)) {
 			return auth.handler(request);
 		}
-		return status(405);
+		set.status = 405;
+		return { error: "Method not allowed" };
 	})
-	// Derive session for all routes under /api
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
-	// Mount Curius routes
+	// Mount Curius routes (legacy integration)
 	.use(curiusRoutes)
-	// tRPC routes (kept for backward compatibility)
-	.all("/trpc/*", async (context) => {
-		const res = await fetchRequestHandler({
-			endpoint: "/trpc",
-			router: appRouter,
-			req: context.request,
-			createContext: () => createContext({ context }),
-		});
-		return res;
-	})
+	// Mount Gloss API routes
+	.use(api)
 	.get("/", () => "OK")
 	.listen(env.PORT, () => {
 		console.log(`Server is running on port ${env.PORT}`);

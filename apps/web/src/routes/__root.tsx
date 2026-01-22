@@ -10,12 +10,12 @@ import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import type { trpc } from "@/utils/trpc";
+import type { api } from "@/utils/api";
 
 import "../index.css";
 
 export interface RouterAppContext {
-	trpc: typeof trpc;
+	api: typeof api;
 	queryClient: QueryClient;
 }
 
