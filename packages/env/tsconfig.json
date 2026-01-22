@@ -1,0 +1,6 @@
+{
+  "extends": "@gloss/config/tsconfig.base.json",
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
+}
