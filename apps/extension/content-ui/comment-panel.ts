@@ -301,6 +301,64 @@ function buildComment(
 	return el;
 }
 
+/** State for mention dropdown handling */
+interface MentionState {
+	query: string;
+	startPos: number;
+	selectedIndex: number;
+	friends: Friend[];
+}
+
+/**
+ * Handle mention dropdown keyboard navigation.
+ * Returns true if the event was handled.
+ */
+function handleMentionKeydown(
+	e: KeyboardEvent,
+	state: MentionState,
+	input: HTMLTextAreaElement,
+	dropdown: HTMLElement
+): boolean {
+	if (dropdown.style.display === "none" || state.friends.length === 0) {
+		return false;
+	}
+
+	switch (e.key) {
+		case "ArrowDown":
+			e.preventDefault();
+			state.selectedIndex = Math.min(
+				state.selectedIndex + 1,
+				state.friends.length - 1
+			);
+			updateMentionSelection(dropdown, state.selectedIndex);
+			return true;
+
+		case "ArrowUp":
+			e.preventDefault();
+			state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
+			updateMentionSelection(dropdown, state.selectedIndex);
+			return true;
+
+		case "Enter":
+		case "Tab": {
+			e.preventDefault();
+			const friend = state.friends[state.selectedIndex];
+			if (friend) {
+				insertMention(input, state.startPos, friend);
+				hideMentionDropdown(dropdown);
+			}
+			return true;
+		}
+
+		case "Escape":
+			hideMentionDropdown(dropdown);
+			return true;
+
+		default:
+			return false;
+	}
+}
+
 /**
  * Build the input area for adding comments.
  */
@@ -325,10 +383,12 @@ function buildInputArea(
 	mentionDropdown.className = "gloss-mention-dropdown";
 	mentionDropdown.style.display = "none";
 
-	let mentionQuery = "";
-	let mentionStartPos = -1;
-	let selectedMentionIndex = 0;
-	let friends: Friend[] = [];
+	const mentionState: MentionState = {
+		query: "",
+		startPos: -1,
+		selectedIndex: 0,
+		friends: [],
+	};
 
 	// Handle input for @mention detection
 	input.addEventListener("input", async () => {
@@ -343,20 +403,20 @@ function buildInputArea(
 			const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
 			// Check if we're in a mention (no spaces after @)
 			if (!textAfterAt.includes(" ")) {
-				mentionQuery = textAfterAt;
-				mentionStartPos = lastAtIndex;
+				mentionState.query = textAfterAt;
+				mentionState.startPos = lastAtIndex;
 
 				// Search friends
-				friends = await onSearchFriends(mentionQuery);
-				selectedMentionIndex = 0;
+				mentionState.friends = await onSearchFriends(mentionState.query);
+				mentionState.selectedIndex = 0;
 
-				if (friends.length > 0) {
+				if (mentionState.friends.length > 0) {
 					showMentionDropdown(
 						mentionDropdown,
-						friends,
-						selectedMentionIndex,
+						mentionState.friends,
+						mentionState.selectedIndex,
 						(friend) => {
-							insertMention(input, mentionStartPos, friend);
+							insertMention(input, mentionState.startPos, friend);
 							hideMentionDropdown(mentionDropdown);
 						}
 					);
@@ -370,30 +430,10 @@ function buildInputArea(
 		hideMentionDropdown(mentionDropdown);
 	});
 
-	// Handle keyboard navigation in mention dropdown
+	// Handle keyboard navigation
 	input.addEventListener("keydown", async (e) => {
-		if (mentionDropdown.style.display !== "none" && friends.length > 0) {
-			if (e.key === "ArrowDown") {
-				e.preventDefault();
-				selectedMentionIndex = Math.min(
-					selectedMentionIndex + 1,
-					friends.length - 1
-				);
-				updateMentionSelection(mentionDropdown, selectedMentionIndex);
-			} else if (e.key === "ArrowUp") {
-				e.preventDefault();
-				selectedMentionIndex = Math.max(selectedMentionIndex - 1, 0);
-				updateMentionSelection(mentionDropdown, selectedMentionIndex);
-			} else if (e.key === "Enter" || e.key === "Tab") {
-				e.preventDefault();
-				const friend = friends[selectedMentionIndex];
-				if (friend) {
-					insertMention(input, mentionStartPos, friend);
-					hideMentionDropdown(mentionDropdown);
-				}
-			} else if (e.key === "Escape") {
-				hideMentionDropdown(mentionDropdown);
-			}
+		// Check if mention dropdown handled the event
+		if (handleMentionKeydown(e, mentionState, input, mentionDropdown)) {
 			return;
 		}
 
@@ -406,7 +446,7 @@ function buildInputArea(
 			}
 
 			// Extract mentions from content
-			const mentions = extractMentions(content, friends);
+			const mentions = extractMentions(content, mentionState.friends);
 
 			// Disable input while submitting
 			input.disabled = true;
@@ -501,9 +541,8 @@ function insertMention(
 function extractMentions(content: string, knownFriends: Friend[]): string[] {
 	const mentionRegex = /@(\w+)/g;
 	const mentions: string[] = [];
-	let match: RegExpExecArray | null = null;
 
-	while ((match = mentionRegex.exec(content)) !== null) {
+	for (const match of content.matchAll(mentionRegex)) {
 		const name = match[1];
 		const friend = knownFriends.find(
 			(f) => f.name?.toLowerCase() === name.toLowerCase()

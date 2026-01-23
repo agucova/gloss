@@ -1,4 +1,8 @@
 import { type Highlight, HighlightManager } from "@gloss/anchoring";
+import {
+	hideCommentPanel,
+	showCommentPanel,
+} from "../content-ui/comment-panel";
 import { generateId } from "../content-ui/popover";
 import {
 	hideSelectionPopover,
@@ -6,6 +10,7 @@ import {
 } from "../content-ui/selection-popover";
 import {
 	isErrorResponse,
+	type ServerComment,
 	type ServerHighlight,
 	sendMessage,
 } from "../utils/messages";
