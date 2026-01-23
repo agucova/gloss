@@ -58,6 +58,7 @@ function getMetadata(active: ActiveHighlight, key: string): string | undefined {
  * Show the comment panel anchored to the highlight.
  */
 export function showCommentPanel(options: CommentPanelOptions): void {
+	console.log("[Gloss] showCommentPanel called");
 	const {
 		element,
 		highlight,
@@ -70,6 +71,8 @@ export function showCommentPanel(options: CommentPanelOptions): void {
 		onDeleteHighlight,
 		onSearchFriends,
 	} = options;
+
+	console.log("[Gloss] Creating panel for highlight:", highlight.highlight.id);
 
 	// Hide existing panel first
 	hideCommentPanel();
@@ -120,6 +123,12 @@ export function showCommentPanel(options: CommentPanelOptions): void {
 
 	// Set up dismiss handlers
 	cleanupDismiss = setupDismissHandlers(host, popover, hideCommentPanel);
+
+	console.log("[Gloss] Comment panel created and positioned", {
+		left: popover.style.left,
+		top: popover.style.top,
+		width: popover.style.width,
+	});
 }
 
 /**

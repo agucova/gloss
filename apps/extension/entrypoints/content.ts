@@ -230,14 +230,13 @@ async function createHighlight(
 
 		console.log("[Gloss] Highlight saved:", response.highlight.id);
 
-		// Update the highlight ID to match the server-assigned ID if different
-		if (response.highlight.id !== id) {
-			// The server may have assigned a different ID
-			// For now, we'll keep our local ID since the DOM element uses it
-			console.log(
-				"[Gloss] Server assigned different ID:",
-				response.highlight.id
-			);
+		// Store the server ID in the highlight metadata for later use
+		const active = manager.get(id);
+		if (active) {
+			active.highlight.metadata = {
+				...active.highlight.metadata,
+				serverId: response.highlight.id,
+			};
 		}
 	} catch (error) {
 		console.error("[Gloss] Error creating highlight:", error);
@@ -283,6 +282,7 @@ async function handleHighlightClick(
 		console.error("[Gloss] Highlight not found:", highlightId);
 		return;
 	}
+	console.log("[Gloss] Found active highlight:", active.highlight.id);
 
 	// Get the highlight definition
 	const highlightData = active.highlight;
@@ -290,14 +290,22 @@ async function handleHighlightClick(
 	// Determine if current user owns this highlight
 	const isOwner =
 		(highlightData.metadata?.userId as string | undefined) === currentUserId;
+	console.log("[Gloss] isOwner:", isOwner, "userId:", currentUserId);
+
+	// Get the server ID (stored in metadata for locally created highlights,
+	// or the highlight ID itself for server-loaded highlights)
+	const serverId =
+		(highlightData.metadata?.serverId as string | undefined) ?? highlightId;
 
 	// Load comments for this highlight
 	let comments: ServerComment[] = [];
 	try {
+		console.log("[Gloss] Loading comments for highlight:", serverId);
 		const response = await sendMessage({
 			type: "LOAD_COMMENTS",
-			highlightId,
+			highlightId: serverId,
 		});
+		console.log("[Gloss] Comments response:", response);
 		if (!isErrorResponse(response)) {
 			comments = response.comments;
 		}
@@ -305,6 +313,11 @@ async function handleHighlightClick(
 		console.error("[Gloss] Error loading comments:", error);
 	}
 
+	console.log(
+		"[Gloss] Showing comment panel with",
+		comments.length,
+		"comments"
+	);
 	// Show the comment panel
 	showCommentPanel({
 		element,
@@ -316,7 +329,7 @@ async function handleHighlightClick(
 			try {
 				const response = await sendMessage({
 					type: "LOAD_COMMENTS",
-					highlightId,
+					highlightId: serverId,
 				});
 				if (!isErrorResponse(response)) {
 					return response.comments;
@@ -330,7 +343,7 @@ async function handleHighlightClick(
 			try {
 				const response = await sendMessage({
 					type: "CREATE_COMMENT",
-					highlightId,
+					highlightId: serverId,
 					content,
 					mentions,
 				});
@@ -344,14 +357,14 @@ async function handleHighlightClick(
 			}
 			return null;
 		},
-		onDeleteComment: async (id) => {
+		onDeleteComment: async (commentId) => {
 			try {
 				const response = await sendMessage({
 					type: "DELETE_COMMENT",
-					id,
+					id: commentId,
 				});
 				if (!isErrorResponse(response)) {
-					console.log("[Gloss] Comment deleted:", id);
+					console.log("[Gloss] Comment deleted:", commentId);
 					return true;
 				}
 				console.error("[Gloss] Failed to delete comment:", response.error);
@@ -363,13 +376,13 @@ async function handleHighlightClick(
 		onDeleteHighlight: isOwner
 			? async () => {
 					try {
-						// Remove from DOM first
+						// Remove from DOM first (use local ID)
 						manager.remove(highlightId);
 
-						// Then delete on server
+						// Then delete on server (use server ID)
 						const response = await sendMessage({
 							type: "DELETE_HIGHLIGHT",
-							id: highlightId,
+							id: serverId,
 						});
 
 						if (isErrorResponse(response)) {
