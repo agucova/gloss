@@ -24,7 +24,14 @@
     "db:push": {
       "cache": false
     },
+    "db:push:prod": {
+      "cache": false
+    },
     "db:studio": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:studio:prod": {
       "cache": false,
       "persistent": true
     },
@@ -35,6 +42,9 @@
       "cache": false
     },
     "db:seed": {
+      "cache": false
+    },
+    "db:seed:prod": {
       "cache": false
     },
     "deploy": {

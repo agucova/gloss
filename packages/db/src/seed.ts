@@ -12,8 +12,9 @@ import { like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { account, bookmark, friendship, highlight, user } from "./schema";
 
-// Load env from server's .env file
-dotenv.config({ path: "../../apps/server/.env" });
+// Load env from server's .env file (can be overridden via ENV_FILE)
+const envFile = process.env.ENV_FILE || "../../apps/server/.env";
+dotenv.config({ path: envFile });
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {

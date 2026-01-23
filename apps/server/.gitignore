@@ -30,8 +30,8 @@ node_modules/
 
 # env
 .env*
-.env.production
 !.env.example
+!.env.prod.local.example
 .dev.vars
 
 # logs

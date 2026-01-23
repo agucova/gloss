@@ -5,6 +5,38 @@ import type {
 	ServerHighlight,
 } from "../utils/messages";
 
+/** Regex for validating hex color format */
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
+
+/** Regex for parsing rgba/rgb color format */
+const RGBA_COLOR_REGEX = /rgba?\((\d+),\s*(\d+),\s*(\d+)/;
+
+/**
+ * Convert an rgba color string to hex format.
+ * Falls back to the original color if parsing fails.
+ */
+function rgbaToHex(color: string): string {
+	// If already hex, return as-is
+	if (HEX_COLOR_REGEX.test(color)) {
+		return color;
+	}
+
+	// Parse rgba(r, g, b, a) or rgb(r, g, b)
+	const match = color.match(RGBA_COLOR_REGEX);
+	if (!match) {
+		// Return default yellow if parsing fails
+		return "#FFFF00";
+	}
+
+	const r = Number.parseInt(match[1], 10);
+	const g = Number.parseInt(match[2], 10);
+	const b = Number.parseInt(match[3], 10);
+
+	// Convert to hex
+	const toHex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
+	return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
 		id: browser.runtime.id,
@@ -39,7 +71,6 @@ export default defineBackground(() => {
 async function handleMessage(
 	message: Message
 ): Promise<MessageResponse<Message["type"]>> {
-	console.log("[Gloss] handleMessage:", message.type, message);
 	switch (message.type) {
 		case "LOAD_HIGHLIGHTS":
 			return await handleLoadHighlights(message.url);
@@ -70,11 +101,66 @@ async function handleMessage(
 }
 
 /**
+ * Extract a human-readable error message from various error formats.
+ */
+function extractErrorMessage(error: unknown, fallback: string): string {
+	if (!error) {
+		return fallback;
+	}
+
+	// If it's already a string, use it
+	if (typeof error === "string") {
+		return error;
+	}
+
+	// If it's an object, try various common properties
+	if (typeof error === "object") {
+		const obj = error as Record<string, unknown>;
+
+		// Eden error format: { value: { message: "..." } } or { value: "..." }
+		if (obj.value !== undefined) {
+			if (typeof obj.value === "string") {
+				return obj.value;
+			}
+			if (
+				typeof obj.value === "object" &&
+				obj.value !== null &&
+				"message" in obj.value
+			) {
+				return String((obj.value as { message: unknown }).message);
+			}
+		}
+
+		// Standard error format
+		if (typeof obj.message === "string") {
+			return obj.message;
+		}
+
+		// Elysia validation error format
+		if (typeof obj.summary === "string") {
+			return obj.summary;
+		}
+
+		// Try JSON stringify for debugging (but limit length)
+		try {
+			const json = JSON.stringify(error);
+			if (json !== "{}") {
+				return json.slice(0, 200);
+			}
+		} catch {
+			// Ignore stringify errors
+		}
+	}
+
+	return fallback;
+}
+
+/**
  * Wrap an API call with consistent error handling.
  */
 async function apiCall<T>(
 	operation: string,
-	fn: () => Promise<{ data: unknown; error: { value?: unknown } | null }>
+	fn: () => Promise<{ data: unknown; error: unknown }>
 ): Promise<T | { error: string }> {
 	try {
 		const response = await fn();
@@ -82,7 +168,7 @@ async function apiCall<T>(
 		if (response.error) {
 			console.error(`[Gloss] API error (${operation}):`, response.error);
 			return {
-				error: response.error.value?.toString() ?? `Failed to ${operation}`,
+				error: extractErrorMessage(response.error, `Failed to ${operation}`),
 			};
 		}
 
@@ -90,7 +176,7 @@ async function apiCall<T>(
 	} catch (error) {
 		console.error(`[Gloss] Error (${operation}):`, error);
 		return {
-			error: error instanceof Error ? error.message : `Failed to ${operation}`,
+			error: extractErrorMessage(error, `Failed to ${operation}`),
 		};
 	}
 }
@@ -101,7 +187,7 @@ async function apiCall<T>(
 async function handleLoadHighlights(
 	url: string
 ): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<ServerHighlight[]>("load highlights", () =>
 		api.api.highlights.get({ query: { url } })
 	);
@@ -124,18 +210,25 @@ async function handleCreateHighlight(message: {
 	color?: string;
 	visibility?: "public" | "friends" | "private";
 }): Promise<{ highlight: ServerHighlight } | { error: string }> {
-	const api = await createApiClient();
+	console.log("[Gloss] handleCreateHighlight called with:", message.url);
+	const api = createApiClient();
+
+	// Convert rgba to hex (server expects #RRGGBB format)
+	const hexColor = message.color ? rgbaToHex(message.color) : undefined;
+
 	const result = await apiCall<ServerHighlight>("create highlight", () =>
 		api.api.highlights.post({
 			url: message.url,
 			selector: message.selector,
 			text: message.text,
-			color: message.color,
+			color: hexColor,
 			visibility: message.visibility,
 		})
 	);
+	console.log("[Gloss] handleCreateHighlight result:", result);
 
 	if ("error" in result) {
+		console.log("[Gloss] Returning error:", result);
 		return result;
 	}
 
@@ -154,7 +247,7 @@ async function handleUpdateHighlight(
 		visibility?: "public" | "friends" | "private";
 	}
 ): Promise<{ highlight: ServerHighlight } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<ServerHighlight>("update highlight", () =>
 		api.api.highlights({ id }).patch(updates)
 	);
@@ -173,7 +266,7 @@ async function handleUpdateHighlight(
 async function handleDeleteHighlight(
 	id: string
 ): Promise<{ success: boolean } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<{ success: boolean }>("delete highlight", () =>
 		api.api.highlights({ id }).delete()
 	);
@@ -228,7 +321,7 @@ async function handleGetAuthStatus(): Promise<{
 async function handleGetRecentHighlights(
 	limit = 5
 ): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<ServerHighlight[]>("get recent highlights", () =>
 		api.api.highlights.mine.get({ query: { limit } })
 	);
@@ -271,21 +364,15 @@ interface ServerCommentResponse {
 async function handleLoadComments(
 	highlightId: string
 ): Promise<{ comments: ServerCommentResponse[] } | { error: string }> {
-	console.log("[Gloss] handleLoadComments called with:", highlightId);
-	const api = await createApiClient();
-	console.log("[Gloss] API client created, fetching comments...");
+	const api = createApiClient();
 	const result = await apiCall<ServerCommentResponse[]>("load comments", () =>
 		api.api.comments.highlight({ highlightId }).get()
 	);
-	console.log("[Gloss] API result:", result);
 
 	if ("error" in result) {
 		return result;
 	}
 
-	console.log(
-		`[Gloss] Loaded ${result.length} comments for highlight ${highlightId}`
-	);
 	return { comments: result };
 }
 
@@ -297,7 +384,7 @@ async function handleCreateComment(message: {
 	content: string;
 	mentions: string[];
 }): Promise<{ comment: ServerCommentResponse } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<ServerCommentResponse>("create comment", () =>
 		api.api.comments.post({
 			highlightId: message.highlightId,
@@ -322,7 +409,7 @@ async function handleUpdateComment(message: {
 	content: string;
 	mentions: string[];
 }): Promise<{ comment: ServerCommentResponse } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<ServerCommentResponse>("update comment", () =>
 		api.api.comments({ id: message.id }).patch({
 			content: message.content,
@@ -344,7 +431,7 @@ async function handleUpdateComment(message: {
 async function handleDeleteComment(
 	id: string
 ): Promise<{ success: boolean } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<{ success: boolean }>("delete comment", () =>
 		api.api.comments({ id }).delete()
 	);
@@ -369,7 +456,7 @@ interface FriendResponse {
 async function handleSearchFriends(
 	query: string
 ): Promise<{ friends: FriendResponse[] } | { error: string }> {
-	const api = await createApiClient();
+	const api = createApiClient();
 	const result = await apiCall<FriendResponse[]>("search friends", () =>
 		api.api.friendships.search.get({ query: { q: query } })
 	);

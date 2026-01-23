@@ -189,12 +189,13 @@ export function hidePopover(
  * Returns a cleanup function.
  */
 export function setupDismissHandlers(
-	_host: HTMLElement,
+	host: HTMLElement,
 	popover: HTMLElement,
 	onDismiss: () => void
 ): () => void {
 	let isMouseInside = false;
 	let clickListenerActive = false;
+	let hasFocusInside = false;
 
 	const handleMouseEnter = () => {
 		isMouseInside = true;
@@ -204,14 +205,29 @@ export function setupDismissHandlers(
 		isMouseInside = false;
 	};
 
+	const handleFocusIn = () => {
+		hasFocusInside = true;
+	};
+
+	const handleFocusOut = () => {
+		hasFocusInside = false;
+	};
+
 	const handleClickOutside = (e: MouseEvent) => {
 		// Ignore clicks until the listener is fully active (prevents race with selection)
 		if (!clickListenerActive) {
 			return;
 		}
-		// Check if click is inside the shadow DOM
+		// Check if click is inside the shadow DOM using composedPath
 		const path = e.composedPath();
-		if (!path.includes(popover)) {
+		// Check if any element in the path is our host or popover
+		const isInside = path.some(
+			(el) =>
+				el === host ||
+				el === popover ||
+				(el instanceof Node && host.contains(el as Node))
+		);
+		if (!isInside) {
 			onDismiss();
 		}
 	};
@@ -224,7 +240,8 @@ export function setupDismissHandlers(
 
 	const handleScroll = () => {
 		// Ignore scroll until listener is active (prevents race with selection)
-		if (!clickListenerActive || isMouseInside) {
+		// Also ignore if mouse is inside or an input has focus
+		if (!clickListenerActive || isMouseInside || hasFocusInside) {
 			return;
 		}
 		onDismiss();
@@ -233,6 +250,8 @@ export function setupDismissHandlers(
 	// Add listeners
 	popover.addEventListener("mouseenter", handleMouseEnter);
 	popover.addEventListener("mouseleave", handleMouseLeave);
+	popover.addEventListener("focusin", handleFocusIn);
+	popover.addEventListener("focusout", handleFocusOut);
 	document.addEventListener("click", handleClickOutside, true);
 	document.addEventListener("keydown", handleKeyDown);
 	window.addEventListener("scroll", handleScroll, true);
@@ -246,6 +265,8 @@ export function setupDismissHandlers(
 	return () => {
 		popover.removeEventListener("mouseenter", handleMouseEnter);
 		popover.removeEventListener("mouseleave", handleMouseLeave);
+		popover.removeEventListener("focusin", handleFocusIn);
+		popover.removeEventListener("focusout", handleFocusOut);
 		document.removeEventListener("click", handleClickOutside, true);
 		document.removeEventListener("keydown", handleKeyDown);
 		window.removeEventListener("scroll", handleScroll, true);

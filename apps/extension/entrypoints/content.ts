@@ -222,7 +222,10 @@ async function createHighlight(
 		});
 
 		if (isErrorResponse(response)) {
-			console.error("[Gloss] Failed to save highlight:", response.error);
+			console.error(
+				"[Gloss] Failed to save highlight:",
+				JSON.stringify(response)
+			);
 			// Remove the DOM highlight if save failed
 			manager.remove(id);
 			return;
@@ -271,8 +274,6 @@ async function handleHighlightClick(
 	highlightId: string,
 	element: HTMLElement
 ): Promise<void> {
-	console.log("[Gloss] Highlight clicked:", highlightId);
-
 	// Hide selection popover if open
 	hideSelectionPopover();
 
@@ -282,7 +283,6 @@ async function handleHighlightClick(
 		console.error("[Gloss] Highlight not found:", highlightId);
 		return;
 	}
-	console.log("[Gloss] Found active highlight:", active.highlight.id);
 
 	// Get the highlight definition
 	const highlightData = active.highlight;
@@ -290,7 +290,6 @@ async function handleHighlightClick(
 	// Determine if current user owns this highlight
 	const isOwner =
 		(highlightData.metadata?.userId as string | undefined) === currentUserId;
-	console.log("[Gloss] isOwner:", isOwner, "userId:", currentUserId);
 
 	// Get the server ID (stored in metadata for locally created highlights,
 	// or the highlight ID itself for server-loaded highlights)
@@ -300,7 +299,6 @@ async function handleHighlightClick(
 	// Load comments for this highlight
 	let comments: ServerComment[] = [];
 	try {
-		console.log("[Gloss] Loading comments for highlight:", serverId);
 		const response = await Promise.race([
 			sendMessage({
 				type: "LOAD_COMMENTS",
@@ -310,21 +308,12 @@ async function handleHighlightClick(
 				setTimeout(() => reject(new Error("Timeout loading comments")), 5000)
 			),
 		]);
-		console.log("[Gloss] Comments response:", response);
-		if (isErrorResponse(response)) {
-			console.error("[Gloss] Error response:", response.error);
-		} else {
+		if (!isErrorResponse(response)) {
 			comments = response.comments;
 		}
 	} catch (error) {
 		console.error("[Gloss] Error loading comments:", error);
 	}
-
-	console.log(
-		"[Gloss] Showing comment panel with",
-		comments.length,
-		"comments"
-	);
 	// Show the comment panel
 	showCommentPanel({
 		element,

@@ -12,31 +12,23 @@ const DEFAULT_SERVER_URL = "http://localhost:3000";
  */
 export async function getServerUrl(): Promise<string> {
 	try {
-		console.log("[Gloss API] Getting server URL from storage...");
 		const result = await browser.storage.sync.get("serverUrl");
-		console.log("[Gloss API] Storage result:", result);
 		return (result.serverUrl as string) || DEFAULT_SERVER_URL;
-	} catch (error) {
-		console.error("[Gloss API] Storage error:", error);
+	} catch {
 		return DEFAULT_SERVER_URL;
 	}
 }
 
 /**
  * Create an Eden Treaty client for the Gloss API.
- * Should be called fresh for each request to pick up any URL changes.
+ * Uses default URL for now to avoid async issues in service workers.
  */
-export async function createApiClient() {
-	console.log("[Gloss API] Creating API client...");
-	const serverUrl = await getServerUrl();
-	console.log("[Gloss API] Server URL:", serverUrl);
-	const client = treaty<App>(serverUrl, {
+export function createApiClient() {
+	return treaty<App>(DEFAULT_SERVER_URL, {
 		fetch: {
 			credentials: "include",
 		},
 	});
-	console.log("[Gloss API] Client created");
-	return client;
 }
 
 /**

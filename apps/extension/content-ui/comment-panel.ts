@@ -58,7 +58,6 @@ function getMetadata(active: ActiveHighlight, key: string): string | undefined {
  * Show the comment panel anchored to the highlight.
  */
 export function showCommentPanel(options: CommentPanelOptions): void {
-	console.log("[Gloss] showCommentPanel called");
 	const {
 		element,
 		highlight,
@@ -71,8 +70,6 @@ export function showCommentPanel(options: CommentPanelOptions): void {
 		onDeleteHighlight,
 		onSearchFriends,
 	} = options;
-
-	console.log("[Gloss] Creating panel for highlight:", highlight.highlight.id);
 
 	// Hide existing panel first
 	hideCommentPanel();
@@ -123,12 +120,6 @@ export function showCommentPanel(options: CommentPanelOptions): void {
 
 	// Set up dismiss handlers
 	cleanupDismiss = setupDismissHandlers(host, popover, hideCommentPanel);
-
-	console.log("[Gloss] Comment panel created and positioned", {
-		left: popover.style.left,
-		top: popover.style.top,
-		width: popover.style.width,
-	});
 }
 
 /**
@@ -202,17 +193,17 @@ function buildHeader(
 	header.className = "gloss-panel-header";
 
 	// Highlighter info
-	const highlighterName = getMetadata(highlight, "userName") || "You";
+	const highlighterName = isOwner
+		? "You"
+		: getMetadata(highlight, "userName") || "Someone";
 	const createdAt = getMetadata(highlight, "createdAt");
 
 	const info = document.createElement("span");
 	info.className = "gloss-panel-info";
-	info.textContent = isOwner ? "" : highlighterName;
+	info.textContent = highlighterName;
 	if (createdAt) {
 		const time = formatRelativeTime(createdAt);
-		if (info.textContent) {
-			info.textContent += ` · ${time}`;
-		}
+		info.textContent += ` · ${time}`;
 	}
 	header.appendChild(info);
 

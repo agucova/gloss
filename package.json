@@ -30,10 +30,13 @@
     "zip:ext": "bun --cwd apps/extension run zip",
     "zip:ext:firefox": "bun --cwd apps/extension run zip:firefox",
     "db:push": "turbo -F @gloss/db db:push",
+    "db:push:prod": "turbo -F @gloss/db db:push:prod",
     "db:studio": "turbo -F @gloss/db db:studio",
+    "db:studio:prod": "turbo -F @gloss/db db:studio:prod",
     "db:generate": "turbo -F @gloss/db db:generate",
     "db:migrate": "turbo -F @gloss/db db:migrate",
     "db:seed": "turbo -F @gloss/db db:seed",
+    "db:seed:prod": "turbo -F @gloss/db db:seed:prod",
     "deploy:web": "turbo -F web deploy",
     "deploy:web:preview": "turbo -F web deploy:preview"
   },

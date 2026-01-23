@@ -424,10 +424,17 @@ export const POPOVER_STYLES = `
   }
 
   .gloss-comments-list {
-    flex: 1;
     overflow-y: auto;
-    padding: 8px 12px;
     min-height: 0;
+  }
+
+  .gloss-comments-list:not(:empty) {
+    flex: 1;
+    padding: 8px 12px;
+  }
+
+  .gloss-comments-list:empty {
+    display: none;
   }
 
   .gloss-comment {

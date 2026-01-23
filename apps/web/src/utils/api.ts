@@ -1,8 +1,8 @@
 import { treaty } from "@elysiajs/eden";
-import { env } from "@gloss/env/web";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import type { App } from "server";
 import { toast } from "sonner";
+import { env } from "@/lib/env";
 
 /**
  * TanStack Query client with global error handling.

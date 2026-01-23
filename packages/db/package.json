@@ -14,10 +14,13 @@
   },
   "scripts": {
     "db:push": "drizzle-kit push",
+    "db:push:prod": "drizzle-kit push --config=drizzle.config.prod.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
+    "db:studio:prod": "drizzle-kit studio --config=drizzle.config.prod.ts",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "bun run src/seed.ts"
+    "db:seed": "bun run src/seed.ts",
+    "db:seed:prod": "ENV_FILE=../../apps/server/.env.prod.local bun run src/seed.ts"
   },
   "dependencies": {
     "@gloss/env": "workspace:*",
