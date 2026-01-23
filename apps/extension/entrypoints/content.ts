@@ -262,11 +262,11 @@ function updateHighlightColor(
 /**
  * Handle click on an existing highlight.
  */
-function handleHighlightClick(
+async function handleHighlightClick(
 	manager: HighlightManager,
 	highlightId: string,
 	element: HTMLElement
-): void {
+): Promise<void> {
 	console.log("[Gloss] Highlight clicked:", highlightId);
 
 	// Hide selection popover if open
@@ -285,63 +285,77 @@ function handleHighlightClick(
 	// Determine if current user owns this highlight
 	const isOwner =
 		(highlightData.metadata?.userId as string | undefined) === currentUserId;
-	const originalColor = highlightData.color || "rgba(254, 240, 138, 0.5)";
 
-	// Show the highlight popover
-	showHighlightPopover({
+	// Load comments for this highlight
+	let comments: ServerComment[] = [];
+	try {
+		const response = await sendMessage({
+			type: "LOAD_COMMENTS",
+			highlightId,
+		});
+		if (!isErrorResponse(response)) {
+			comments = response.comments;
+		}
+	} catch (error) {
+		console.error("[Gloss] Error loading comments:", error);
+	}
+
+	// Show the comment panel
+	showCommentPanel({
 		element,
 		highlight: active,
 		isOwner,
-		onColorChange: isOwner
-			? async (color: string) => {
-					// Update locally first for immediate feedback
-					updateHighlightColor(manager, highlightId, color);
-
-					// Then save to server
-					try {
-						const response = await sendMessage({
-							type: "UPDATE_HIGHLIGHT",
-							id: highlightId,
-							updates: { color },
-						});
-
-						if (isErrorResponse(response)) {
-							console.error("[Gloss] Failed to update color:", response.error);
-							// Revert to original color
-							updateHighlightColor(manager, highlightId, originalColor);
-						} else {
-							console.log("[Gloss] Highlight color updated");
-						}
-					} catch (error) {
-						console.error("[Gloss] Error updating color:", error);
-						updateHighlightColor(manager, highlightId, originalColor);
-					}
+		currentUserId: currentUserId ?? undefined,
+		comments,
+		onLoadComments: async () => {
+			try {
+				const response = await sendMessage({
+					type: "LOAD_COMMENTS",
+					highlightId,
+				});
+				if (!isErrorResponse(response)) {
+					return response.comments;
 				}
-			: undefined,
-		onNoteChange: isOwner
-			? async (note: string) => {
-					try {
-						const response = await sendMessage({
-							type: "UPDATE_HIGHLIGHT",
-							id: highlightId,
-							updates: { note },
-						});
-
-						if (isErrorResponse(response)) {
-							console.error("[Gloss] Failed to update note:", response.error);
-						} else {
-							console.log("[Gloss] Highlight note updated");
-							// Update local metadata
-							if (highlightData.metadata) {
-								highlightData.metadata.note = note;
-							}
-						}
-					} catch (error) {
-						console.error("[Gloss] Error updating note:", error);
-					}
+			} catch (error) {
+				console.error("[Gloss] Error loading comments:", error);
+			}
+			return [];
+		},
+		onCreateComment: async (content, mentions) => {
+			try {
+				const response = await sendMessage({
+					type: "CREATE_COMMENT",
+					highlightId,
+					content,
+					mentions,
+				});
+				if (!isErrorResponse(response)) {
+					console.log("[Gloss] Comment created:", response.comment.id);
+					return response.comment;
 				}
-			: undefined,
-		onDelete: isOwner
+				console.error("[Gloss] Failed to create comment:", response.error);
+			} catch (error) {
+				console.error("[Gloss] Error creating comment:", error);
+			}
+			return null;
+		},
+		onDeleteComment: async (id) => {
+			try {
+				const response = await sendMessage({
+					type: "DELETE_COMMENT",
+					id,
+				});
+				if (!isErrorResponse(response)) {
+					console.log("[Gloss] Comment deleted:", id);
+					return true;
+				}
+				console.error("[Gloss] Failed to delete comment:", response.error);
+			} catch (error) {
+				console.error("[Gloss] Error deleting comment:", error);
+			}
+			return false;
+		},
+		onDeleteHighlight: isOwner
 			? async () => {
 					try {
 						// Remove from DOM first
@@ -358,7 +372,6 @@ function handleHighlightClick(
 								"[Gloss] Failed to delete highlight:",
 								response.error
 							);
-							// Could reload highlights to restore, but that's expensive
 						} else {
 							console.log("[Gloss] Highlight deleted");
 						}
@@ -367,6 +380,20 @@ function handleHighlightClick(
 					}
 				}
 			: undefined,
+		onSearchFriends: async (query) => {
+			try {
+				const response = await sendMessage({
+					type: "SEARCH_FRIENDS",
+					query,
+				});
+				if (!isErrorResponse(response)) {
+					return response.friends;
+				}
+			} catch (error) {
+				console.error("[Gloss] Error searching friends:", error);
+			}
+			return [];
+		},
 	});
 }
 

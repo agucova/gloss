@@ -5,6 +5,10 @@ import {
 	accountRelations,
 	bookmark,
 	bookmarkRelations,
+	comment,
+	commentMention,
+	commentMentionRelations,
+	commentRelations,
 	curiusCredentials,
 	curiusCredentialsRelations,
 	friendship,
@@ -38,6 +42,10 @@ const schema = {
 	friendship,
 	friendshipRelations,
 	friendshipStatusEnum,
+	comment,
+	commentRelations,
+	commentMention,
+	commentMentionRelations,
 };
 
 export const db = drizzle(env.DATABASE_URL, { schema });
