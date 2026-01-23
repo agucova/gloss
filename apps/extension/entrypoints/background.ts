@@ -39,6 +39,7 @@ export default defineBackground(() => {
 async function handleMessage(
 	message: Message
 ): Promise<MessageResponse<Message["type"]>> {
+	console.log("[Gloss] handleMessage:", message.type, message);
 	switch (message.type) {
 		case "LOAD_HIGHLIGHTS":
 			return await handleLoadHighlights(message.url);
@@ -270,10 +271,13 @@ interface ServerCommentResponse {
 async function handleLoadComments(
 	highlightId: string
 ): Promise<{ comments: ServerCommentResponse[] } | { error: string }> {
+	console.log("[Gloss] handleLoadComments called with:", highlightId);
 	const api = await createApiClient();
+	console.log("[Gloss] API client created, fetching comments...");
 	const result = await apiCall<ServerCommentResponse[]>("load comments", () =>
 		api.api.comments.highlight({ highlightId }).get()
 	);
+	console.log("[Gloss] API result:", result);
 
 	if ("error" in result) {
 		return result;
