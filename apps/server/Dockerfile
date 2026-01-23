@@ -11,12 +11,15 @@ COPY turbo.json ./
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY apps/extension/package.json ./apps/extension/
+COPY packages/anchoring/package.json ./packages/anchoring/
 COPY packages/api/package.json ./packages/api/
 COPY packages/auth/package.json ./packages/auth/
-COPY packages/db/package.json ./packages/db/
-COPY packages/env/package.json ./packages/env/
 COPY packages/config/package.json ./packages/config/
 COPY packages/curius/package.json ./packages/curius/
+COPY packages/dashboard/package.json ./packages/dashboard/
+COPY packages/db/package.json ./packages/db/
+COPY packages/env/package.json ./packages/env/
+COPY packages/fonts/package.json ./packages/fonts/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

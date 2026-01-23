@@ -1,8 +1,4 @@
 import { type Highlight, HighlightManager } from "@gloss/anchoring";
-import {
-	hideHighlightPopover,
-	showHighlightPopover,
-} from "../content-ui/highlight-popover";
 import { generateId } from "../content-ui/popover";
 import {
 	hideSelectionPopover,
@@ -79,7 +75,7 @@ export default defineContentScript({
 				console.log("[Gloss] URL changed, reloading highlights");
 				manager.clear();
 				hideSelectionPopover();
-				hideHighlightPopover();
+				hideCommentPanel();
 				loadHighlights(manager);
 			}
 		}, 500);
@@ -90,7 +86,7 @@ export default defineContentScript({
 			clearInterval(navigationCheck);
 			document.removeEventListener("mouseup", handleMouseUp);
 			hideSelectionPopover();
-			hideHighlightPopover();
+			hideCommentPanel();
 			manager.destroy();
 		});
 	},
