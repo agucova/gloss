@@ -301,12 +301,19 @@ async function handleHighlightClick(
 	let comments: ServerComment[] = [];
 	try {
 		console.log("[Gloss] Loading comments for highlight:", serverId);
-		const response = await sendMessage({
-			type: "LOAD_COMMENTS",
-			highlightId: serverId,
-		});
+		const response = await Promise.race([
+			sendMessage({
+				type: "LOAD_COMMENTS",
+				highlightId: serverId,
+			}),
+			new Promise<{ error: string }>((_, reject) =>
+				setTimeout(() => reject(new Error("Timeout loading comments")), 5000)
+			),
+		]);
 		console.log("[Gloss] Comments response:", response);
-		if (!isErrorResponse(response)) {
+		if (isErrorResponse(response)) {
+			console.error("[Gloss] Error response:", response.error);
+		} else {
 			comments = response.comments;
 		}
 	} catch (error) {

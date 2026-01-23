@@ -5,7 +5,7 @@ export default defineConfig({
 	format: "esm",
 	outDir: "./dist",
 	clean: true,
-	// Bundle everything except native/problematic modules
+	// Bundle everything except native modules
 	noExternal: [/.*/],
-	external: ["pg", "pg-native", "better-sqlite3"],
+	external: ["pg-native", "better-sqlite3"],
 });
