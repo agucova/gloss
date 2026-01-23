@@ -151,3 +151,39 @@ This project uses **Ultracite** (Biome) for formatting and linting. Most issues 
 - Tab indentation, double quotes
 - Tailwind class sorting (via `cn`, `clsx`, `cva` functions)
 - Lefthook runs Biome on pre-commit
+
+---
+
+## Design Context
+
+### Users
+Knowledge workers—researchers, writers, analysts—who highlight text for retention and reference. They're browsing the web with intention, often reading long-form content, and want to capture what resonates. The interface should feel like a tool that respects their focus and gets out of the way.
+
+### Brand Personality
+**Minimal, calm, focused.** Gloss should feel like a quiet companion rather than an attention-seeking app. The interface recedes when not needed and surfaces information without friction. Think library, not social feed.
+
+### Aesthetic Direction
+- **Primary reference**: Are.na / Cosmos—gallery-like presentation, artistic sensibility, community without noise
+- **Visual tone**: Understated, spacious, considered. Every element earns its place.
+- **Typography**: Clean sans-serif (Inter), generous line-height, restrained hierarchy
+- **Color**: Neutral base with warm pastel highlights (soft yellows, peaches, pinks) for user highlights; distinct but harmonious tones for friends' highlights
+- **Theme**: Both light and dark modes, respecting system preference with manual toggle
+- **Density**: Spacious—generous whitespace, breathing room, one thing at a time
+
+### Anti-References (What to Avoid)
+- **Corporate SaaS**: No gradient CTAs, generic dashboards, or startup-y enthusiasm
+- **Social media**: No feed-like density, engagement metrics, or notification pressure
+- **Academic/utilitarian**: No dry, unstyled, purely functional interfaces
+- **Overly whimsical**: No mascots, excessive illustrations, or forced playfulness
+
+### Design Principles
+
+1. **Invisible until needed** — The best interface is one you forget is there. Highlights should feel native to the page, not overlaid. Controls appear contextually.
+
+2. **Content is the hero** — Highlighted text and the pages it lives on matter most. UI chrome should be minimal; let the words breathe.
+
+3. **Warmth through restraint** — Friendliness comes from thoughtful spacing and soft highlight colors, not from visual busyness or emoji.
+
+4. **Respect the reader's context** — Users are mid-thought when highlighting. Interactions should be fast, quiet, and non-disruptive.
+
+5. **Gallery over feed** — When displaying highlights, prefer considered curation (cards, collections) over infinite scroll. Quality of attention over quantity.

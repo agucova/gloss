@@ -50,8 +50,35 @@
   # Scripts for common tasks
   scripts = {
     dev.exec = ''
-      echo "Starting Gloss development servers..."
+      echo "Starting Gloss (web :3001 + server :3000 + extension HMR :5555)..."
+      echo "Extension output: apps/extension/.output/chrome-mv3-dev"
+      echo ""
       bun run dev
+    '';
+
+    dev-chrome.exec = ''
+      echo "Starting Gloss for Chrome..."
+      echo "Extension auto-loads with browser"
+      echo ""
+      bun run dev
+    '';
+
+    dev-firefox.exec = ''
+      echo "Starting Gloss for Firefox..."
+      echo "Extension auto-loads with browser"
+      echo ""
+      bun run dev:firefox
+    '';
+
+    build-ext.exec = ''
+      echo "Building browser extension..."
+      bun run build:ext
+      echo "Output: apps/extension/.output/chrome-mv3"
+    '';
+
+    zip-ext.exec = ''
+      echo "Packaging browser extension for Chrome Web Store..."
+      bun run zip:ext
     '';
 
     db-reset.exec = ''
@@ -66,9 +93,16 @@
       bun install
       echo ""
       echo "Pushing database schema..."
+      echo "(Make sure PostgreSQL is running: 'devenv up' in another terminal)"
+      echo ""
       bun run db:push
       echo ""
-      echo "Setup complete! Run 'dev' to start the development servers."
+      echo "Setup complete! Run 'dev' to start all services."
+    '';
+
+    pg.exec = ''
+      echo "Starting PostgreSQL..."
+      devenv up postgres
     '';
   };
 
@@ -78,18 +112,18 @@
     echo "Gloss Development Environment"
     echo "=============================="
     echo ""
-    echo "PostgreSQL: localhost:5432/gloss (user: postgres, pass: postgres)"
-    echo "Version control: jj (jujutsu)"
+    echo "First time? Run in separate terminals:"
+    echo "  1. devenv up    # Starts PostgreSQL"
+    echo "  2. setup        # Install deps + push schema"
+    echo "  3. dev-chrome   # Start all services + open Chrome"
     echo ""
-    echo "Available commands:"
-    echo "  dev        - Start all development servers"
-    echo "  setup      - Install deps + push DB schema"
-    echo "  db-reset   - Drop and recreate the database"
-    echo ""
-    echo "Manual commands:"
-    echo "  bun run dev:web     - Web app only (port 3001)"
-    echo "  bun run dev:server  - API server only (port 3000)"
-    echo "  bun run db:studio   - Open Drizzle Studio"
+    echo "Commands:"
+    echo "  dev-chrome  - All services + open Chrome"
+    echo "  dev-firefox - All services + open Firefox"
+    echo "  dev         - All services (no browser)"
+    echo "  setup       - Install deps + push DB schema"
+    echo "  build-ext   - Build extension for production"
+    echo "  db-reset    - Drop and recreate database"
     echo ""
   '';
 

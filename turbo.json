@@ -17,6 +17,10 @@
       "cache": false,
       "persistent": true
     },
+    "dev:firefox": {
+      "cache": false,
+      "persistent": true
+    },
     "db:push": {
       "cache": false
     },
@@ -28,6 +32,17 @@
       "cache": false
     },
     "db:generate": {
+      "cache": false
+    },
+    "db:seed": {
+      "cache": false
+    },
+    "deploy": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "deploy:preview": {
+      "dependsOn": ["build"],
       "cache": false
     }
   }

@@ -1,6 +1,25 @@
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
 	modules: ["@wxt-dev/module-react"],
+	vite: () => ({
+		plugins: [tailwindcss()],
+	}),
+	manifest: {
+		name: "Gloss",
+		description:
+			"Highlight text on any webpage and share with friends. See what your friends are reading and highlighting across the web.",
+		version: "0.1.0",
+		permissions: ["storage", "activeTab"],
+		host_permissions: ["<all_urls>"],
+		chrome_url_overrides: {
+			newtab: "newtab.html",
+		},
+	},
+	// Auto-open browser with extension loaded, navigate to web app
+	webExt: {
+		startUrls: ["http://localhost:3001"],
+	},
 });

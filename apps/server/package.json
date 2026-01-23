@@ -7,6 +7,7 @@
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "dev": "bun run --hot src/index.ts",
+    "dev:firefox": "bun run --hot src/index.ts",
     "start": "bun run dist/index.js"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "@paralleldrive/cuid2": "^3.0.6",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.45.1",
     "elysia": "catalog:",
     "zod": "catalog:"
   },

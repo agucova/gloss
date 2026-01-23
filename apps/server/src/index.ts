@@ -17,7 +17,7 @@ export const app = new Elysia()
 	.all("/api/auth/*", async (context) => {
 		const { request, set } = context;
 		if (["POST", "GET"].includes(request.method)) {
-			return auth.handler(request);
+			return await auth.handler(request);
 		}
 		set.status = 405;
 		return { error: "Method not allowed" };

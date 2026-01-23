@@ -36,11 +36,11 @@ export type NetworkLink = z.infer<typeof networkLinkSchema>;
 /**
  * Options for creating a CuriusClient
  */
-export type CuriusClientOptions = {
+export interface CuriusClientOptions {
 	/** JWT token for authentication */
 	token: string;
 	/** Base URL override (defaults to https://curius.app) */
 	baseUrl?: string;
 	/** Request timeout in ms (defaults to 10000) */
 	timeout?: number;
-};
+}

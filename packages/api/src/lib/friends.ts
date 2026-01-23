@@ -1,5 +1,6 @@
-import { and, db, eq, or } from "@gloss/db";
+import { db } from "@gloss/db";
 import { friendship } from "@gloss/db/schema";
+import { and, eq, or } from "drizzle-orm";
 
 /**
  * Get all accepted friend IDs for a user.

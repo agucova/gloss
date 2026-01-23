@@ -16,6 +16,7 @@
     "@gloss/env": "workspace:*",
     "@paralleldrive/cuid2": "^3.0.6",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.45.1",
     "elysia": "catalog:"
   },
   "devDependencies": {

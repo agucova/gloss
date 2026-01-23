@@ -1,8 +1,9 @@
-import { and, db, desc, eq, inArray, or } from "@gloss/db";
+import { auth } from "@gloss/auth";
+import { db } from "@gloss/db";
 import { highlight } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { authPlugin, protectedPlugin } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import { hashUrl, normalizeUrl } from "../lib/url";
 import {
@@ -15,7 +16,13 @@ import {
  * Highlights routes.
  */
 export const highlights = new Elysia({ prefix: "/highlights" })
-	.use(authPlugin)
+	// Derive session for all highlight routes
+	.derive(async ({ request }) => {
+		const session = await auth.api.getSession({
+			headers: request.headers,
+		});
+		return { session };
+	})
 
 	// Get highlights for a URL (visibility-filtered based on auth)
 	.get(
@@ -68,13 +75,15 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 		}
 	)
 
-	// Protected routes below
-	.use(protectedPlugin)
-
 	// Create a new highlight
 	.post(
 		"/",
 		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const normalizedUrl = normalizeUrl(body.url);
 			const urlHash = await hashUrl(normalizedUrl);
 
@@ -82,7 +91,7 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 				.insert(highlight)
 				.values({
 					id: createId(),
-					userId: session!.user.id,
+					userId: session.user.id,
 					url: normalizedUrl,
 					urlHash,
 					selector: body.selector,
@@ -104,26 +113,22 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 	// Get own highlights (paginated)
 	.get(
 		"/mine",
-		async ({ query, session }) => {
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const limit = query.limit ?? 20;
 			const results = await db.query.highlight.findMany({
-				where: eq(highlight.userId, session!.user.id),
+				where: eq(highlight.userId, session.user.id),
 				orderBy: [desc(highlight.createdAt)],
-				limit: limit + 1, // Fetch one extra to check if there's more
-				...(query.cursor && {
-					where: and(
-						eq(highlight.userId, session!.user.id)
-						// Cursor is the createdAt timestamp
-						// We need to fetch highlights older than the cursor
-					),
-				}),
+				limit: limit + 1,
 			});
 
 			const hasMore = results.length > limit;
 			const items = hasMore ? results.slice(0, -1) : results;
-			const nextCursor = hasMore
-				? items[items.length - 1]?.createdAt.toISOString()
-				: null;
+			const nextCursor = hasMore ? items.at(-1)?.createdAt.toISOString() : null;
 
 			return {
 				items,
@@ -139,6 +144,11 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 	.patch(
 		"/:id",
 		async ({ params, body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			// Verify ownership
 			const existing = await db.query.highlight.findFirst({
 				where: eq(highlight.id, params.id),
@@ -149,7 +159,7 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 				return { error: "Highlight not found" };
 			}
 
-			if (existing.userId !== session!.user.id) {
+			if (existing.userId !== session.user.id) {
 				set.status = 403;
 				return { error: "Not authorized to update this highlight" };
 			}
@@ -178,6 +188,11 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 	.delete(
 		"/:id",
 		async ({ params, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			// Verify ownership
 			const existing = await db.query.highlight.findFirst({
 				where: eq(highlight.id, params.id),
@@ -188,7 +203,7 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 				return { error: "Highlight not found" };
 			}
 
-			if (existing.userId !== session!.user.id) {
+			if (existing.userId !== session.user.id) {
 				set.status = 403;
 				return { error: "Not authorized to delete this highlight" };
 			}

@@ -11,7 +11,7 @@
  * XPath-based range selector for precise DOM positioning.
  * Most precise but brittle to DOM changes.
  */
-export type RangeSelector = {
+export interface RangeSelector {
 	type: "RangeSelector";
 	/** XPath to start container node (relative to root) */
 	startContainer: string;
@@ -21,25 +21,25 @@ export type RangeSelector = {
 	endContainer: string;
 	/** Character offset within end container */
 	endOffset: number;
-};
+}
 
 /**
  * Character position selector based on textContent offsets.
  * More reliable than XPath but can drift with content changes.
  */
-export type TextPositionSelector = {
+export interface TextPositionSelector {
 	type: "TextPositionSelector";
 	/** Start character offset in root's textContent */
 	start: number;
 	/** End character offset in root's textContent */
 	end: number;
-};
+}
 
 /**
  * Text quote selector with surrounding context.
  * Most robust to page changes via fuzzy matching.
  */
-export type TextQuoteSelector = {
+export interface TextQuoteSelector {
 	type: "TextQuoteSelector";
 	/** The exact highlighted text */
 	exact: string;
@@ -47,17 +47,17 @@ export type TextQuoteSelector = {
 	prefix: string;
 	/** Text immediately after the highlight (~32 chars) */
 	suffix: string;
-};
+}
 
 /**
  * All three selector types stored together for maximum resilience.
  * Anchoring tries each in order until one succeeds.
  */
-export type AnnotationSelector = {
+export interface AnnotationSelector {
 	range: RangeSelector;
 	position: TextPositionSelector;
 	quote: TextQuoteSelector;
-};
+}
 
 // ============================================================================
 // Anchoring Types
@@ -69,36 +69,36 @@ export type AnchorMethod = "range" | "position" | "quote" | "fuzzy";
 /**
  * Result of successfully anchoring a selector to the DOM.
  */
-export type AnchorResult = {
+export interface AnchorResult {
 	/** The DOM Range representing the anchored highlight */
 	range: Range;
 	/** Which anchoring strategy succeeded */
 	method: AnchorMethod;
 	/** Confidence score (0-1). Lower for fuzzy matches. */
 	confidence: number;
-};
+}
 
 /**
  * Options for the describe() function.
  */
-export type DescribeOptions = {
+export interface DescribeOptions {
 	/** Root element to describe relative to (defaults to document.body) */
 	root?: Element;
 	/** Length of prefix/suffix context (defaults to 32) */
 	contextLength?: number;
-};
+}
 
 /**
  * Options for the anchor() function.
  */
-export type AnchorOptions = {
+export interface AnchorOptions {
 	/** Root element to anchor within (defaults to document.body) */
 	root?: Element;
 	/** Maximum errors allowed for fuzzy matching (defaults to 10% of quote length) */
 	maxFuzzyErrors?: number;
 	/** Position hint for faster fuzzy search */
 	positionHint?: number;
-};
+}
 
 // ============================================================================
 // Highlight Types
@@ -110,7 +110,7 @@ export type HighlightColor = string;
 /**
  * Options for highlighting a range.
  */
-export type HighlightOptions = {
+export interface HighlightOptions {
 	/** Unique identifier for the highlight */
 	id: string;
 	/** Background color (CSS value) */
@@ -123,17 +123,17 @@ export type HighlightOptions = {
 	onMouseEnter?: (event: MouseEvent) => void;
 	/** Mouseleave handler */
 	onMouseLeave?: (event: MouseEvent) => void;
-};
+}
 
 /**
  * Result of highlighting a range.
  */
-export type HighlightResult = {
+export interface HighlightResult {
 	/** The <mark> elements created */
 	elements: HTMLElement[];
 	/** Function to remove the highlight and restore original DOM */
 	cleanup: () => void;
-};
+}
 
 // ============================================================================
 // Manager Types
@@ -142,7 +142,7 @@ export type HighlightResult = {
 /**
  * A highlight with its selector and metadata.
  */
-export type Highlight = {
+export interface Highlight {
 	/** Unique identifier */
 	id: string;
 	/** The selector for re-anchoring */
@@ -151,12 +151,12 @@ export type Highlight = {
 	color?: HighlightColor;
 	/** Additional metadata (user ID, timestamp, etc.) */
 	metadata?: Record<string, unknown>;
-};
+}
 
 /**
  * An active highlight with DOM state.
  */
-export type ActiveHighlight = {
+export interface ActiveHighlight {
 	/** The highlight definition */
 	highlight: Highlight;
 	/** Current DOM range (null if orphaned) */
@@ -167,7 +167,7 @@ export type ActiveHighlight = {
 	method: AnchorMethod | null;
 	/** Function to remove from DOM */
 	cleanup: () => void;
-};
+}
 
 /**
  * Events emitted by HighlightManager.
@@ -182,7 +182,7 @@ export type HighlightEvent =
 /**
  * Options for HighlightManager.
  */
-export type HighlightManagerOptions = {
+export interface HighlightManagerOptions {
 	/** Root element (defaults to document.body) */
 	root?: Element;
 	/** Debounce interval for re-anchoring after DOM changes (ms) */
@@ -191,19 +191,19 @@ export type HighlightManagerOptions = {
 	defaultColor?: HighlightColor;
 	/** Event callback */
 	onEvent?: (event: HighlightEvent) => void;
-};
+}
 
 /**
  * Current state of the HighlightManager.
  */
-export type HighlightManagerState = {
+export interface HighlightManagerState {
 	/** Active highlights by ID */
 	highlights: Map<string, ActiveHighlight>;
 	/** IDs of highlights that couldn't be anchored */
 	orphaned: Set<string>;
 	/** Current URL being tracked */
 	url: string;
-};
+}
 
 // ============================================================================
 // Error Types
@@ -237,11 +237,11 @@ export class AnchorError extends Error {
  * Curius highlight position format.
  * @see packages/curius/src/schemas.ts
  */
-export type CuriusHighlightPosition = {
+export interface CuriusHighlightPosition {
 	rawHighlight: string;
 	leftContext: string;
 	rightContext: string;
-};
+}
 
 /**
  * Convert Curius position format to TextQuoteSelector.

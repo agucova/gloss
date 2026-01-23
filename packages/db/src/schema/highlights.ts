@@ -8,6 +8,7 @@ import {
 	timestamp,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
+import { comment } from "./comments";
 
 export const visibilityEnum = pgEnum("visibility", [
 	"private",
@@ -45,9 +46,10 @@ export const highlight = pgTable(
 	]
 );
 
-export const highlightRelations = relations(highlight, ({ one }) => ({
+export const highlightRelations = relations(highlight, ({ one, many }) => ({
 	user: one(user, {
 		fields: [highlight.userId],
 		references: [user.id],
 	}),
+	comments: many(comment),
 }));

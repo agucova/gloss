@@ -36,11 +36,102 @@ export function extractText(node: Node): string {
 }
 
 /**
+ * Resolve a Range boundary (node + offset) to a text node and character offset.
+ * Range boundaries can be either:
+ * - Text node with character offset
+ * - Element node with child index offset
+ */
+function resolveRangeBoundary(
+	node: Node,
+	offset: number
+): { textNode: Text; offset: number } | null {
+	// If it's already a text node, return as-is
+	if (node.nodeType === Node.TEXT_NODE) {
+		return { textNode: node as Text, offset };
+	}
+
+	// It's an element - offset is the index of the child node
+	// Find the text position at that boundary
+	const childNodes = node.childNodes;
+
+	if (offset === 0) {
+		// Position is before all children - find first text node
+		const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+		const firstText = walker.nextNode() as Text | null;
+		if (firstText) {
+			return { textNode: firstText, offset: 0 };
+		}
+		return null;
+	}
+
+	if (offset >= childNodes.length) {
+		// Position is after all children - find last text node
+		const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+		let lastText: Text | null = null;
+		let current = walker.nextNode() as Text | null;
+		while (current) {
+			lastText = current;
+			current = walker.nextNode() as Text | null;
+		}
+		if (lastText) {
+			return { textNode: lastText, offset: lastText.length };
+		}
+		return null;
+	}
+
+	// Position is between children - find text at that boundary
+	// The boundary is just before the child at `offset`
+	const childBefore = childNodes[offset - 1];
+	if (childBefore) {
+		// Find the last text node in this child's subtree
+		if (childBefore.nodeType === Node.TEXT_NODE) {
+			return {
+				textNode: childBefore as Text,
+				offset: childBefore.textContent?.length ?? 0,
+			};
+		}
+		const walker = document.createTreeWalker(
+			childBefore,
+			NodeFilter.SHOW_TEXT,
+			null
+		);
+		let lastText: Text | null = null;
+		let current = walker.nextNode() as Text | null;
+		while (current) {
+			lastText = current;
+			current = walker.nextNode() as Text | null;
+		}
+		if (lastText) {
+			return { textNode: lastText, offset: lastText.length };
+		}
+	}
+
+	// Fallback: find first text node starting from the child at offset
+	const childAt = childNodes[offset];
+	if (childAt) {
+		if (childAt.nodeType === Node.TEXT_NODE) {
+			return { textNode: childAt as Text, offset: 0 };
+		}
+		const walker = document.createTreeWalker(
+			childAt,
+			NodeFilter.SHOW_TEXT,
+			null
+		);
+		const firstText = walker.nextNode() as Text | null;
+		if (firstText) {
+			return { textNode: firstText, offset: 0 };
+		}
+	}
+
+	return null;
+}
+
+/**
  * Calculate the character offset of a position within a root's textContent.
  *
  * @param root - The root element
- * @param node - The text node containing the position
- * @param offset - The offset within the text node
+ * @param node - The node containing the position (can be text or element)
+ * @param offset - The offset within the node
  * @returns Character offset from start of root's textContent, or -1 if not found
  */
 export function getTextOffset(
@@ -48,13 +139,21 @@ export function getTextOffset(
 	node: Node,
 	offset: number
 ): number {
+	// Resolve the boundary to an actual text node
+	const resolved = resolveRangeBoundary(node, offset);
+	if (!resolved) {
+		return -1;
+	}
+
+	const { textNode, offset: charOffset } = resolved;
+
 	let position = 0;
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
 
 	let current = walker.nextNode();
 	while (current) {
-		if (current === node) {
-			return position + offset;
+		if (current === textNode) {
+			return position + charOffset;
 		}
 		position += current.textContent?.length ?? 0;
 		current = walker.nextNode();
@@ -75,7 +174,9 @@ export function nodeAtOffset(
 	root: Element,
 	offset: number
 ): { node: Text; offset: number } | null {
-	if (offset < 0) return null;
+	if (offset < 0) {
+		return null;
+	}
 
 	let position = 0;
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);

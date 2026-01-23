@@ -1,8 +1,10 @@
-import { and, db, eq, or } from "@gloss/db";
+import { auth } from "@gloss/auth";
+import { db } from "@gloss/db";
 import { friendship, user } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
+import { and, eq, ilike, inArray, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { protectedPlugin } from "../lib/auth";
+import { getFriendIds } from "../lib/friends";
 import { FriendRequestSchema } from "../models";
 
 /**
@@ -10,13 +12,24 @@ import { FriendRequestSchema } from "../models";
  * All routes require authentication.
  */
 export const friendships = new Elysia({ prefix: "/friendships" })
-	.use(protectedPlugin)
+	// Derive session for all friendship routes
+	.derive(async ({ request }) => {
+		const session = await auth.api.getSession({
+			headers: request.headers,
+		});
+		return { session };
+	})
 
 	// Send a friend request
 	.post(
 		"/request",
 		async ({ body, session, set }) => {
-			const requesterId = session!.user.id;
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const requesterId = session.user.id;
 			const addresseeId = body.userId;
 
 			// Can't friend yourself
@@ -99,6 +112,11 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	.post(
 		"/:id/accept",
 		async ({ params, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const friendshipRecord = await db.query.friendship.findFirst({
 				where: eq(friendship.id, params.id),
 			});
@@ -109,7 +127,7 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 			}
 
 			// Only the addressee can accept
-			if (friendshipRecord.addresseeId !== session!.user.id) {
+			if (friendshipRecord.addresseeId !== session.user.id) {
 				set.status = 403;
 				return { error: "Not authorized to accept this request" };
 			}
@@ -138,6 +156,11 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	.post(
 		"/:id/reject",
 		async ({ params, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const friendshipRecord = await db.query.friendship.findFirst({
 				where: eq(friendship.id, params.id),
 			});
@@ -148,7 +171,7 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 			}
 
 			// Only the addressee can reject
-			if (friendshipRecord.addresseeId !== session!.user.id) {
+			if (friendshipRecord.addresseeId !== session.user.id) {
 				set.status = 403;
 				return { error: "Not authorized to reject this request" };
 			}
@@ -177,7 +200,12 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	.delete(
 		"/:userId",
 		async ({ params, session, set }) => {
-			const currentUserId = session!.user.id;
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const currentUserId = session.user.id;
 			const targetUserId = params.userId;
 
 			// Find the friendship
@@ -214,8 +242,13 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	)
 
 	// List friends
-	.get("/", async ({ session }) => {
-		const currentUserId = session!.user.id;
+	.get("/", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
+		}
+
+		const currentUserId = session.user.id;
 
 		const friendships = await db.query.friendship.findMany({
 			where: and(
@@ -242,10 +275,15 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	})
 
 	// List pending incoming requests
-	.get("/pending", async ({ session }) => {
+	.get("/pending", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
+		}
+
 		const pendingRequests = await db.query.friendship.findMany({
 			where: and(
-				eq(friendship.addresseeId, session!.user.id),
+				eq(friendship.addresseeId, session.user.id),
 				eq(friendship.status, "pending")
 			),
 			with: {
@@ -264,10 +302,15 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 	})
 
 	// List sent requests
-	.get("/sent", async ({ session }) => {
+	.get("/sent", async ({ session, set }) => {
+		if (!session) {
+			set.status = 401;
+			return { error: "Authentication required" };
+		}
+
 		const sentRequests = await db.query.friendship.findMany({
 			where: and(
-				eq(friendship.requesterId, session!.user.id),
+				eq(friendship.requesterId, session.user.id),
 				eq(friendship.status, "pending")
 			),
 			with: {
@@ -283,4 +326,32 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 			user: f.addressee,
 			createdAt: f.createdAt,
 		}));
-	});
+	})
+
+	// Search friends (for @mention autocomplete)
+	.get(
+		"/search",
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const friendIds = await getFriendIds(session.user.id);
+			if (friendIds.length === 0) return [];
+
+			const results = await db.query.user.findMany({
+				where: and(
+					inArray(user.id, friendIds),
+					ilike(user.name, `%${query.q}%`)
+				),
+				columns: { id: true, name: true, image: true },
+				limit: 10,
+			});
+
+			return results;
+		},
+		{
+			query: t.Object({ q: t.String() }),
+		}
+	);

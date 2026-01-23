@@ -2,13 +2,14 @@
  * Base error class for Curius API errors
  */
 export class CuriusError extends Error {
-	constructor(
-		message: string,
-		public readonly statusCode?: number,
-		public readonly code?: string
-	) {
+	readonly statusCode?: number;
+	readonly code?: string;
+
+	constructor(message: string, statusCode?: number, code?: string) {
 		super(message);
 		this.name = "CuriusError";
+		this.statusCode = statusCode;
+		this.code = code;
 	}
 }
 
@@ -26,12 +27,12 @@ export class CuriusAuthError extends CuriusError {
  * Thrown when rate limited (429)
  */
 export class CuriusRateLimitError extends CuriusError {
-	constructor(
-		message = "Rate limit exceeded",
-		public readonly retryAfter?: number
-	) {
+	readonly retryAfter?: number;
+
+	constructor(message = "Rate limit exceeded", retryAfter?: number) {
 		super(message, 429, "RATE_LIMIT");
 		this.name = "CuriusRateLimitError";
+		this.retryAfter = retryAfter;
 	}
 }
 

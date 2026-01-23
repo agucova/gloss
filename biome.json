@@ -8,6 +8,7 @@
   "files": {
     "ignoreUnknown": false,
     "includes": [
+      "!/nix/store",
       "!**/.next",
       "!**/dist",
       "!**/.turbo",
@@ -43,6 +44,9 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "performance": {
+        "noBarrelFile": "off"
+      },
       "correctness": {
         "useExhaustiveDependencies": "info"
       },
@@ -72,7 +76,8 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "double"
-    }
+    },
+    "globals": ["defineBackground", "defineContentScript", "browser"]
   },
   "css": {
     "parser": {

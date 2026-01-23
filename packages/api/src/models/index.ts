@@ -1,19 +1,43 @@
 import { t } from "elysia";
 
 /**
- * Selector schema for highlight anchoring.
- * The exact format is TBD based on anchoring approach.
- * For now, we use a flexible object that can hold various selector types.
+ * XPath-based range selector for precise DOM positioning.
+ */
+export const RangeSelectorSchema = t.Object({
+	type: t.Literal("RangeSelector"),
+	startContainer: t.String(),
+	startOffset: t.Number(),
+	endContainer: t.String(),
+	endOffset: t.Number(),
+});
+
+/**
+ * Character position selector based on textContent offsets.
+ */
+export const TextPositionSelectorSchema = t.Object({
+	type: t.Literal("TextPositionSelector"),
+	start: t.Number(),
+	end: t.Number(),
+});
+
+/**
+ * Text quote selector with surrounding context.
+ */
+export const TextQuoteSelectorSchema = t.Object({
+	type: t.Literal("TextQuoteSelector"),
+	exact: t.String(),
+	prefix: t.String(),
+	suffix: t.String(),
+});
+
+/**
+ * Composite selector containing all three selector types for maximum resilience.
+ * Matches @gloss/anchoring AnnotationSelector type.
  */
 export const SelectorSchema = t.Object({
-	type: t.String(),
-	// Additional fields depending on selector type
-	exact: t.Optional(t.String()),
-	prefix: t.Optional(t.String()),
-	suffix: t.Optional(t.String()),
-	// For range-based selectors
-	start: t.Optional(t.Number()),
-	end: t.Optional(t.Number()),
+	range: RangeSelectorSchema,
+	position: TextPositionSelectorSchema,
+	quote: TextQuoteSelectorSchema,
 });
 
 /**

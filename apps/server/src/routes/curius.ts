@@ -1,8 +1,9 @@
 import { auth } from "@gloss/auth";
 import { CuriusAuthError, CuriusClient, CuriusError } from "@gloss/curius";
-import { db, eq } from "@gloss/db";
+import { db } from "@gloss/db";
 import { curiusCredentials } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
+import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 /**

@@ -1,8 +1,8 @@
 {
-  "name": "extension",
-  "version": "0.0.0",
+  "name": "@gloss/extension",
+  "version": "0.1.0",
   "private": true,
-  "description": "manifest.json description",
+  "description": "Gloss browser extension for highlighting and sharing",
   "type": "module",
   "scripts": {
     "dev": "wxt --port 5555",
@@ -15,13 +15,23 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@gloss/anchoring": "workspace:*",
+    "@gloss/dashboard": "workspace:*",
+    "@elysiajs/eden": "^1.4.0",
+    "@tanstack/react-query": "^5.90.12",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.473.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.15",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@wxt-dev/module-react": "^1.1.5",
+    "server": "workspace:*",
+    "tailwindcss": "^4.0.15",
     "typescript": "^5.9.3",
     "wxt": "^0.20.6"
   }

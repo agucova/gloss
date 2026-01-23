@@ -48,7 +48,9 @@ function countSameTypeSiblings(node: Node): number {
 	let count = 0;
 	const parent = node.parentNode;
 
-	if (!parent) return 1;
+	if (!parent) {
+		return 1;
+	}
 
 	let sibling = parent.firstChild;
 	while (sibling) {
@@ -95,7 +97,7 @@ export function xpathFromNode(
 		return ".";
 	}
 
-	return "./" + parts.join("/");
+	return `./${parts.join("/")}`;
 }
 
 /**

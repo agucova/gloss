@@ -5,18 +5,25 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:firefox": "vite dev",
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "deploy": "bun run build && wrangler deploy",
+    "deploy:preview": "bun run build && wrangler deploy --env preview",
+    "cf:dev": "bun run build && wrangler dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.0.0",
     "@elysiajs/eden": "^1.4.6",
     "@gloss/api": "workspace:*",
     "@gloss/auth": "workspace:*",
+    "@gloss/dashboard": "workspace:*",
     "@gloss/db": "workspace:*",
     "@gloss/env": "workspace:*",
+    "@gloss/fonts": "workspace:*",
+    "server": "workspace:*",
     "@hookform/resolvers": "^5.1.1",
     "@tailwindcss/vite": "^4.0.15",
     "@tanstack/react-form": "^1.12.3",
@@ -38,6 +45,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250121.0",
     "@gloss/config": "workspace:*",
     "@tanstack/react-query-devtools": "^5.91.1",
     "@tanstack/react-router-devtools": "^1.141.1",
@@ -49,6 +57,7 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.15",
     "typescript": "catalog:",
-    "vite": "^6.2.2"
+    "vite": "^6.2.2",
+    "wrangler": "^4.4.0"
   }
 }

@@ -9,7 +9,7 @@ import { normalizeText } from "./text";
 /**
  * Result of a fuzzy match with scoring.
  */
-export type FuzzyMatch = {
+export interface FuzzyMatch {
 	/** Start index in the text */
 	start: number;
 	/** End index in the text */
@@ -18,7 +18,7 @@ export type FuzzyMatch = {
 	errors: number;
 	/** Computed score (higher is better) */
 	score: number;
-};
+}
 
 /**
  * Find approximate matches for a pattern in text.
@@ -81,7 +81,7 @@ export function fuzzySearchWithContext(
 	}
 
 	if (matches.length === 1) {
-		return matches[0];
+		return matches[0] ?? null;
 	}
 
 	// Score each match based on context alignment
@@ -143,7 +143,7 @@ function scoreContextMatch(text: string, context: string): number {
 	const maxErrors = Math.ceil(normalizedContext.length * 0.3);
 	const matches = fuzzySearch(normalizedText, normalizedContext, maxErrors);
 
-	if (matches.length > 0) {
+	if (matches.length > 0 && matches[0]) {
 		const bestMatch = matches[0];
 		// Score based on error rate
 		const errorRate = bestMatch.errors / normalizedContext.length;

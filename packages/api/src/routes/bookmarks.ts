@@ -1,8 +1,9 @@
-import { and, db, desc, eq } from "@gloss/db";
+import { auth } from "@gloss/auth";
+import { db } from "@gloss/db";
 import { bookmark } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
+import { and, desc, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { protectedPlugin } from "../lib/auth";
 import { hashUrl, normalizeUrl } from "../lib/url";
 import { CreateBookmarkSchema, CursorPaginationSchema } from "../models";
 
@@ -11,19 +12,30 @@ import { CreateBookmarkSchema, CursorPaginationSchema } from "../models";
  * All routes require authentication.
  */
 export const bookmarks = new Elysia({ prefix: "/bookmarks" })
-	.use(protectedPlugin)
+	// Derive session for all bookmark routes
+	.derive(async ({ request }) => {
+		const session = await auth.api.getSession({
+			headers: request.headers,
+		});
+		return { session };
+	})
 
 	// Create a bookmark
 	.post(
 		"/",
 		async ({ body, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const normalizedUrl = normalizeUrl(body.url);
 			const urlHash = await hashUrl(normalizedUrl);
 
 			// Check if already bookmarked
 			const existing = await db.query.bookmark.findFirst({
 				where: and(
-					eq(bookmark.userId, session!.user.id),
+					eq(bookmark.userId, session.user.id),
 					eq(bookmark.urlHash, urlHash)
 				),
 			});
@@ -37,7 +49,7 @@ export const bookmarks = new Elysia({ prefix: "/bookmarks" })
 				.insert(bookmark)
 				.values({
 					id: createId(),
-					userId: session!.user.id,
+					userId: session.user.id,
 					url: normalizedUrl,
 					urlHash,
 					title: body.title ?? null,
@@ -57,6 +69,11 @@ export const bookmarks = new Elysia({ prefix: "/bookmarks" })
 	.delete(
 		"/:id",
 		async ({ params, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const existing = await db.query.bookmark.findFirst({
 				where: eq(bookmark.id, params.id),
 			});
@@ -66,7 +83,7 @@ export const bookmarks = new Elysia({ prefix: "/bookmarks" })
 				return { error: "Bookmark not found" };
 			}
 
-			if (existing.userId !== session!.user.id) {
+			if (existing.userId !== session.user.id) {
 				set.status = 403;
 				return { error: "Not authorized to delete this bookmark" };
 			}
@@ -85,19 +102,22 @@ export const bookmarks = new Elysia({ prefix: "/bookmarks" })
 	// List bookmarks (paginated)
 	.get(
 		"/",
-		async ({ query, session }) => {
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const limit = query.limit ?? 20;
 			const results = await db.query.bookmark.findMany({
-				where: eq(bookmark.userId, session!.user.id),
+				where: eq(bookmark.userId, session.user.id),
 				orderBy: [desc(bookmark.createdAt)],
 				limit: limit + 1,
 			});
 
 			const hasMore = results.length > limit;
 			const items = hasMore ? results.slice(0, -1) : results;
-			const nextCursor = hasMore
-				? items[items.length - 1]?.createdAt.toISOString()
-				: null;
+			const nextCursor = hasMore ? items.at(-1)?.createdAt.toISOString() : null;
 
 			return {
 				items,
@@ -112,13 +132,18 @@ export const bookmarks = new Elysia({ prefix: "/bookmarks" })
 	// Check if URL is bookmarked
 	.get(
 		"/check",
-		async ({ query, session }) => {
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const normalizedUrl = normalizeUrl(query.url);
 			const urlHash = await hashUrl(normalizedUrl);
 
 			const existing = await db.query.bookmark.findFirst({
 				where: and(
-					eq(bookmark.userId, session!.user.id),
+					eq(bookmark.userId, session.user.id),
 					eq(bookmark.urlHash, urlHash)
 				),
 			});

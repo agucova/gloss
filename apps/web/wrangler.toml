@@ -1,0 +1,11 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "gloss-web"
+main = "src/worker.ts"
+compatibility_date = "2025-01-15"
+account_id = "d2fe37c02a1d31f3239f9c30c8907db7"
+
+# Static assets configuration
+[assets]
+directory = "dist"
+# Serve index.html for SPA routing (any unmatched routes)
+not_found_handling = "single-page-application"

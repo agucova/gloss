@@ -1,23 +1,35 @@
-import { and, db, desc, eq, inArray, lt, or } from "@gloss/db";
-import { highlight } from "@gloss/db/schema";
+import { auth } from "@gloss/auth";
+import { db } from "@gloss/db";
+import { bookmark, highlight } from "@gloss/db/schema";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { Elysia } from "elysia";
-import { protectedPlugin } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import { CursorPaginationSchema } from "../models";
 
 /**
  * Feed routes.
- * Shows friends' recent highlights.
+ * Shows friends' recent activity (highlights and bookmarks).
  */
 export const feed = new Elysia({ prefix: "/feed" })
-	.use(protectedPlugin)
+	// Derive session for all feed routes
+	.derive(async ({ request }) => {
+		const session = await auth.api.getSession({
+			headers: request.headers,
+		});
+		return { session };
+	})
 
 	// Get friends' recent highlights (paginated)
 	.get(
 		"/",
-		async ({ query, session }) => {
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
 			const limit = query.limit ?? 20;
-			const friendIds = await getFriendIds(session!.user.id);
+			const friendIds = await getFriendIds(session.user.id);
 
 			if (friendIds.length === 0) {
 				return {
@@ -27,11 +39,9 @@ export const feed = new Elysia({ prefix: "/feed" })
 			}
 
 			// Build cursor condition
-			let cursorCondition;
-			if (query.cursor) {
-				const cursorDate = new Date(query.cursor);
-				cursorCondition = lt(highlight.createdAt, cursorDate);
-			}
+			const cursorCondition = query.cursor
+				? lt(highlight.createdAt, new Date(query.cursor))
+				: undefined;
 
 			const results = await db.query.highlight.findMany({
 				where: and(
@@ -53,9 +63,54 @@ export const feed = new Elysia({ prefix: "/feed" })
 
 			const hasMore = results.length > limit;
 			const items = hasMore ? results.slice(0, -1) : results;
-			const nextCursor = hasMore
-				? items[items.length - 1]?.createdAt.toISOString()
-				: null;
+			const nextCursor = hasMore ? items.at(-1)?.createdAt.toISOString() : null;
+
+			return {
+				items,
+				nextCursor,
+			};
+		},
+		{
+			query: CursorPaginationSchema,
+		}
+	)
+
+	// Get friends' recent bookmarks (paginated)
+	.get(
+		"/bookmarks",
+		async ({ query, session, set }) => {
+			if (!session) {
+				set.status = 401;
+				return { error: "Authentication required" };
+			}
+
+			const limit = query.limit ?? 20;
+			const friendIds = await getFriendIds(session.user.id);
+
+			if (friendIds.length === 0) {
+				return {
+					items: [],
+					nextCursor: null,
+				};
+			}
+
+			// Build cursor condition
+			const cursorCondition = query.cursor
+				? lt(bookmark.createdAt, new Date(query.cursor))
+				: undefined;
+
+			const results = await db.query.bookmark.findMany({
+				where: and(inArray(bookmark.userId, friendIds), cursorCondition),
+				with: {
+					user: { columns: { id: true, name: true, image: true } },
+				},
+				orderBy: [desc(bookmark.createdAt)],
+				limit: limit + 1,
+			});
+
+			const hasMore = results.length > limit;
+			const items = hasMore ? results.slice(0, -1) : results;
+			const nextCursor = hasMore ? items.at(-1)?.createdAt.toISOString() : null;
 
 			return {
 				items,

@@ -13,5 +13,9 @@ export default defineConfig({
 	},
 	server: {
 		port: 3001,
+		watch: {
+			// Ignore the auto-generated route tree to prevent infinite reload loops
+			ignored: ["**/routeTree.gen.ts"],
+		},
 	},
 });
