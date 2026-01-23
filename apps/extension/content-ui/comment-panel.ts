@@ -100,7 +100,7 @@ export function showCommentPanel(options: CommentPanelOptions): void {
 	const inputArea = buildInputArea(
 		onCreateComment,
 		onSearchFriends,
-		async (newComment) => {
+		async (_newComment) => {
 			// Refresh comments list after adding
 			const updatedComments = await onLoadComments();
 			buildCommentsList(
@@ -401,7 +401,9 @@ function buildInputArea(
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
 			const content = input.value.trim();
-			if (!content) return;
+			if (!content) {
+				return;
+			}
 
 			// Extract mentions from content
 			const mentions = extractMentions(content, friends);
@@ -558,7 +560,9 @@ function escapeHtml(text: string): string {
  * Format a timestamp as relative time.
  */
 function formatRelativeTime(dateString?: string): string {
-	if (!dateString) return "";
+	if (!dateString) {
+		return "";
+	}
 
 	const date = new Date(dateString);
 	const now = new Date();
@@ -568,10 +572,18 @@ function formatRelativeTime(dateString?: string): string {
 	const diffHours = Math.floor(diffMinutes / 60);
 	const diffDays = Math.floor(diffHours / 24);
 
-	if (diffSeconds < 60) return "just now";
-	if (diffMinutes < 60) return `${diffMinutes}m ago`;
-	if (diffHours < 24) return `${diffHours}h ago`;
-	if (diffDays < 30) return `${diffDays}d ago`;
+	if (diffSeconds < 60) {
+		return "just now";
+	}
+	if (diffMinutes < 60) {
+		return `${diffMinutes}m ago`;
+	}
+	if (diffHours < 24) {
+		return `${diffHours}h ago`;
+	}
+	if (diffDays < 30) {
+		return `${diffDays}d ago`;
+	}
 
 	return date.toLocaleDateString();
 }

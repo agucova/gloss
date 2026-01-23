@@ -30,9 +30,15 @@ async function canViewHighlight(
 	hl: typeof highlight.$inferSelect,
 	userId?: string
 ): Promise<boolean> {
-	if (hl.visibility === "public") return true;
-	if (!userId) return false;
-	if (hl.userId === userId) return true;
+	if (hl.visibility === "public") {
+		return true;
+	}
+	if (!userId) {
+		return false;
+	}
+	if (hl.userId === userId) {
+		return true;
+	}
 	if (hl.visibility === "friends") {
 		return await areFriends(hl.userId, userId);
 	}
@@ -47,13 +53,17 @@ async function canCommentOnHighlight(
 	userId: string
 ): Promise<boolean> {
 	// Owner can always comment
-	if (hl.userId === userId) return true;
+	if (hl.userId === userId) {
+		return true;
+	}
 	// Friends can comment on friends-visible highlights
 	if (hl.visibility === "friends") {
 		return await areFriends(hl.userId, userId);
 	}
 	// Anyone authenticated can comment on public highlights
-	if (hl.visibility === "public") return true;
+	if (hl.visibility === "public") {
+		return true;
+	}
 	return false;
 }
 
@@ -64,7 +74,9 @@ async function validateMentions(
 	mentionIds: string[],
 	userId: string
 ): Promise<string[]> {
-	if (mentionIds.length === 0) return [];
+	if (mentionIds.length === 0) {
+		return [];
+	}
 	const friendIds = await getFriendIds(userId);
 	const validIds = new Set([userId, ...friendIds]);
 	return mentionIds.filter((id) => validIds.has(id));
@@ -158,15 +170,12 @@ export const comments = new Elysia({ prefix: "/comments" })
 			const commentId = createId();
 
 			// Insert comment
-			const [newComment] = await db
-				.insert(comment)
-				.values({
-					id: commentId,
-					highlightId: body.highlightId,
-					authorId: session.user.id,
-					content: body.content,
-				})
-				.returning();
+			await db.insert(comment).values({
+				id: commentId,
+				highlightId: body.highlightId,
+				authorId: session.user.id,
+				content: body.content,
+			});
 
 			// Insert mentions
 			if (validMentions.length > 0) {

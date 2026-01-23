@@ -244,7 +244,7 @@ async function createHighlight(
 /**
  * Update highlight color by modifying DOM elements directly.
  */
-function updateHighlightColor(
+function _updateHighlightColor(
 	manager: HighlightManager,
 	highlightId: string,
 	color: string

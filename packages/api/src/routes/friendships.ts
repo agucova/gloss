@@ -338,7 +338,9 @@ export const friendships = new Elysia({ prefix: "/friendships" })
 			}
 
 			const friendIds = await getFriendIds(session.user.id);
-			if (friendIds.length === 0) return [];
+			if (friendIds.length === 0) {
+				return [];
+			}
 
 			const results = await db.query.user.findMany({
 				where: and(
