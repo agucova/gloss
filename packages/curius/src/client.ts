@@ -12,6 +12,7 @@ import {
 	getFollowingResponseSchema,
 	getLinkByUrlResponseSchema,
 	getNetworkLinksResponseSchema,
+	getUserLinksResponseSchema,
 	getUserResponseSchema,
 } from "./schemas";
 import type {
@@ -20,7 +21,7 @@ import type {
 	CuriusLink,
 	CuriusUser,
 	HighlightPosition,
-	NetworkLink,
+	NetworkInfo,
 } from "./types";
 
 const CURIUS_BASE_URL = "https://curius.app";
@@ -36,6 +37,7 @@ const ENDPOINTS = {
 
 	// Links
 	ADD_LINK: "/api/links",
+	GET_USER_LINKS: "/api/links",
 	GET_LINK_BY_URL: "/api/links/url",
 	GET_NETWORK_LINKS: "/api/links/url/network",
 	DELETE_LINK: (id: string) => `/api/links/${id}`,
@@ -174,11 +176,12 @@ export class CuriusClient {
 	 * Get the current authenticated user's profile
 	 */
 	async getUser(): Promise<CuriusUser> {
-		return await this.request(
+		const response = await this.request(
 			ENDPOINTS.GET_USER,
 			{ method: "GET" },
 			getUserResponseSchema
 		);
+		return response.user;
 	}
 
 	/**
@@ -196,6 +199,18 @@ export class CuriusClient {
 	// =========================================================================
 	// Link endpoints
 	// =========================================================================
+
+	/**
+	 * Get all links saved by the current user (with highlights)
+	 */
+	async getUserLinks(): Promise<CuriusLink[]> {
+		const response = await this.request(
+			ENDPOINTS.GET_USER_LINKS,
+			{ method: "GET" },
+			getUserLinksResponseSchema
+		);
+		return response.links;
+	}
 
 	/**
 	 * Add a new link/bookmark
@@ -221,7 +236,7 @@ export class CuriusClient {
 	 */
 	async getLinkByUrl(url: string): Promise<CuriusLink | null> {
 		try {
-			return await this.request(
+			const response = await this.request(
 				ENDPOINTS.GET_LINK_BY_URL,
 				{
 					method: "POST",
@@ -229,6 +244,7 @@ export class CuriusClient {
 				},
 				getLinkByUrlResponseSchema
 			);
+			return response.link;
 		} catch (error) {
 			if (error instanceof CuriusNotFoundError) {
 				return null;
@@ -238,10 +254,10 @@ export class CuriusClient {
 	}
 
 	/**
-	 * Get friend/network links for a URL (highlights from people you follow)
+	 * Get network info for a URL (who saved it and their highlights)
 	 */
-	async getNetworkLinks(url: string): Promise<NetworkLink[]> {
-		return await this.request(
+	async getNetworkInfo(url: string): Promise<NetworkInfo> {
+		const response = await this.request(
 			ENDPOINTS.GET_NETWORK_LINKS,
 			{
 				method: "POST",
@@ -249,6 +265,7 @@ export class CuriusClient {
 			},
 			getNetworkLinksResponseSchema
 		);
+		return response.networkInfo;
 	}
 
 	/**

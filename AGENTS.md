@@ -93,18 +93,26 @@ Then mount in `apps/server/src/index.ts` with `.use(myRoutes)`.
 
 ## Environment Variables
 
-### Server (`apps/server/.env`)
+All env vars live in a single `.env` file at the repo root (see `.env.example`).
+
+### Development (`.env`)
 ```
-DATABASE_URL=postgresql://...
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/gloss
 BETTER_AUTH_SECRET=<min 32 chars>
 BETTER_AUTH_URL=http://localhost:3000
-CORS_ORIGIN=http://localhost:3001
+VITE_SERVER_URL=http://localhost:3000
+VITE_WEB_URL=http://localhost:3001
 NODE_ENV=development
 ```
 
-### Web (`apps/web/.env`)
+### Production (`.env.production`)
+Used for `:prod` script variants (e.g., `db:push:prod`, `db:studio:prod`).
 ```
-VITE_SERVER_URL=http://localhost:3000
+DATABASE_URL=postgresql://...
+BETTER_AUTH_URL=https://api.gloss.agus.sh
+VITE_SERVER_URL=https://api.gloss.agus.sh
+VITE_WEB_URL=https://gloss.agus.sh
+NODE_ENV=production
 ```
 
 ---

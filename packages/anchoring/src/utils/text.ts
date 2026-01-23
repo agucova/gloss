@@ -41,6 +41,7 @@ export function extractText(node: Node): string {
  * - Text node with character offset
  * - Element node with child index offset
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: DOM traversal with multiple edge cases
 function resolveRangeBoundary(
 	node: Node,
 	offset: number

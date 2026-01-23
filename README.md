@@ -35,7 +35,7 @@ This project uses PostgreSQL with Drizzle ORM.
 devenv up
 ```
 
-Then set `DATABASE_URL` in `apps/server/.env` (see `apps/server/.env.example`):
+Then copy `.env.example` to `.env` at the repo root and configure your database:
 ```
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gloss
 ```
@@ -103,7 +103,7 @@ gloss/
    DATABASE_URL=<your-runway-postgres-url>
    BETTER_AUTH_SECRET=<generate with: openssl rand -base64 32>
    BETTER_AUTH_URL=https://your-api.example.com
-   CORS_ORIGIN=https://your-web-app.example.com
+   VITE_WEB_URL=https://your-web-app.example.com
    NODE_ENV=production
    ```
    Note: `PORT` is injected automatically by Runway.
@@ -147,7 +147,7 @@ If you prefer to keep everything on Runway:
 - [ ] Create "Default role" and save credentials (shown only once!)
 - [ ] Use connection string with `sslmode=verify-full` and port `6432` (PgBouncer)
 - [ ] Generate a secure `BETTER_AUTH_SECRET`: `openssl rand -base64 32`
-- [ ] Set `CORS_ORIGIN` to your web app's production URL (e.g., `https://gloss.pages.dev`)
+- [ ] Set `VITE_WEB_URL` to your web app's production URL (e.g., `https://gloss.pages.dev`)
 - [ ] Set `BETTER_AUTH_URL` to your API's production URL (e.g., `https://gloss-api.example.com`)
 - [ ] Run `DATABASE_URL=<url> bun run db:push` to create tables
 - [ ] Test authentication flow end-to-end

@@ -4,6 +4,7 @@ import type {
 	curiusLinkSchema,
 	curiusUserSchema,
 	highlightPositionSchema,
+	networkInfoSchema,
 	networkLinkSchema,
 } from "./schemas";
 
@@ -30,8 +31,14 @@ export type CuriusLink = z.infer<typeof curiusLinkSchema>;
 
 /**
  * A link with friend highlights (from network endpoint)
+ * @deprecated Use NetworkInfo instead
  */
 export type NetworkLink = z.infer<typeof networkLinkSchema>;
+
+/**
+ * Network info for a URL (includes users who saved it and highlights)
+ */
+export type NetworkInfo = z.infer<typeof networkInfoSchema>;
 
 /**
  * Options for creating a CuriusClient

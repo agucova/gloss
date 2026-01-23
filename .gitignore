@@ -8,9 +8,10 @@ dist
 build
 *.tsbuildinfo
 
-# Environment variables
+# Environment variables (keep .env.example)
 .env
-.env*.local
+.env.*
+!.env.example
 
 # IDEs and editors
 .vscode/*
@@ -55,4 +56,3 @@ temp
 # devenv
 .devenv
 .devenv.flake.nix
-devenv.lock

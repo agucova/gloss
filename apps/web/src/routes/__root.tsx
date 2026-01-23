@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import Header from "@/components/header";
+import { PasskeyPrompt } from "@/components/passkey-prompt";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import type { api } from "@/utils/api";
@@ -28,13 +29,14 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 			},
 			{
 				name: "description",
-				content: "gloss is a web application",
+				content: "Highlight text on any webpage and share with friends",
 			},
 		],
 		links: [
 			{
 				rel: "icon",
-				href: "/favicon.ico",
+				type: "image/svg+xml",
+				href: "/icon.svg",
 			},
 		],
 	}),
@@ -55,6 +57,7 @@ function RootComponent() {
 					<Outlet />
 				</div>
 				<Toaster richColors />
+				<PasskeyPrompt />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />
 			<ReactQueryDevtools buttonPosition="bottom-right" position="bottom" />

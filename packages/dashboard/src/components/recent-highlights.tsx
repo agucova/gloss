@@ -17,7 +17,7 @@ export function RecentHighlights({
 }: RecentHighlightsProps) {
 	const { data, isLoading, error } = useFriendsHighlights({
 		apiClient,
-		limit: 6,
+		limit: 5,
 	});
 
 	return (
@@ -26,31 +26,33 @@ export function RecentHighlights({
 				Recent highlights
 			</h2>
 
-			{isLoading && <RecentHighlightsSkeleton />}
+			<div className="min-h-32">
+				{isLoading && <RecentHighlightsSkeleton />}
 
-			{error && (
-				<div className="flex h-24 items-center justify-center rounded-xl border border-border border-dashed">
-					<p className="text-muted-foreground text-sm">
-						Unable to load recent highlights
-					</p>
-				</div>
-			)}
+				{error && (
+					<div className="flex min-h-24 items-center justify-center rounded-xl border border-border border-dashed">
+						<p className="text-muted-foreground text-sm">
+							Unable to load recent highlights
+						</p>
+					</div>
+				)}
 
-			{data && data.items.length === 0 && (
-				<div className="flex h-24 items-center justify-center rounded-xl border border-border border-dashed">
-					<p className="text-muted-foreground text-sm">
-						No recent highlights from friends yet
-					</p>
-				</div>
-			)}
+				{data && data.items.length === 0 && (
+					<div className="flex min-h-24 items-center justify-center rounded-xl border border-border border-dashed">
+						<p className="text-muted-foreground text-sm">
+							No recent highlights from friends yet
+						</p>
+					</div>
+				)}
 
-			{data && data.items.length > 0 && (
-				<div className="space-y-3">
-					{data.items.map((item) => (
-						<FriendActivityItem item={item} key={item.id} type="highlight" />
-					))}
-				</div>
-			)}
+				{data && data.items.length > 0 && (
+					<div className="space-y-3">
+						{data.items.map((item) => (
+							<FriendActivityItem item={item} key={item.id} type="highlight" />
+						))}
+					</div>
+				)}
+			</div>
 		</section>
 	);
 }

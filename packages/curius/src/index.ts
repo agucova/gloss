@@ -22,6 +22,7 @@ export {
 	getNetworkHighlightsInputSchema,
 	highlightPositionSchema,
 	networkHighlightSchema,
+	networkInfoSchema,
 	networkLinkSchema,
 } from "./schemas";
 // Types
@@ -31,5 +32,6 @@ export type {
 	CuriusLink,
 	CuriusUser,
 	HighlightPosition,
+	NetworkInfo,
 	NetworkLink,
 } from "./types";

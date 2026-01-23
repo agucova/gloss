@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@source "../../../../packages/dashboard/src/**/*.{ts,tsx}";
+
 @font-face {
 	font-family: "Satoshi";
 	src: url("/fonts/Satoshi-Regular.woff2") format("woff2");

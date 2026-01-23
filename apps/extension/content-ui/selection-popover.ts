@@ -4,7 +4,6 @@
  */
 
 import { type AnnotationSelector, describe } from "@gloss/anchoring";
-import { DEFAULT_HIGHLIGHT_COLOR } from "./color-picker";
 import {
 	createPopoverContainer,
 	hidePopover,
@@ -15,10 +14,8 @@ import {
 export interface SelectionPopoverOptions {
 	/** Bounding rect of the selection */
 	rect: DOMRect;
-	/** Selected text */
-	text: string;
 	/** Callback when user confirms highlight */
-	onHighlight: (color: string) => void;
+	onHighlight: () => void;
 	/** Whether user is authenticated */
 	isAuthenticated?: boolean;
 	/** Callback to open sign-in page */
@@ -30,7 +27,6 @@ const POPOVER_ID = "gloss-selection-popover";
 let currentHost: HTMLElement | null = null;
 let currentPopover: HTMLElement | null = null;
 let cleanupDismiss: (() => void) | null = null;
-let selectedColor = DEFAULT_HIGHLIGHT_COLOR;
 
 // Store the selector and text immediately when popover is shown,
 // before the DOM can change
@@ -41,7 +37,7 @@ let savedText: string | null = null;
  * Show the selection popover near the selected text.
  */
 export function showSelectionPopover(options: SelectionPopoverOptions): void {
-	const { rect, text, onHighlight, isAuthenticated = true, onSignIn } = options;
+	const { rect, onHighlight, isAuthenticated = true, onSignIn } = options;
 
 	// Create selector immediately from the current selection,
 	// before the DOM can change (e.g., from dynamic scripts on the page)
@@ -74,12 +70,9 @@ export function showSelectionPopover(options: SelectionPopoverOptions): void {
 	currentHost = host;
 	currentPopover = popover;
 
-	// Reset selected color
-	selectedColor = DEFAULT_HIGHLIGHT_COLOR;
-
 	// Build popover content
 	if (isAuthenticated) {
-		buildAuthenticatedContent(popover, text, onHighlight);
+		buildAuthenticatedContent(popover, onHighlight);
 	} else {
 		buildUnauthenticatedContent(popover, onSignIn);
 	}
@@ -148,8 +141,7 @@ export function clearSavedSelection(): void {
  */
 function buildAuthenticatedContent(
 	popover: HTMLElement,
-	_text: string,
-	onHighlight: (color: string) => void
+	onHighlight: () => void
 ): void {
 	// Simple highlight icon button
 	const highlightBtn = document.createElement("button");
@@ -163,7 +155,7 @@ function buildAuthenticatedContent(
 	highlightBtn.addEventListener("click", (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		onHighlight(selectedColor);
+		onHighlight();
 		hideSelectionPopover();
 	});
 

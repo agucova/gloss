@@ -20,16 +20,16 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 	return (
 		<section className={className}>
 			<h2 className="mb-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-				Recent links
+				Recent bookmarks
 			</h2>
 
-			<div className="rounded-xl border border-border bg-card p-4">
+			<div className="min-h-32 rounded-xl border border-border bg-card px-4 py-1.5">
 				{isLoading && <RecentLinksSkeleton />}
 
 				{error && (
 					<div className="flex h-24 items-center justify-center">
 						<p className="text-muted-foreground text-sm">
-							Unable to load recent links
+							Unable to load recent bookmarks
 						</p>
 					</div>
 				)}
@@ -37,7 +37,7 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 				{data && data.items.length === 0 && (
 					<div className="flex h-24 items-center justify-center">
 						<p className="text-muted-foreground text-sm">
-							No recent links from friends yet
+							No recent bookmarks from friends yet
 						</p>
 					</div>
 				)}

@@ -1,41 +1,14 @@
 import { createApiClient, getServerUrl } from "../utils/api";
 import type {
+	DashboardBookmark,
+	FeedBookmark,
+	FeedHighlight,
 	Message,
 	MessageResponse,
+	PaginatedResponse,
+	SearchResults,
 	ServerHighlight,
 } from "../utils/messages";
-
-/** Regex for validating hex color format */
-const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
-
-/** Regex for parsing rgba/rgb color format */
-const RGBA_COLOR_REGEX = /rgba?\((\d+),\s*(\d+),\s*(\d+)/;
-
-/**
- * Convert an rgba color string to hex format.
- * Falls back to the original color if parsing fails.
- */
-function rgbaToHex(color: string): string {
-	// If already hex, return as-is
-	if (HEX_COLOR_REGEX.test(color)) {
-		return color;
-	}
-
-	// Parse rgba(r, g, b, a) or rgb(r, g, b)
-	const match = color.match(RGBA_COLOR_REGEX);
-	if (!match) {
-		// Return default yellow if parsing fails
-		return "#FFFF00";
-	}
-
-	const r = Number.parseInt(match[1], 10);
-	const g = Number.parseInt(match[2], 10);
-	const b = Number.parseInt(match[3], 10);
-
-	// Convert to hex
-	const toHex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
-	return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
 
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
@@ -95,6 +68,39 @@ async function handleMessage(
 			return await handleDeleteComment(message.id);
 		case "SEARCH_FRIENDS":
 			return await handleSearchFriends(message.query);
+		case "LOAD_PAGE_COMMENT_SUMMARY":
+			return await handleLoadPageCommentSummary(message.highlightIds);
+		// Bookmark messages
+		case "GET_PAGE_METADATA":
+			return await handleGetPageMetadata();
+		case "GET_BOOKMARK_STATUS":
+			return await handleGetBookmarkStatus(message.url);
+		case "SAVE_BOOKMARK":
+			return await handleSaveBookmark(message);
+		case "UPDATE_BOOKMARK":
+			return await handleUpdateBookmark(message);
+		case "DELETE_BOOKMARK":
+			return await handleDeleteBookmark(message.id);
+		case "GET_USER_TAGS":
+			return await handleGetUserTags();
+		case "TOGGLE_FAVORITE":
+			return await handleToggleFavorite(message.id);
+		case "TOGGLE_READ_LATER":
+			return await handleToggleReadLater(message.id);
+		// Dashboard messages (for newtab)
+		case "GET_FEED_HIGHLIGHTS":
+			return await handleGetFeedHighlights(message.cursor, message.limit);
+		case "GET_FEED_BOOKMARKS":
+			return await handleGetFeedBookmarks(message.cursor, message.limit);
+		case "GET_MY_BOOKMARKS":
+			return await handleGetMyBookmarks(message.cursor, message.limit);
+		case "SEARCH_DASHBOARD":
+			return await handleSearchDashboard(message.query, message.limit);
+		// Settings messages
+		case "GET_USER_SETTINGS":
+			return await handleGetUserSettings();
+		case "SYNC_USER_SETTINGS":
+			return await handleSyncUserSettings();
 		default:
 			return { error: "Unknown message type" };
 	}
@@ -207,21 +213,16 @@ async function handleCreateHighlight(message: {
 	url: string;
 	selector: ServerHighlight["selector"];
 	text: string;
-	color?: string;
 	visibility?: "public" | "friends" | "private";
 }): Promise<{ highlight: ServerHighlight } | { error: string }> {
 	console.log("[Gloss] handleCreateHighlight called with:", message.url);
 	const api = createApiClient();
-
-	// Convert rgba to hex (server expects #RRGGBB format)
-	const hexColor = message.color ? rgbaToHex(message.color) : undefined;
 
 	const result = await apiCall<ServerHighlight>("create highlight", () =>
 		api.api.highlights.post({
 			url: message.url,
 			selector: message.selector,
 			text: message.text,
-			color: hexColor,
 			visibility: message.visibility,
 		})
 	);
@@ -242,8 +243,6 @@ async function handleCreateHighlight(message: {
 async function handleUpdateHighlight(
 	id: string,
 	updates: {
-		color?: string;
-		note?: string;
 		visibility?: "public" | "friends" | "private";
 	}
 ): Promise<{ highlight: ServerHighlight } | { error: string }> {
@@ -342,6 +341,7 @@ interface ServerCommentResponse {
 	id: string;
 	highlightId: string;
 	authorId: string;
+	parentId: string | null;
 	content: string;
 	createdAt: string;
 	updatedAt: string;
@@ -383,6 +383,7 @@ async function handleCreateComment(message: {
 	highlightId: string;
 	content: string;
 	mentions: string[];
+	parentId?: string;
 }): Promise<{ comment: ServerCommentResponse } | { error: string }> {
 	const api = createApiClient();
 	const result = await apiCall<ServerCommentResponse>("create comment", () =>
@@ -390,6 +391,7 @@ async function handleCreateComment(message: {
 			highlightId: message.highlightId,
 			content: message.content,
 			mentions: message.mentions,
+			parentId: message.parentId,
 		})
 	);
 
@@ -466,4 +468,556 @@ async function handleSearchFriends(
 	}
 
 	return { friends: result };
+}
+
+interface PageCommentSummaryResponse {
+	highlightComments: Array<{
+		highlightId: string;
+		comments: ServerCommentResponse[];
+	}>;
+	totalComments: number;
+	commenters: Array<{
+		id: string;
+		name: string | null;
+		image: string | null;
+	}>;
+}
+
+/**
+ * Load comment summary for all highlights on a page.
+ * Batches requests to get comments for each highlight and aggregates results.
+ */
+async function handleLoadPageCommentSummary(
+	highlightIds: string[]
+): Promise<PageCommentSummaryResponse | { error: string }> {
+	if (highlightIds.length === 0) {
+		return {
+			highlightComments: [],
+			totalComments: 0,
+			commenters: [],
+		};
+	}
+
+	const api = createApiClient();
+	const highlightComments: Array<{
+		highlightId: string;
+		comments: ServerCommentResponse[];
+	}> = [];
+	const commenterMap = new Map<
+		string,
+		{ id: string; name: string | null; image: string | null }
+	>();
+	let totalComments = 0;
+
+	// Load comments for all highlights in parallel
+	const results = await Promise.allSettled(
+		highlightIds.map(async (highlightId) => {
+			const result = await apiCall<ServerCommentResponse[]>(
+				"load comments",
+				() => api.api.comments.highlight({ highlightId }).get()
+			);
+			return { highlightId, result };
+		})
+	);
+
+	for (const settledResult of results) {
+		if (settledResult.status === "rejected") {
+			continue;
+		}
+
+		const { highlightId, result } = settledResult.value;
+		if ("error" in result) {
+			continue;
+		}
+
+		// Only include highlights that have comments
+		if (result.length > 0) {
+			highlightComments.push({ highlightId, comments: result });
+			totalComments += result.length;
+
+			// Collect unique commenters
+			for (const comment of result) {
+				if (!commenterMap.has(comment.authorId)) {
+					commenterMap.set(comment.authorId, {
+						id: comment.authorId,
+						name: comment.author.name,
+						image: comment.author.image,
+					});
+				}
+			}
+		}
+	}
+
+	return {
+		highlightComments,
+		totalComments,
+		commenters: Array.from(commenterMap.values()),
+	};
+}
+
+// ============================================================================
+// Bookmark handlers
+// ============================================================================
+
+interface ServerBookmarkResponse {
+	id: string;
+	userId: string;
+	url: string;
+	urlHash: string;
+	title: string | null;
+	description: string | null;
+	favicon: string | null;
+	ogImage: string | null;
+	ogDescription: string | null;
+	siteName: string | null;
+	createdAt: string;
+	tags: Array<{
+		id: string;
+		name: string;
+		color: string | null;
+		isSystem: boolean;
+	}>;
+}
+
+interface PageMetadataResponse {
+	title: string;
+	url: string;
+	favicon: string | null;
+	ogImage: string | null;
+	ogDescription: string | null;
+	siteName: string | null;
+}
+
+/**
+ * Get page metadata from the active tab's content script.
+ */
+async function handleGetPageMetadata(): Promise<{
+	metadata: PageMetadataResponse;
+}> {
+	try {
+		// Get the active tab
+		const [tab] = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+
+		if (!(tab?.id && tab.url)) {
+			return {
+				metadata: {
+					title: "",
+					url: "",
+					favicon: null,
+					ogImage: null,
+					ogDescription: null,
+					siteName: null,
+				},
+			};
+		}
+
+		// Send message to content script to extract metadata
+		const response = await browser.tabs.sendMessage(tab.id, {
+			type: "GET_PAGE_METADATA",
+		});
+
+		return { metadata: response.metadata };
+	} catch (error) {
+		console.error("[Gloss] Error getting page metadata:", error);
+		// Return basic info from the tab itself
+		const [tab] = await browser.tabs.query({
+			active: true,
+			currentWindow: true,
+		});
+		return {
+			metadata: {
+				title: tab?.title || "",
+				url: tab?.url || "",
+				favicon: tab?.favIconUrl || null,
+				ogImage: null,
+				ogDescription: null,
+				siteName: null,
+			},
+		};
+	}
+}
+
+/**
+ * Check if a URL is bookmarked.
+ */
+async function handleGetBookmarkStatus(
+	url: string
+): Promise<
+	| { bookmarked: true; bookmark: ServerBookmarkResponse }
+	| { bookmarked: false; bookmark: null }
+	| { error: string }
+> {
+	const api = createApiClient();
+	const result = await apiCall<{
+		bookmarked: boolean;
+		bookmark: ServerBookmarkResponse | null;
+	}>("check bookmark status", () =>
+		api.api.bookmarks.check.get({ query: { url } })
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	if (result.bookmarked && result.bookmark) {
+		return { bookmarked: true, bookmark: result.bookmark };
+	}
+
+	return { bookmarked: false, bookmark: null };
+}
+
+/**
+ * Save a new bookmark.
+ */
+async function handleSaveBookmark(message: {
+	url: string;
+	title?: string;
+	favicon?: string;
+	ogImage?: string;
+	ogDescription?: string;
+	siteName?: string;
+	tags?: string[];
+}): Promise<{ bookmark: ServerBookmarkResponse } | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<ServerBookmarkResponse>("save bookmark", () =>
+		api.api.bookmarks.post({
+			url: message.url,
+			title: message.title,
+			favicon: message.favicon,
+			ogImage: message.ogImage,
+			ogDescription: message.ogDescription,
+			siteName: message.siteName,
+			tags: message.tags,
+		})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	console.log("[Gloss] Saved bookmark:", result.id);
+	return { bookmark: result };
+}
+
+/**
+ * Update an existing bookmark.
+ */
+async function handleUpdateBookmark(message: {
+	id: string;
+	title?: string;
+	description?: string;
+	tags?: string[];
+}): Promise<{ bookmark: ServerBookmarkResponse } | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<ServerBookmarkResponse>("update bookmark", () =>
+		api.api.bookmarks({ id: message.id }).patch({
+			title: message.title,
+			description: message.description,
+			tags: message.tags,
+		})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	console.log("[Gloss] Updated bookmark:", message.id);
+	return { bookmark: result };
+}
+
+/**
+ * Delete a bookmark.
+ */
+async function handleDeleteBookmark(
+	id: string
+): Promise<{ success: boolean } | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<{ success: boolean }>("delete bookmark", () =>
+		api.api.bookmarks({ id }).delete()
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	console.log("[Gloss] Deleted bookmark:", id);
+	return { success: true };
+}
+
+/**
+ * Get user's tags for autocomplete.
+ */
+async function handleGetUserTags(): Promise<
+	| {
+			tags: Array<{
+				id: string;
+				name: string;
+				color: string | null;
+				isSystem: boolean;
+			}>;
+	  }
+	| { error: string }
+> {
+	const api = createApiClient();
+	const result = await apiCall<{
+		tags: Array<{
+			id: string;
+			name: string;
+			color: string | null;
+			isSystem: boolean;
+		}>;
+	}>("get user tags", () => api.api.bookmarks.tags.get({ query: {} }));
+
+	if ("error" in result) {
+		return result;
+	}
+
+	return { tags: result.tags };
+}
+
+/**
+ * Toggle favorite status on a bookmark.
+ * Returns the new favorited state - UI should refresh bookmark to see updated tags.
+ */
+async function handleToggleFavorite(
+	id: string
+): Promise<
+	{ favorited: boolean; bookmark: ServerBookmarkResponse } | { error: string }
+> {
+	const api = createApiClient();
+	const result = await apiCall<{ favorited: boolean }>("toggle favorite", () =>
+		api.api.bookmarks({ id }).favorite.post({})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	console.log("[Gloss] Toggled favorite:", id, result.favorited);
+	return {
+		favorited: result.favorited,
+		bookmark: {} as ServerBookmarkResponse, // UI should refetch to get updated tags
+	};
+}
+
+/**
+ * Toggle to-read status on a bookmark.
+ * Returns the new toRead state - UI should refresh bookmark to see updated tags.
+ */
+async function handleToggleReadLater(
+	id: string
+): Promise<
+	{ toRead: boolean; bookmark: ServerBookmarkResponse } | { error: string }
+> {
+	const api = createApiClient();
+	const result = await apiCall<{ toRead: boolean }>("toggle to-read", () =>
+		api.api.bookmarks({ id })["to-read"].post({})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	console.log("[Gloss] Toggled to-read:", id, result.toRead);
+	return {
+		toRead: result.toRead,
+		bookmark: {} as ServerBookmarkResponse, // UI should refetch to get updated tags
+	};
+}
+
+// ============================================================================
+// Dashboard handlers (for newtab)
+// ============================================================================
+
+const DEFAULT_LIMIT = 20;
+
+/**
+ * Get feed highlights (friends' highlights).
+ */
+async function handleGetFeedHighlights(
+	cursor?: string,
+	limit?: number
+): Promise<PaginatedResponse<FeedHighlight> | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<PaginatedResponse<FeedHighlight>>(
+		"get feed highlights",
+		() => api.api.feed.get({ query: { cursor, limit: limit ?? DEFAULT_LIMIT } })
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	return result;
+}
+
+/**
+ * Get feed bookmarks (friends' bookmarks).
+ */
+async function handleGetFeedBookmarks(
+	cursor?: string,
+	limit?: number
+): Promise<PaginatedResponse<FeedBookmark> | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<PaginatedResponse<FeedBookmark>>(
+		"get feed bookmarks",
+		() =>
+			api.api.feed.bookmarks.get({
+				query: { cursor, limit: limit ?? DEFAULT_LIMIT },
+			})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	return result;
+}
+
+/**
+ * Get user's own bookmarks.
+ */
+async function handleGetMyBookmarks(
+	cursor?: string,
+	limit?: number
+): Promise<PaginatedResponse<DashboardBookmark> | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<PaginatedResponse<DashboardBookmark>>(
+		"get my bookmarks",
+		() =>
+			api.api.bookmarks.get({
+				query: { cursor, limit: limit ?? DEFAULT_LIMIT },
+			})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	return result;
+}
+
+/**
+ * Search bookmarks and highlights.
+ */
+async function handleSearchDashboard(
+	searchQuery: string,
+	limit?: number
+): Promise<SearchResults | { error: string }> {
+	const api = createApiClient();
+	const result = await apiCall<SearchResults>("search dashboard", () =>
+		api.api.search.get({
+			query: { q: searchQuery, limit: limit ?? DEFAULT_LIMIT },
+		})
+	);
+
+	if ("error" in result) {
+		return result;
+	}
+
+	return result;
+}
+
+// ============================================================================
+// Settings handlers
+// ============================================================================
+
+const SETTINGS_STORAGE_KEY = "glossUserSettings";
+const SETTINGS_LAST_SYNC_KEY = "glossSettingsLastSync";
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+interface UserSettingsData {
+	profileVisibility: "public" | "friends" | "private";
+	highlightsVisibility: "public" | "friends" | "private";
+	bookmarksVisibility: "public" | "friends" | "private";
+	highlightDisplayFilter: "anyone" | "friends" | "me";
+	commentDisplayMode: "expanded" | "collapsed";
+}
+
+const DEFAULT_SETTINGS: UserSettingsData = {
+	profileVisibility: "public",
+	highlightsVisibility: "friends",
+	bookmarksVisibility: "public",
+	highlightDisplayFilter: "friends",
+	commentDisplayMode: "collapsed",
+};
+
+/**
+ * Get user settings from storage, or sync from server if stale/missing.
+ */
+async function handleGetUserSettings(): Promise<
+	{ settings: UserSettingsData } | { error: string }
+> {
+	try {
+		const stored = await browser.storage.sync.get([
+			SETTINGS_STORAGE_KEY,
+			SETTINGS_LAST_SYNC_KEY,
+		]);
+
+		const lastSync = stored[SETTINGS_LAST_SYNC_KEY] as number | undefined;
+		const cachedSettings = stored[SETTINGS_STORAGE_KEY] as
+			| UserSettingsData
+			| undefined;
+
+		// If we have cached settings and they're fresh, return them
+		if (
+			cachedSettings &&
+			lastSync &&
+			Date.now() - lastSync < SETTINGS_CACHE_TTL
+		) {
+			return { settings: cachedSettings };
+		}
+
+		// Otherwise, sync from server
+		return await handleSyncUserSettings();
+	} catch (error) {
+		console.error("[Gloss] Error getting user settings:", error);
+		// Return defaults if we can't fetch settings
+		return { settings: DEFAULT_SETTINGS };
+	}
+}
+
+/**
+ * Sync user settings from server and store in browser.storage.sync.
+ */
+async function handleSyncUserSettings(): Promise<
+	{ settings: UserSettingsData } | { error: string }
+> {
+	const api = createApiClient();
+	const result = await apiCall<UserSettingsData>("sync user settings", () =>
+		api.api.users.me.settings.get()
+	);
+
+	if ("error" in result) {
+		// If we can't fetch settings, try to return cached settings
+		try {
+			const stored = await browser.storage.sync.get(SETTINGS_STORAGE_KEY);
+			const cachedSettings = stored[SETTINGS_STORAGE_KEY] as
+				| UserSettingsData
+				| undefined;
+			if (cachedSettings) {
+				return { settings: cachedSettings };
+			}
+		} catch {
+			// Ignore storage errors
+		}
+		// Return defaults if all else fails
+		return { settings: DEFAULT_SETTINGS };
+	}
+
+	// Store settings in browser.storage.sync
+	try {
+		await browser.storage.sync.set({
+			[SETTINGS_STORAGE_KEY]: result,
+			[SETTINGS_LAST_SYNC_KEY]: Date.now(),
+		});
+		console.log("[Gloss] Synced user settings from server");
+	} catch (error) {
+		console.error("[Gloss] Error storing user settings:", error);
+	}
+
+	return { settings: result };
 }

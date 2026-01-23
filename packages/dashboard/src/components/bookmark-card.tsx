@@ -28,7 +28,7 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
 
 	return (
 		<a
-			className="group flex w-56 shrink-0 flex-col rounded-xl border border-border bg-card p-4 transition-all duration-150 hover:border-border/80 hover:shadow-sm"
+			className="group flex flex-col rounded-xl border border-border bg-card p-4 transition-all duration-150 hover:border-border/80 hover:shadow-sm"
 			href={bookmark.url}
 			rel="noopener noreferrer"
 			target="_blank"

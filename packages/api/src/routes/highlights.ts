@@ -1,10 +1,11 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
-import { highlight } from "@gloss/db/schema";
+import { highlight, user } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { deriveAuth } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
+import { indexHighlight, removeFromIndex } from "../lib/search-index";
 import { hashUrl, normalizeUrl } from "../lib/url";
 import {
 	CreateHighlightSchema,
@@ -14,17 +15,12 @@ import {
 
 /**
  * Highlights routes.
+ * Supports both session and API key authentication.
  */
 export const highlights = new Elysia({ prefix: "/highlights" })
-	// Derive session for all highlight routes
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
-	// Get highlights for a URL (visibility-filtered based on auth)
+	// Get highlights for a URL (visibility-filtered based on auth and user preferences)
 	.get(
 		"/",
 		async ({ query, session }) => {
@@ -45,10 +41,55 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 				return results;
 			}
 
-			// Authenticated: show public, own, and friends' highlights
+			// Fetch user's display filter preference
+			const userSettings = await db.query.user.findFirst({
+				where: eq(user.id, session.user.id),
+				columns: { highlightDisplayFilter: true },
+			});
+			const displayFilter = userSettings?.highlightDisplayFilter ?? "friends";
+
+			// "me" filter: only show own highlights
+			if (displayFilter === "me") {
+				const results = await db.query.highlight.findMany({
+					where: and(
+						eq(highlight.urlHash, urlHash),
+						eq(highlight.userId, session.user.id)
+					),
+					with: { user: { columns: { id: true, name: true, image: true } } },
+					orderBy: [desc(highlight.createdAt)],
+				});
+				return results;
+			}
+
+			// Get friend IDs for "friends" and "anyone" filters
 			const friendIds = await getFriendIds(session.user.id);
 			const visibleUserIds = [session.user.id, ...friendIds];
 
+			// "friends" filter: only show own + friends' highlights
+			if (displayFilter === "friends") {
+				const results = await db.query.highlight.findMany({
+					where: and(
+						eq(highlight.urlHash, urlHash),
+						or(
+							// Own highlights (any visibility)
+							eq(highlight.userId, session.user.id),
+							// Friends' highlights with friends or public visibility
+							and(
+								inArray(highlight.userId, friendIds),
+								or(
+									eq(highlight.visibility, "public"),
+									eq(highlight.visibility, "friends")
+								)
+							)
+						)
+					),
+					with: { user: { columns: { id: true, name: true, image: true } } },
+					orderBy: [desc(highlight.createdAt)],
+				});
+				return results;
+			}
+
+			// "anyone" filter: show public + own + friends' highlights (most permissive)
 			const results = await db.query.highlight.findMany({
 				where: and(
 					eq(highlight.urlHash, urlHash),
@@ -96,14 +137,18 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 					urlHash,
 					selector: body.selector,
 					text: body.text,
-					note: body.note ?? null,
-					color: body.color ?? "#FFFF00",
 					visibility: body.visibility ?? "friends",
 				})
 				.returning();
 
+			const created = newHighlight[0];
+			if (created) {
+				// Index for search (fire-and-forget)
+				indexHighlight(created);
+			}
+
 			set.status = 201;
-			return newHighlight[0];
+			return created;
 		},
 		{
 			body: CreateHighlightSchema,
@@ -167,14 +212,18 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 			const updated = await db
 				.update(highlight)
 				.set({
-					...(body.note !== undefined && { note: body.note }),
-					...(body.color !== undefined && { color: body.color }),
 					...(body.visibility !== undefined && { visibility: body.visibility }),
 				})
 				.where(eq(highlight.id, params.id))
 				.returning();
 
-			return updated[0];
+			const result = updated[0];
+			// Re-index if visibility changed (affects search filtering)
+			if (result && body.visibility !== undefined) {
+				indexHighlight(result);
+			}
+
+			return result;
 		},
 		{
 			params: t.Object({
@@ -209,6 +258,9 @@ export const highlights = new Elysia({ prefix: "/highlights" })
 			}
 
 			await db.delete(highlight).where(eq(highlight.id, params.id));
+
+			// Remove from search index (fire-and-forget)
+			removeFromIndex("highlight", params.id);
 
 			return { success: true };
 		},

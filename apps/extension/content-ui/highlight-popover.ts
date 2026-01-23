@@ -1,10 +1,12 @@
 /**
  * Highlight popover for viewing/editing existing highlights.
  * Shows when user clicks on a highlight.
+ *
+ * NOTE: This component is currently unused - comment-panel.ts is used instead.
+ * Keeping for potential future use.
  */
 
 import type { ActiveHighlight, Highlight } from "@gloss/anchoring";
-import { createColorPicker, updateColorPickerSelection } from "./color-picker";
 import {
 	createPopoverContainer,
 	hidePopover,
@@ -24,10 +26,6 @@ export interface HighlightPopoverOptions {
 	highlight: ActiveHighlight;
 	/** Whether current user owns this highlight */
 	isOwner: boolean;
-	/** Callback when color changes */
-	onColorChange?: (color: string) => void;
-	/** Callback when note changes */
-	onNoteChange?: (note: string) => void;
 	/** Callback when highlight is deleted */
 	onDelete?: () => void;
 }
@@ -42,8 +40,7 @@ let cleanupDismiss: (() => void) | null = null;
  * Show the highlight popover anchored to the clicked highlight.
  */
 export function showHighlightPopover(options: HighlightPopoverOptions): void {
-	const { element, highlight, isOwner, onColorChange, onNoteChange, onDelete } =
-		options;
+	const { element, highlight, isOwner, onDelete } = options;
 
 	// Hide existing popover first
 	hideHighlightPopover();
@@ -59,13 +56,7 @@ export function showHighlightPopover(options: HighlightPopoverOptions): void {
 
 	// Build content based on ownership
 	if (isOwner) {
-		buildOwnerContent(
-			container,
-			highlight,
-			onColorChange,
-			onNoteChange,
-			onDelete
-		);
+		buildOwnerContent(container, highlight, onDelete);
 	} else {
 		buildFriendContent(container, highlight);
 	}
@@ -120,63 +111,8 @@ function getMetadata(active: ActiveHighlight, key: string): string | undefined {
 function buildOwnerContent(
 	container: HTMLElement,
 	active: ActiveHighlight,
-	onColorChange?: (color: string) => void,
-	onNoteChange?: (note: string) => void,
 	onDelete?: () => void
 ): void {
-	const data = getHighlightData(active);
-
-	// Color picker
-	if (onColorChange) {
-		const colorPicker = createColorPicker({
-			selected: data.color || "rgba(254, 240, 138, 0.5)",
-			onChange: (color: string) => {
-				onColorChange(color);
-				// Update the selection state in the picker
-				updateColorPickerSelection(colorPicker, color);
-			},
-		});
-		container.appendChild(colorPicker);
-	}
-
-	// Note section
-	if (onNoteChange) {
-		const noteSection = document.createElement("div");
-		noteSection.className = "gloss-flex gloss-flex-col gloss-gap-1";
-
-		// Note textarea
-		const noteInput = document.createElement("textarea");
-		noteInput.className = "gloss-input";
-		noteInput.placeholder = "Add a note...";
-		noteInput.value = getMetadata(active, "note") || "";
-		noteInput.rows = 2;
-
-		// Save note on blur
-		noteInput.addEventListener("blur", () => {
-			const newNote = noteInput.value.trim();
-			const oldNote = getMetadata(active, "note") || "";
-			if (newNote !== oldNote) {
-				onNoteChange(newNote);
-			}
-		});
-
-		// Also save on Enter (but allow Shift+Enter for newlines)
-		noteInput.addEventListener("keydown", (e) => {
-			if (e.key === "Enter" && !e.shiftKey) {
-				e.preventDefault();
-				noteInput.blur();
-			}
-		});
-
-		noteSection.appendChild(noteInput);
-		container.appendChild(noteSection);
-	}
-
-	// Divider
-	const divider = document.createElement("div");
-	divider.className = "gloss-divider";
-	container.appendChild(divider);
-
 	// Action row
 	const actionRow = document.createElement("div");
 	actionRow.className = "gloss-flex gloss-items-center gloss-justify-between";
@@ -220,7 +156,7 @@ function buildFriendContent(
 	const userRow = document.createElement("div");
 	userRow.className = "gloss-user-info";
 
-	// User dot (colored circle)
+	// User dot (colored circle using the highlight's generated color)
 	const userDot = document.createElement("div");
 	userDot.className = "gloss-user-dot";
 	userDot.style.backgroundColor = data.color || "rgba(254, 240, 138, 0.5)";
@@ -233,17 +169,6 @@ function buildFriendContent(
 	userRow.appendChild(userName);
 
 	container.appendChild(userRow);
-
-	// Note if present
-	const note = getMetadata(active, "note");
-	if (note) {
-		const noteDisplay = document.createElement("p");
-		noteDisplay.className = "gloss-text-sm";
-		noteDisplay.textContent = note;
-		noteDisplay.style.fontStyle = "italic";
-		noteDisplay.style.padding = "4px 0";
-		container.appendChild(noteDisplay);
-	}
 
 	// Timestamp
 	const timestamp = document.createElement("span");

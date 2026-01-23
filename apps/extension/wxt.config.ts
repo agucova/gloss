@@ -4,6 +4,12 @@ import { defineConfig } from "wxt";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
 	modules: ["@wxt-dev/module-react"],
+	// Use port 5555 to avoid conflict with API server on port 3000
+	dev: {
+		server: {
+			port: 5555,
+		},
+	},
 	vite: () => ({
 		plugins: [tailwindcss()],
 	}),

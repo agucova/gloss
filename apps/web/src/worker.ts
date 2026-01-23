@@ -3,7 +3,7 @@
 // This worker can be extended to add custom headers, redirects, or other edge logic
 
 export default {
-	async fetch(): Promise<Response> {
+	fetch(): Response {
 		// Static assets are served automatically by the assets binding
 		// This handler is only reached if no static file matches
 		// With not_found_handling = "single-page-application", this shouldn't be called

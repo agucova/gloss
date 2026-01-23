@@ -5,7 +5,7 @@ import { highlight } from "./highlights";
 
 /**
  * Comments on highlights (marginalia).
- * Flat structure — no threading to keep UI simple.
+ * Supports threading via parentId for nested replies.
  */
 export const comment = pgTable(
 	"comment",
@@ -17,6 +17,8 @@ export const comment = pgTable(
 		authorId: text("author_id")
 			.notNull()
 			.references(() => user.id, { onDelete: "cascade" }),
+		// Parent comment ID for threading (null = top-level comment)
+		parentId: text("parent_id"),
 		// Markdown content stored as plain text
 		content: text("content").notNull(),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -31,6 +33,7 @@ export const comment = pgTable(
 		index("comment_highlightId_idx").on(table.highlightId),
 		index("comment_authorId_idx").on(table.authorId),
 		index("comment_createdAt_idx").on(table.createdAt),
+		index("comment_parentId_idx").on(table.parentId),
 	]
 );
 
@@ -66,6 +69,15 @@ export const commentRelations = relations(comment, ({ one, many }) => ({
 		references: [user.id],
 	}),
 	mentions: many(commentMention),
+	// Threading relations
+	parent: one(comment, {
+		fields: [comment.parentId],
+		references: [comment.id],
+		relationName: "commentThread",
+	}),
+	replies: many(comment, {
+		relationName: "commentThread",
+	}),
 }));
 
 export const commentMentionRelations = relations(commentMention, ({ one }) => ({

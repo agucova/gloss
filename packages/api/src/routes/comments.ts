@@ -5,6 +5,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { areFriends, getFriendIds } from "../lib/friends";
+import { indexComment, removeFromIndex } from "../lib/search-index";
 
 /**
  * Schema for creating a comment.
@@ -13,6 +14,7 @@ const CreateCommentSchema = t.Object({
 	highlightId: t.String({ minLength: 1 }),
 	content: t.String({ minLength: 1 }),
 	mentions: t.Optional(t.Array(t.String())),
+	parentId: t.Optional(t.String()),
 });
 
 /**
@@ -161,6 +163,23 @@ export const comments = new Elysia({ prefix: "/comments" })
 				return { error: "Cannot comment on this highlight" };
 			}
 
+			// If replying to a parent comment, validate it exists and belongs to same highlight
+			if (body.parentId) {
+				const parentComment = await db.query.comment.findFirst({
+					where: and(eq(comment.id, body.parentId), isNull(comment.deletedAt)),
+				});
+
+				if (!parentComment) {
+					set.status = 404;
+					return { error: "Parent comment not found" };
+				}
+
+				if (parentComment.highlightId !== body.highlightId) {
+					set.status = 400;
+					return { error: "Parent comment belongs to different highlight" };
+				}
+			}
+
 			// Validate mentioned users are friends (or self)
 			const validMentions = await validateMentions(
 				body.mentions ?? [],
@@ -175,6 +194,7 @@ export const comments = new Elysia({ prefix: "/comments" })
 				highlightId: body.highlightId,
 				authorId: session.user.id,
 				content: body.content,
+				parentId: body.parentId ?? null,
 			});
 
 			// Insert mentions
@@ -200,6 +220,15 @@ export const comments = new Elysia({ prefix: "/comments" })
 					},
 				},
 			});
+
+			// Index for search (fire-and-forget)
+			if (result) {
+				indexComment(
+					{ id: commentId, authorId: session.user.id, content: body.content },
+					hl.visibility,
+					hl.url
+				);
+			}
 
 			set.status = 201;
 			return result;
@@ -268,6 +297,20 @@ export const comments = new Elysia({ prefix: "/comments" })
 				},
 			});
 
+			// Re-index for search (fire-and-forget)
+			if (result) {
+				const hl = await db.query.highlight.findFirst({
+					where: eq(highlight.id, existing.highlightId),
+				});
+				if (hl) {
+					indexComment(
+						{ id: params.id, authorId: session.user.id, content: body.content },
+						hl.visibility,
+						hl.url
+					);
+				}
+			}
+
 			return result;
 		},
 		{
@@ -311,6 +354,9 @@ export const comments = new Elysia({ prefix: "/comments" })
 				.update(comment)
 				.set({ deletedAt: new Date() })
 				.where(eq(comment.id, params.id));
+
+			// Remove from search index (fire-and-forget)
+			removeFromIndex("comment", params.id);
 
 			return { success: true };
 		},

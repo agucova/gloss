@@ -1,6 +1,8 @@
 { pkgs, lib, config, ... }:
 
 {
+  dotenv.enable = true;
+  
   # Core packages for development
   packages = with pkgs; [
     bun
@@ -20,19 +22,22 @@
     BETTER_AUTH_URL = "http://localhost:3000";
 
     # Server
-    CORS_ORIGIN = "http://localhost:3001";
     NODE_ENV = "development";
     PORT = "3000";
 
-    # Web client
+    # URLs (VITE_ prefix makes them available to Vite client builds)
     VITE_SERVER_URL = "http://localhost:3000";
+    VITE_WEB_URL = "http://localhost:3001";
   };
 
-  # PostgreSQL service
+  # PostgreSQL service with pgvector for semantic search
   services.postgres = {
     enable = true;
     listen_addresses = "127.0.0.1";
     port = 5432;
+    extensions = extensions: [
+      extensions.pgvector
+    ];
     initialDatabases = [
       { name = "gloss"; }
     ];
@@ -44,6 +49,9 @@
     initialScript = ''
       CREATE USER postgres WITH SUPERUSER PASSWORD 'postgres';
       GRANT ALL PRIVILEGES ON DATABASE gloss TO postgres;
+      -- Enable pgvector extension
+      \c gloss
+      CREATE EXTENSION IF NOT EXISTS vector;
     '';
   };
 

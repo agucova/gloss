@@ -29,15 +29,24 @@ export default function UserMenu() {
 		);
 	}
 
+	const displayName =
+		session.user.name ||
+		(session.user as { username?: string }).username ||
+		session.user.email?.split("@")[0] ||
+		"Account";
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger render={<Button variant="outline" />}>
-				{session.user.name}
+				{displayName}
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="bg-card">
 				<DropdownMenuGroup>
 					<DropdownMenuItem onClick={() => navigate({ to: "/profile" })}>
 						Profile
+					</DropdownMenuItem>
+					<DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+						Settings
 					</DropdownMenuItem>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem

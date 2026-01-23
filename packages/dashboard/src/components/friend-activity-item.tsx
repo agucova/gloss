@@ -73,7 +73,7 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 					</span>
 				</div>
 				<p className="mt-0.5 truncate text-muted-foreground text-sm transition-colors group-hover:text-foreground/70">
-					{item.title || domain}
+					in {item.title || domain}
 				</p>
 			</div>
 		</a>
@@ -106,8 +106,8 @@ function HighlightItem({ item }: { item: FeedHighlight }) {
 					<UserDot userId={item.user.id} />
 				</div>
 			</div>
-			<p className="text-foreground/90 text-sm leading-relaxed">
-				"{truncate(item.text, 180)}"
+			<p className="break-words text-foreground/90 text-sm leading-relaxed">
+				{truncate(item.text, 180)}
 			</p>
 		</a>
 	);

@@ -6,6 +6,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig(({ mode }) => ({
 	plugins: [tailwindcss(), tanstackRouter({}), react()],
+	// Load .env from monorepo root
+	envDir: path.resolve(__dirname, "../.."),
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),

@@ -11,10 +11,12 @@
   },
   "scripts": {},
   "dependencies": {
+    "@better-auth/passkey": "^1.4.17",
     "@gloss/db": "workspace:*",
     "@gloss/env": "workspace:*",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "resend": "^6.8.0",
     "zod": "catalog:"
   },
   "devDependencies": {

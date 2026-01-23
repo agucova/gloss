@@ -20,7 +20,7 @@
     "db:studio:prod": "drizzle-kit studio --config=drizzle.config.prod.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "bun run src/seed.ts",
-    "db:seed:prod": "ENV_FILE=../../apps/server/.env.prod.local bun run src/seed.ts"
+    "db:seed:prod": "ENV_FILE=../../.env.production bun run src/seed.ts"
   },
   "dependencies": {
     "@gloss/env": "workspace:*",

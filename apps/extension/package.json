@@ -15,9 +15,10 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@elysiajs/eden": "^1.4.0",
+    "@floating-ui/dom": "^1.7.4",
     "@gloss/anchoring": "workspace:*",
     "@gloss/dashboard": "workspace:*",
-    "@elysiajs/eden": "^1.4.0",
     "@tanstack/react-query": "^5.90.12",
     "clsx": "^2.1.1",
     "lucide-react": "^0.473.0",

@@ -60,7 +60,7 @@ describe("CuriusClient", () => {
 				lastName: "User",
 				userLink: "testuser",
 			};
-			mockFetchResponse(mockUser);
+			mockFetchResponse({ user: mockUser });
 
 			const user = await client.getUser();
 
@@ -89,7 +89,7 @@ describe("CuriusClient", () => {
 				lastName: "User",
 				userLink: "testuser",
 			};
-			mockFetchResponse(mockUser);
+			mockFetchResponse({ user: mockUser });
 
 			await client.getUser();
 
@@ -186,7 +186,7 @@ describe("CuriusClient", () => {
 				highlights: [],
 				nHighlights: 0,
 			};
-			mockFetchResponse(mockLink);
+			mockFetchResponse({ link: mockLink });
 
 			const link = await client.getLinkByUrl("https://example.com");
 
@@ -203,41 +203,57 @@ describe("CuriusClient", () => {
 		});
 	});
 
-	describe("getNetworkLinks", () => {
-		test("returns array of network links with user info", async () => {
-			const mockResponse = [
-				{
-					id: "link-1",
-					url: "https://example.com",
-					highlights: [
+	describe("getNetworkInfo", () => {
+		test("returns network info with users and highlights", async () => {
+			const mockResponse = {
+				networkInfo: {
+					id: 123,
+					link: "https://example.com",
+					title: "Example Page",
+					users: [
 						{
-							id: "h-1",
-							highlight: "Some text",
+							id: 1,
+							firstName: "Alice",
+							lastName: "Smith",
+							userLink: "alice",
 						},
 					],
-					user: {
-						id: "user-1",
-						firstName: "Alice",
-						lastName: "Smith",
-						userLink: "alice",
-					},
+					highlights: [
+						[
+							{
+								id: 456,
+								userId: 1,
+								linkId: 123,
+								highlight: "Some text",
+							},
+						],
+					],
 				},
-			];
+			};
 			mockFetchResponse(mockResponse);
 
-			const links = await client.getNetworkLinks("https://example.com");
+			const info = await client.getNetworkInfo("https://example.com");
 
-			expect(links).toHaveLength(1);
-			expect(links[0]?.user.firstName).toBe("Alice");
-			expect(links[0]?.highlights).toHaveLength(1);
+			expect(info.users).toHaveLength(1);
+			expect(info.users[0]?.firstName).toBe("Alice");
+			expect(info.highlights).toHaveLength(1);
 		});
 
-		test("returns empty array when no network links", async () => {
-			mockFetchResponse([]);
+		test("returns empty users/highlights when no network info", async () => {
+			const mockResponse = {
+				networkInfo: {
+					id: 456,
+					link: "https://example.com",
+					users: [],
+					highlights: [],
+				},
+			};
+			mockFetchResponse(mockResponse);
 
-			const links = await client.getNetworkLinks("https://example.com");
+			const info = await client.getNetworkInfo("https://example.com");
 
-			expect(links).toHaveLength(0);
+			expect(info.users).toHaveLength(0);
+			expect(info.highlights).toHaveLength(0);
 		});
 	});
 
@@ -364,10 +380,12 @@ describe("CuriusClient", () => {
 	describe("verifyToken", () => {
 		test("returns true for valid token", async () => {
 			mockFetchResponse({
-				id: "user-123",
-				firstName: "Test",
-				lastName: "User",
-				userLink: "test",
+				user: {
+					id: "user-123",
+					firstName: "Test",
+					lastName: "User",
+					userLink: "test",
+				},
 			});
 
 			const isValid = await client.verifyToken();
@@ -401,10 +419,12 @@ describe("CuriusClient", () => {
 				baseUrl: "https://custom.curius.app",
 			});
 			mockFetchResponse({
-				id: "user-123",
-				firstName: "Test",
-				lastName: "User",
-				userLink: "test",
+				user: {
+					id: "user-123",
+					firstName: "Test",
+					lastName: "User",
+					userLink: "test",
+				},
 			});
 
 			await customClient.getUser();

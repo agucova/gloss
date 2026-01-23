@@ -1,20 +1,8 @@
 import { relations } from "drizzle-orm";
-import {
-	index,
-	jsonb,
-	pgEnum,
-	pgTable,
-	text,
-	timestamp,
-} from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { comment } from "./comments";
-
-export const visibilityEnum = pgEnum("visibility", [
-	"private",
-	"friends",
-	"public",
-]);
+import { visibilityEnum } from "./enums";
 
 export const highlight = pgTable(
 	"highlight",
@@ -29,9 +17,11 @@ export const highlight = pgTable(
 		selector: jsonb("selector").notNull(),
 		// Denormalized highlighted text for display/search
 		text: text("text").notNull(),
-		note: text("note"),
-		color: text("color").default("#FFFF00").notNull(),
 		visibility: visibilityEnum("visibility").default("friends").notNull(),
+		// Import tracking for Curius migration
+		importSource: text("import_source"), // 'curius' | null (native)
+		externalId: text("external_id"), // Original ID from source system
+		importedAt: timestamp("imported_at"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()
@@ -43,6 +33,10 @@ export const highlight = pgTable(
 		index("highlight_urlHash_idx").on(table.urlHash),
 		index("highlight_visibility_idx").on(table.visibility),
 		index("highlight_createdAt_idx").on(table.createdAt),
+		index("highlight_importSource_externalId_idx").on(
+			table.importSource,
+			table.externalId
+		),
 	]
 );
 

@@ -17,7 +17,8 @@
     "@paralleldrive/cuid2": "^3.0.6",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
-    "elysia": "catalog:"
+    "elysia": "catalog:",
+    "openai": "^6.16.0"
   },
   "devDependencies": {
     "@gloss/config": "workspace:*",
