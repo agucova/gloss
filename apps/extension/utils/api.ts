@@ -12,9 +12,12 @@ const DEFAULT_SERVER_URL = "http://localhost:3000";
  */
 export async function getServerUrl(): Promise<string> {
 	try {
+		console.log("[Gloss API] Getting server URL from storage...");
 		const result = await browser.storage.sync.get("serverUrl");
+		console.log("[Gloss API] Storage result:", result);
 		return (result.serverUrl as string) || DEFAULT_SERVER_URL;
-	} catch {
+	} catch (error) {
+		console.error("[Gloss API] Storage error:", error);
 		return DEFAULT_SERVER_URL;
 	}
 }
@@ -24,12 +27,16 @@ export async function getServerUrl(): Promise<string> {
  * Should be called fresh for each request to pick up any URL changes.
  */
 export async function createApiClient() {
+	console.log("[Gloss API] Creating API client...");
 	const serverUrl = await getServerUrl();
-	return treaty<App>(serverUrl, {
+	console.log("[Gloss API] Server URL:", serverUrl);
+	const client = treaty<App>(serverUrl, {
 		fetch: {
 			credentials: "include",
 		},
 	});
+	console.log("[Gloss API] Client created");
+	return client;
 }
 
 /**

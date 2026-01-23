@@ -4,6 +4,11 @@ main = "src/worker.ts"
 compatibility_date = "2025-01-15"
 account_id = "d2fe37c02a1d31f3239f9c30c8907db7"
 
+# Custom domain
+routes = [
+  { pattern = "gloss.agus.sh/*", zone_name = "agus.sh" }
+]
+
 # Static assets configuration
 [assets]
 directory = "dist"
