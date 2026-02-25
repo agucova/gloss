@@ -237,7 +237,7 @@ export type Message =
 	| { type: "SEARCH_FRIENDS"; query: string }
 	| { type: "LOAD_PAGE_COMMENT_SUMMARY"; highlightIds: string[] }
 	// Bookmark messages
-	| { type: "GET_PAGE_METADATA" }
+	| { type: "GET_PAGE_METADATA"; tabId?: number }
 	| { type: "GET_BOOKMARK_STATUS"; url: string }
 	| {
 			type: "SAVE_BOOKMARK";

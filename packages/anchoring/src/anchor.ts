@@ -11,12 +11,16 @@ import type {
 	TextPositionSelector,
 	TextQuoteSelector,
 } from "./types";
+
+import { fuzzySearchWithContext, recommendedMaxErrors } from "./utils/fuzzy";
 import {
-	exactSearch,
-	fuzzySearchWithContext,
-	recommendedMaxErrors,
-} from "./utils/fuzzy";
-import { extractText, nodeAtOffset, normalizeText } from "./utils/text";
+	type OffsetMapping,
+	extractText,
+	getTextOffset,
+	nodeAtOffset,
+	normalizeText,
+	normalizeWithMap,
+} from "./utils/text";
 import { nodeFromXPath } from "./utils/xpath";
 
 /**
@@ -74,43 +78,51 @@ function tryPositionSelector(
 /**
  * Try to anchor using TextQuoteSelector with exact matching.
  * Slower but handles DOM restructuring if text is preserved.
+ *
+ * Uses pre-computed OffsetMapping to correctly convert normalized-space
+ * indices back to raw-space offsets for DOM range creation.
  */
 function tryQuoteSelectorExact(
 	selector: TextQuoteSelector,
-	root: Element
+	root: Element,
+	mapped: OffsetMapping
 ): Range | null {
-	const text = extractText(root);
-	const index = exactSearch(text, selector.exact);
+	const normalizedPattern = normalizeText(selector.exact);
+	const index = mapped.text.indexOf(normalizedPattern);
 
 	if (index === -1) {
 		return null;
 	}
 
 	// If there might be multiple matches, use context to disambiguate
-	const normalizedText = normalizeText(text);
-	const normalizedPattern = normalizeText(selector.exact);
-	const secondOccurrence = normalizedText.indexOf(normalizedPattern, index + 1);
+	const secondOccurrence = mapped.text.indexOf(normalizedPattern, index + 1);
 
 	if (secondOccurrence !== -1) {
 		// Multiple matches - need to use context
-		return tryQuoteSelectorWithContext(selector, root, text);
+		return tryQuoteSelectorWithContext(selector, root, mapped);
 	}
 
-	return createRangeFromOffsets(root, index, index + selector.exact.length);
+	return createRangeFromOffsets(
+		root,
+		mapped.toRaw(index),
+		mapped.toRaw(index + normalizedPattern.length)
+	);
 }
 
 /**
  * Try to anchor using TextQuoteSelector with context disambiguation.
+ *
+ * Passes normalized text to fuzzySearchWithContext (re-normalizing
+ * already-normalized text is a no-op), then converts the returned
+ * normalized indices to raw offsets via the OffsetMapping.
  */
 function tryQuoteSelectorWithContext(
 	selector: TextQuoteSelector,
 	root: Element,
-	text?: string
+	mapped: OffsetMapping
 ): Range | null {
-	const fullText = text ?? extractText(root);
-
 	const match = fuzzySearchWithContext(
-		fullText,
+		mapped.text,
 		selector.exact,
 		selector.prefix,
 		selector.suffix,
@@ -121,7 +133,11 @@ function tryQuoteSelectorWithContext(
 		return null;
 	}
 
-	return createRangeFromOffsets(root, match.start, match.end);
+	return createRangeFromOffsets(
+		root,
+		mapped.toRaw(match.start),
+		mapped.toRaw(match.end)
+	);
 }
 
 /**
@@ -131,13 +147,12 @@ function tryQuoteSelectorWithContext(
 function tryFuzzySelector(
 	selector: TextQuoteSelector,
 	root: Element,
+	mapped: OffsetMapping,
 	maxErrors: number,
 	positionHint?: number
 ): Range | null {
-	const text = extractText(root);
-
 	const match = fuzzySearchWithContext(
-		text,
+		mapped.text,
 		selector.exact,
 		selector.prefix,
 		selector.suffix,
@@ -149,7 +164,11 @@ function tryFuzzySelector(
 		return null;
 	}
 
-	return createRangeFromOffsets(root, match.start, match.end);
+	return createRangeFromOffsets(
+		root,
+		mapped.toRaw(match.start),
+		mapped.toRaw(match.end)
+	);
 }
 
 /**
@@ -187,6 +206,64 @@ function validateQuote(range: Range, expectedText: string): boolean {
 }
 
 /**
+ * Quick context validation for fast-path strategies.
+ * Checks whether the text surrounding the range matches the stored prefix/suffix.
+ * Returns null if no context is available (empty prefix AND suffix).
+ * Returns true/false for context match/mismatch.
+ *
+ * Uses normalized substring containment — no fuzzy matching, negligible cost.
+ */
+function quickContextMatch(
+	root: Element,
+	range: Range,
+	quote: TextQuoteSelector
+): boolean | null {
+	if (!quote.prefix && !quote.suffix) {
+		return null; // No context stored — caller decides confidence
+	}
+
+	const fullText = extractText(root);
+	const startOffset = getTextOffset(
+		root,
+		range.startContainer,
+		range.startOffset
+	);
+	const endOffset = getTextOffset(root, range.endContainer, range.endOffset);
+
+	if (startOffset === -1 || endOffset === -1) {
+		return false;
+	}
+
+	let matches = 0;
+	let checks = 0;
+
+	if (quote.prefix) {
+		checks++;
+		const textBefore = normalizeText(
+			fullText.slice(
+				Math.max(0, startOffset - quote.prefix.length - 5),
+				startOffset
+			)
+		);
+		if (textBefore.includes(normalizeText(quote.prefix))) {
+			matches++;
+		}
+	}
+
+	if (quote.suffix) {
+		checks++;
+		const textAfter = normalizeText(
+			fullText.slice(endOffset, endOffset + quote.suffix.length + 5)
+		);
+		if (textAfter.includes(normalizeText(quote.suffix))) {
+			matches++;
+		}
+	}
+
+	return matches === checks;
+}
+
+/**
  * Anchor a selector back to a DOM Range using cascade fallback.
  *
  * Tries strategies in order of speed/precision:
@@ -218,50 +295,60 @@ export function anchor(
 	// Strategy 1: RangeSelector (XPath-based)
 	const rangeResult = tryRangeSelector(selector.range, root);
 	if (rangeResult && validateQuote(rangeResult, expectedText)) {
-		return {
-			range: rangeResult,
-			method: "range",
-			confidence: 1.0,
-		};
+		const ctx = quickContextMatch(root, rangeResult, selector.quote);
+		if (ctx === true) {
+			return { range: rangeResult, method: "range", confidence: 1.0 };
+		}
+		if (ctx === null) {
+			// No context available — can't verify, slightly lower confidence
+			return { range: rangeResult, method: "range", confidence: 0.9 };
+		}
+		// Context mismatch — text matches but wrong occurrence, continue cascade
 	}
 
 	// Strategy 2: TextPositionSelector (character offsets)
 	const positionResult = tryPositionSelector(selector.position, root);
 	if (positionResult && validateQuote(positionResult, expectedText)) {
-		return {
-			range: positionResult,
-			method: "position",
-			confidence: 1.0,
-		};
+		const ctx = quickContextMatch(root, positionResult, selector.quote);
+		if (ctx === true) {
+			return { range: positionResult, method: "position", confidence: 1.0 };
+		}
+		if (ctx === null) {
+			return { range: positionResult, method: "position", confidence: 0.9 };
+		}
+		// Context mismatch — continue cascade
 	}
 
-	// Strategy 3: TextQuoteSelector (exact match)
-	const quoteResult = tryQuoteSelectorExact(selector.quote, root);
+	// Pre-compute normalized text with offset mapping for quote-based strategies.
+	// This mapping allows searching in normalized space (whitespace collapsed)
+	// while correctly converting result indices back to raw DOM text offsets.
+	const rawText = extractText(root);
+	const mapped = normalizeWithMap(rawText);
+
+	// Strategy 3: TextQuoteSelector (exact match, uses context natively)
+	const quoteResult = tryQuoteSelectorExact(selector.quote, root, mapped);
 	if (quoteResult) {
-		return {
-			range: quoteResult,
-			method: "quote",
-			confidence: 0.95,
-		};
+		return { range: quoteResult, method: "quote", confidence: 0.95 };
 	}
 
 	// Strategy 4: Fuzzy matching (last resort)
 	const errors = maxFuzzyErrors ?? recommendedMaxErrors(expectedText.length);
 	const hint = positionHint ?? selector.position.start;
-	const fuzzyResult = tryFuzzySelector(selector.quote, root, errors, hint);
+	const fuzzyResult = tryFuzzySelector(
+		selector.quote,
+		root,
+		mapped,
+		errors,
+		hint
+	);
 	if (fuzzyResult) {
-		// Calculate confidence based on how different the text is
 		const actualText = normalizeText(fuzzyResult.toString());
 		const similarity =
 			1 -
 			Math.abs(actualText.length - expectedText.length) / expectedText.length;
-		const confidence = Math.max(0.5, Math.min(0.9, similarity * 0.9));
+		const confidence = Math.max(0.5, Math.min(0.85, similarity * 0.85));
 
-		return {
-			range: fuzzyResult,
-			method: "fuzzy",
-			confidence,
-		};
+		return { range: fuzzyResult, method: "fuzzy", confidence };
 	}
 
 	// All strategies failed

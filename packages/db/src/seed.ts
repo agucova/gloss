@@ -5,11 +5,11 @@
  * Run with: bun run db:seed
  */
 
-import { randomBytes, scrypt } from "node:crypto";
-import { promisify } from "node:util";
 import dotenv from "dotenv";
 import { eq, like } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { randomBytes, scrypt } from "node:crypto";
+
 import {
 	account,
 	bookmark,
@@ -34,7 +34,22 @@ if (!DATABASE_URL) {
 // Create a direct db connection (bypasses @gloss/env validation)
 const db = drizzle(DATABASE_URL);
 
-const scryptAsync = promisify(scrypt);
+function scryptAsync(
+	password: string,
+	salt: string,
+	keylen: number,
+	options: { N: number; r: number; p: number; maxmem: number }
+): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
+		scrypt(password, salt, keylen, options, (err, key) => {
+			if (err) {
+				reject(err);
+			} else {
+				resolve(key);
+			}
+		});
+	});
+}
 
 // Better-Auth scrypt parameters (must match exactly)
 const SCRYPT_CONFIG = {
@@ -55,7 +70,7 @@ async function hashPassword(password: string): Promise<string> {
 	// Generate salt and convert to hex string
 	const saltHex = randomBytes(16).toString("hex");
 	// Pass the hex STRING to scrypt (this is what Better-Auth does)
-	const derivedKey = (await scryptAsync(
+	const derivedKey = await scryptAsync(
 		password.normalize("NFKC"),
 		saltHex, // string, not Buffer
 		SCRYPT_CONFIG.dkLen,
@@ -65,7 +80,7 @@ async function hashPassword(password: string): Promise<string> {
 			p: SCRYPT_CONFIG.p,
 			maxmem: 128 * SCRYPT_CONFIG.N * SCRYPT_CONFIG.r * 2,
 		}
-	)) as Buffer;
+	);
 	return `${saltHex}:${derivedKey.toString("hex")}`;
 }
 
@@ -219,16 +234,6 @@ function createSelector(text: string, prefix = "", suffix = "") {
 	};
 }
 
-// Highlight colors - warm pastels as per design spec
-const COLORS = {
-	yellow: "#FFF3CD",
-	peach: "#FFE5D9",
-	pink: "#FFD6E0",
-	lavender: "#E2D9F3",
-	mint: "#D4EDDA",
-	sky: "#D1ECF1",
-};
-
 const HIGHLIGHTS = [
 	// ==========================================================================
 	// Agucova's highlights (the main user - lots of activity)
@@ -238,7 +243,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.paulgraham,
 		text: "Reading about x doesn't just teach you about x; it also teaches you how to write.",
-		color: COLORS.yellow,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -246,7 +251,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.paulgraham,
 		text: "You can't think well without writing well, and you can't write well without reading well.",
-		color: COLORS.peach,
+
 		visibility: "public" as const,
 	},
 	{
@@ -254,7 +259,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.paulgraham,
 		text: "There is a kind of thinking that can only be done by writing.",
-		color: COLORS.yellow,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -262,7 +267,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.areflect,
 		text: "Books are surprisingly bad at conveying knowledge, and readers mostly don't realize it.",
-		color: COLORS.pink,
+
 		visibility: "public" as const,
 	},
 	{
@@ -270,7 +275,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.areflect,
 		text: "We don't necessarily have to make books work. We can make new forms instead.",
-		color: COLORS.lavender,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -278,7 +283,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.tools,
 		text: "Memory is, in fact, a central part of cognition. But the right response to this is not immense amounts of dreary rote memorization.",
-		color: COLORS.mint,
+
 		visibility: "public" as const,
 	},
 	{
@@ -286,7 +291,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.tools,
 		text: "Conceptual mastery is actually enabled by a mastery of details.",
-		color: COLORS.sky,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -294,7 +299,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.alignment,
 		text: "the 21st century could be the most important century ever for humanity, via the development of advanced AI systems that could dramatically speed up scientific and technological advancement",
-		color: COLORS.peach,
+
 		visibility: "public" as const,
 	},
 	{
@@ -302,7 +307,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.alignment,
 		text: "we as a civilization are not ready for what's coming, and we need to start by taking it more seriously",
-		color: COLORS.pink,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -310,7 +315,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.zettelkasten,
 		text: "A Zettelkasten makes connecting and not collecting a priority.",
-		color: COLORS.yellow,
+
 		visibility: "public" as const,
 	},
 	{
@@ -318,7 +323,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.deepwork,
 		text: "Deep work is like a superpower in our current economy: it enables you to quickly learn complicated new skills and produce high-value output at a high rate.",
-		color: COLORS.mint,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -326,7 +331,7 @@ const HIGHLIGHTS = [
 		userId: seedId("agucova"),
 		url: URLS.reasoning,
 		text: "the blessings of scale as the secret of AGI: intelligence is 'just' simple neural units & learning algorithms applied to diverse experiences at a (currently) unreachable scale.",
-		color: COLORS.lavender,
+
 		visibility: "public" as const,
 	},
 
@@ -338,7 +343,7 @@ const HIGHLIGHTS = [
 		userId: seedId("alice"),
 		url: URLS.paulgraham,
 		text: "Writing is not just a way to convey ideas, but also a way to have them.",
-		color: COLORS.peach,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -346,7 +351,7 @@ const HIGHLIGHTS = [
 		userId: seedId("alice"),
 		url: URLS.paulgraham,
 		text: "People who just want information may find other ways to get it. But people who want to have ideas can't afford to.",
-		color: COLORS.yellow,
+
 		visibility: "public" as const,
 	},
 	{
@@ -354,7 +359,7 @@ const HIGHLIGHTS = [
 		userId: seedId("alice"),
 		url: URLS.areflect,
 		text: "Prose can frame or stimulate readers' thoughts, but prose can't behave or respond to those thoughts as they unfold.",
-		color: COLORS.lavender,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -362,7 +367,7 @@ const HIGHLIGHTS = [
 		userId: seedId("alice"),
 		url: URLS.tools,
 		text: "the most powerful tools for thought express deep insights into the underlying subject matter",
-		color: COLORS.mint,
+
 		visibility: "public" as const,
 	},
 	{
@@ -370,7 +375,7 @@ const HIGHLIGHTS = [
 		userId: seedId("alice"),
 		url: URLS.zettelkasten,
 		text: "The Zettelkasten Method is an amplifier of your endeavors in the realm of knowledge work.",
-		color: COLORS.sky,
+
 		visibility: "friends" as const,
 	},
 
@@ -382,7 +387,7 @@ const HIGHLIGHTS = [
 		userId: seedId("bob"),
 		url: URLS.reasoning,
 		text: "hard problems are easier to solve than easy problems---everything gets better as it gets larger",
-		color: COLORS.lavender,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -390,7 +395,7 @@ const HIGHLIGHTS = [
 		userId: seedId("bob"),
 		url: URLS.reasoning,
 		text: "the final few bits are the most valuable bits, which require the most of what we think of as intelligence",
-		color: COLORS.pink,
+
 		visibility: "public" as const,
 	},
 	{
@@ -398,7 +403,7 @@ const HIGHLIGHTS = [
 		userId: seedId("bob"),
 		url: URLS.alignment,
 		text: "if PASTA systems are misaligned - pursuing their own non-human-compatible objectives - things could very quickly go sideways",
-		color: COLORS.peach,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -406,7 +411,7 @@ const HIGHLIGHTS = [
 		userId: seedId("bob"),
 		url: URLS.deepwork,
 		text: "The Deep Work Hypothesis. Deep work is becoming increasingly valuable at the same time that it's becoming increasingly rare.",
-		color: COLORS.yellow,
+
 		visibility: "public" as const,
 	},
 
@@ -418,7 +423,7 @@ const HIGHLIGHTS = [
 		userId: seedId("carol"),
 		url: URLS.zettelkasten,
 		text: "The fixed address of each note is the alpha and omega of the world of Zettelkasten. Everything becomes possible because of it.",
-		color: COLORS.mint,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -426,7 +431,7 @@ const HIGHLIGHTS = [
 		userId: seedId("carol"),
 		url: URLS.zettelkasten,
 		text: "If you just add links without any explanation you will not create knowledge.",
-		color: COLORS.sky,
+
 		visibility: "public" as const,
 	},
 	{
@@ -434,7 +439,7 @@ const HIGHLIGHTS = [
 		userId: seedId("carol"),
 		url: URLS.areflect,
 		text: "It is possible to design new mediums which embody specific ideas about how people think and learn.",
-		color: COLORS.lavender,
+
 		visibility: "friends" as const,
 	},
 
@@ -446,7 +451,7 @@ const HIGHLIGHTS = [
 		userId: seedId("eve"),
 		url: URLS.deepwork,
 		text: "Deep work is also an activity that generates a sense of meaning and fulfillment in your professional life.",
-		color: COLORS.peach,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -454,7 +459,7 @@ const HIGHLIGHTS = [
 		userId: seedId("eve"),
 		url: URLS.deepwork,
 		text: "Few come home energized after an afternoon of frenetic e-mail replies, but the same time spent tackling a hard problem in a quiet location can be immensely satisfying.",
-		color: COLORS.yellow,
+
 		visibility: "public" as const,
 	},
 	{
@@ -462,7 +467,7 @@ const HIGHLIGHTS = [
 		userId: seedId("eve"),
 		url: URLS.tools,
 		text: "You need the insight-through-making loop to operate, whereby deep, original insights about the subject feed back to change and improve the system",
-		color: COLORS.pink,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -470,7 +475,7 @@ const HIGHLIGHTS = [
 		userId: seedId("eve"),
 		url: URLS.alignment,
 		text: "something like PASTA is more likely than not this century",
-		color: COLORS.lavender,
+
 		visibility: "public" as const,
 	},
 
@@ -482,7 +487,7 @@ const HIGHLIGHTS = [
 		userId: seedId("dan"),
 		url: URLS.paulgraham,
 		text: "Reading about x doesn't just teach you about x; it also teaches you how to write.",
-		color: COLORS.mint,
+
 		visibility: "friends" as const,
 	},
 	{
@@ -490,7 +495,7 @@ const HIGHLIGHTS = [
 		userId: seedId("dan"),
 		url: URLS.reasoning,
 		text: "neural nets absorb data & compute, generalizing and becoming more Bayesian as problems get harder, manifesting new abilities",
-		color: COLORS.sky,
+
 		visibility: "public" as const,
 	},
 ];
@@ -941,7 +946,6 @@ async function seedHighlights() {
 			urlHash,
 			selector: createSelector(h.text),
 			text: h.text,
-			color: h.color,
 			visibility: h.visibility,
 		});
 	}

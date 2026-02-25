@@ -22,10 +22,10 @@ export function HighlightCard({ highlight }: HighlightCardProps) {
 			<div className="flex gap-3">
 				<div className="w-0.5 shrink-0 rounded-full bg-amber-400/70 dark:bg-amber-500/50" />
 				<div className="min-w-0 flex-1">
-					<p className="text-foreground/90 text-sm leading-relaxed">
+					<p className="text-sm leading-relaxed text-foreground/90">
 						{highlight.text}
 					</p>
-					<div className="mt-2 flex items-center gap-2 text-muted-foreground/60 text-xs">
+					<div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground/60">
 						<span className="truncate">{domain}</span>
 						<span>·</span>
 						<span>{formatRelativeTime(highlight.createdAt)}</span>

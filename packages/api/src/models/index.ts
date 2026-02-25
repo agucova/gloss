@@ -57,6 +57,7 @@ export const CursorPaginationSchema = t.Object({
 	limit: t.Number({ minimum: 1, maximum: 100, default: 20 }),
 	q: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
 	tagId: t.Optional(t.String()),
+	order: t.Optional(t.Union([t.Literal("asc"), t.Literal("desc")])),
 });
 
 /**

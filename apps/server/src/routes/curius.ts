@@ -1,5 +1,6 @@
-import { auth } from "@gloss/auth";
 import type { CuriusHighlight, CuriusLink, CuriusUser } from "@gloss/curius";
+
+import { auth } from "@gloss/auth";
 import { CuriusAuthError, CuriusClient, CuriusError } from "@gloss/curius";
 import { db } from "@gloss/db";
 import {
@@ -10,6 +11,7 @@ import {
 import { createId } from "@paralleldrive/cuid2";
 import { and, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
 import { hashUrl, normalizeUrl } from "../lib/url";
 
 /**
@@ -430,7 +432,8 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 				return { error: "Curius account not connected" };
 			}
 
-			return await client.getNetworkInfo(body.url);
+			const info = await client.getNetworkInfo(body.url);
+			return info ?? { users: [], highlights: [] };
 		},
 		{
 			body: t.Object({
@@ -459,7 +462,8 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 		{
 			body: t.Object({
 				url: t.String({ format: "uri" }),
-				title: t.Optional(t.String()),
+				title: t.String(),
+				snippet: t.String({ minLength: 1 }),
 			}),
 		}
 	)
@@ -479,7 +483,8 @@ export const curiusRoutes = new Elysia({ prefix: "/curius" })
 				return { error: "Curius account not connected" };
 			}
 
-			return await client.addHighlight(params.linkId, body.position);
+			await client.addHighlight(params.linkId, body.position);
+			return { success: true };
 		},
 		{
 			params: t.Object({

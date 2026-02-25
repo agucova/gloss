@@ -1,9 +1,10 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
 import { friendship, user } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, eq, ilike, inArray, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
+import { deriveAuth } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import { FriendRequestSchema } from "../models";
 
@@ -13,12 +14,7 @@ import { FriendRequestSchema } from "../models";
  */
 export const friendships = new Elysia({ prefix: "/friendships" })
 	// Derive session for all friendship routes
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
 	// Send a friend request
 	.post(

@@ -2,6 +2,7 @@ import { db } from "@gloss/db";
 import { searchIndex } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, eq, sql } from "drizzle-orm";
+
 import { generateEmbedding } from "./embeddings";
 
 /**

@@ -1,59 +1,81 @@
 {
-  "name": "gloss",
-  "private": true,
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ],
-    "catalog": {
-      "dotenv": "^17.2.2",
-      "zod": "^4.1.13",
-      "typescript": "^5",
-      "@types/bun": "^1.3.4",
-      "elysia": "^1.4.21",
-      "better-auth": "^1.4.9"
-    }
-  },
-  "type": "module",
-  "scripts": {
-    "dev": "turbo -F web -F server -F @gloss/extension dev",
-    "dev:firefox": "turbo -F web -F server -F @gloss/extension dev:firefox",
-    "build": "turbo build",
-    "check-types": "turbo check-types",
-    "dev:web": "turbo -F web dev",
-    "dev:server": "turbo -F server dev",
-    "dev:ext": "turbo -F @gloss/extension dev",
-    "dev:ext:firefox": "bun --cwd apps/extension run dev:firefox",
-    "build:ext": "turbo -F @gloss/extension build",
-    "build:ext:firefox": "bun --cwd apps/extension run build:firefox",
-    "zip:ext": "bun --cwd apps/extension run zip",
-    "zip:ext:firefox": "bun --cwd apps/extension run zip:firefox",
-    "db:push": "turbo -F @gloss/db db:push",
-    "db:push:prod": "turbo -F @gloss/db db:push:prod",
-    "db:studio": "turbo -F @gloss/db db:studio",
-    "db:studio:prod": "turbo -F @gloss/db db:studio:prod",
-    "db:generate": "turbo -F @gloss/db db:generate",
-    "db:migrate": "turbo -F @gloss/db db:migrate",
-    "db:seed": "turbo -F @gloss/db db:seed",
-    "db:seed:prod": "turbo -F @gloss/db db:seed:prod",
-    "deploy:web": "turbo -F web deploy",
-    "deploy:web:preview": "turbo -F web deploy:preview"
-  },
-  "dependencies": {
-    "@gloss/env": "workspace:*",
-    "dotenv": "^17.2.3",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.3.11",
-    "@gloss/config": "workspace:*",
-    "@types/bun": "^1.3.6",
-    "concurrently": "^9.2.1",
-    "lefthook": "^2.0.15",
-    "turbo": "^2.7.5",
-    "typescript": "^5.9.3",
-    "ultracite": "7.0.12"
-  },
-  "packageManager": "bun@1.3.6"
+	"name": "gloss",
+	"private": true,
+	"workspaces": {
+		"packages": [
+			"apps/*",
+			"packages/*"
+		],
+		"catalog": {
+			"dotenv": "^17.2.2",
+			"zod": "^4.1.13",
+			"typescript": "^5",
+			"@types/bun": "^1.3.4",
+			"elysia": "^1.4.21",
+			"better-auth": "^1.4.9"
+		}
+	},
+	"type": "module",
+	"scripts": {
+		"dev": "turbo -F web -F server -F @gloss/extension dev",
+		"dev:firefox": "turbo -F web -F server -F @gloss/extension dev:firefox",
+		"build": "turbo build",
+		"check-types": "turbo check-types",
+		"check-types:tsgo": "tsgo --noEmit -p packages/api && tsgo --noEmit -p packages/auth && tsgo --noEmit -p packages/env && tsgo --noEmit -p packages/curius && tsgo --noEmit -p packages/anchoring && tsgo --noEmit -p packages/cli && tsgo --noEmit -p apps/extension",
+		"dev:web": "turbo -F web dev",
+		"dev:server": "turbo -F server dev",
+		"dev:ext": "turbo -F @gloss/extension dev",
+		"dev:ext:firefox": "bun --cwd apps/extension run dev:firefox",
+		"build:ext": "turbo -F @gloss/extension build",
+		"build:ext:firefox": "bun --cwd apps/extension run build:firefox",
+		"zip:ext": "bun --cwd apps/extension run zip",
+		"zip:ext:firefox": "bun --cwd apps/extension run zip:firefox",
+		"db:push": "turbo -F @gloss/db db:push",
+		"db:push:prod": "turbo -F @gloss/db db:push:prod",
+		"db:studio": "turbo -F @gloss/db db:studio",
+		"db:studio:prod": "turbo -F @gloss/db db:studio:prod",
+		"db:generate": "turbo -F @gloss/db db:generate",
+		"db:migrate": "turbo -F @gloss/db db:migrate",
+		"db:setup": "bun run packages/db/src/setup.ts",
+		"db:init": "bun run db:setup && bun run db:push",
+		"db:seed": "turbo -F @gloss/db db:seed",
+		"db:seed:prod": "turbo -F @gloss/db db:seed:prod",
+		"db:backfill": "turbo -F @gloss/db db:backfill",
+		"deploy:web": "turbo -F web deploy",
+		"deploy:web:preview": "turbo -F web deploy:preview",
+		"lint": "oxlint .",
+		"lint:fix": "oxlint --fix . && oxfmt --write .",
+		"format": "oxfmt --write .",
+		"format:check": "oxfmt --check .",
+		"test": "turbo test",
+		"test:coverage": "turbo test -- --coverage",
+		"e2e": "bunx playwright test",
+		"e2e:extension": "bunx playwright test --project=extension",
+		"e2e:web": "bunx playwright test --project=web",
+		"e2e:headed": "bunx playwright test --headed",
+		"e2e:ui": "bunx playwright test --ui",
+		"e2e:report": "bunx playwright show-report"
+	},
+	"dependencies": {
+		"@gloss/env": "workspace:*",
+		"better-auth": "^1.4.19",
+		"dotenv": "^17.2.3",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@gloss/config": "workspace:*",
+		"@gloss/db": "workspace:*",
+		"@paralleldrive/cuid2": "^3.3.0",
+		"@playwright/test": "^1.58.2",
+		"@types/bun": "^1.3.6",
+		"@typescript/native-preview": "^7.0.0-dev.20260225.1",
+		"concurrently": "^9.2.1",
+		"drizzle-orm": "^0.45.1",
+		"lefthook": "^2.0.15",
+		"oxfmt": "^0.35.0",
+		"oxlint": "^1.50.0",
+		"turbo": "^2.7.5",
+		"typescript": "^5.9.3"
+	},
+	"packageManager": "bun@1.3.6"
 }

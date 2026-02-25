@@ -93,17 +93,18 @@
       echo "Resetting database..."
       dropdb --if-exists gloss
       createdb gloss
-      echo "Database reset. Run 'bun run db:push' to apply schema."
+      echo "Database reset. Running setup + schema push..."
+      bun run db:init
     '';
 
     setup.exec = ''
       echo "Installing dependencies..."
       bun install
       echo ""
-      echo "Pushing database schema..."
+      echo "Setting up database (extensions + schema)..."
       echo "(Make sure PostgreSQL is running: 'devenv up' in another terminal)"
       echo ""
-      bun run db:push
+      bun run db:init
       echo ""
       echo "Setup complete! Run 'dev' to start all services."
     '';
@@ -122,14 +123,14 @@
     echo ""
     echo "First time? Run in separate terminals:"
     echo "  1. devenv up    # Starts PostgreSQL"
-    echo "  2. setup        # Install deps + push schema"
+    echo "  2. setup        # Install deps + setup DB + push schema"
     echo "  3. dev-chrome   # Start all services + open Chrome"
     echo ""
     echo "Commands:"
     echo "  dev-chrome  - All services + open Chrome"
     echo "  dev-firefox - All services + open Firefox"
     echo "  dev         - All services (no browser)"
-    echo "  setup       - Install deps + push DB schema"
+    echo "  setup       - Install deps + setup DB + push schema"
     echo "  build-ext   - Build extension for production"
     echo "  db-reset    - Drop and recreate database"
     echo ""

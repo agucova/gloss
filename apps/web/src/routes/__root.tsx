@@ -7,11 +7,13 @@ import {
 	Outlet,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+
+import type { api } from "@/utils/api";
+
 import Header from "@/components/header";
 import { PasskeyPrompt } from "@/components/passkey-prompt";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import type { api } from "@/utils/api";
 
 import "../index.css";
 
@@ -37,6 +39,13 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 				rel: "icon",
 				type: "image/svg+xml",
 				href: "/icon.svg",
+				media: "(prefers-color-scheme: light)",
+			},
+			{
+				rel: "icon",
+				type: "image/svg+xml",
+				href: "/icon-dark.svg",
+				media: "(prefers-color-scheme: dark)",
 			},
 		],
 	}),

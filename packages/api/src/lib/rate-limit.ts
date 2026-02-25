@@ -1,4 +1,3 @@
-import { Elysia } from "elysia";
 import type { AuthContext } from "./auth";
 
 interface RateLimitConfig {
@@ -6,11 +5,11 @@ interface RateLimitConfig {
 	maxRequests: number;
 }
 
-const RATE_LIMITS: Record<string, RateLimitConfig> = {
+const RATE_LIMITS = {
 	api_key_read: { windowMs: 60_000, maxRequests: 100 },
 	api_key_write: { windowMs: 60_000, maxRequests: 30 },
 	session: { windowMs: 60_000, maxRequests: 200 },
-};
+} as const satisfies Record<string, RateLimitConfig>;
 
 interface RateLimitEntry {
 	count: number;
@@ -62,64 +61,6 @@ export function checkRateLimit(
 		limit: config.maxRequests,
 	};
 }
-
-/**
- * Rate limiting plugin for Elysia.
- * Must be used after authPlugin/deriveAuth.
- *
- * Applies rate limits based on auth method:
- * - API key (read): 100 req/min
- * - API key (write): 30 req/min
- * - Session: 200 req/min
- */
-export const rateLimitPlugin = new Elysia({ name: "rateLimit" }).onBeforeHandle(
-	({ session, authMethod, apiKeyId, apiKeyScope, set, request }) => {
-		// Skip rate limiting for unauthenticated requests
-		// (they'll fail auth anyway)
-		if (!session) {
-			return;
-		}
-
-		// Determine identifier and limit type
-		let identifier: string;
-		let limitType: keyof typeof RATE_LIMITS;
-
-		if (authMethod === "api_key" && apiKeyId) {
-			identifier = `api_key:${apiKeyId}`;
-			// Use write limits for mutating requests
-			const method = request.method.toUpperCase();
-			if (
-				method === "POST" ||
-				method === "PUT" ||
-				method === "PATCH" ||
-				method === "DELETE"
-			) {
-				limitType = "api_key_write";
-			} else {
-				limitType = "api_key_read";
-			}
-		} else {
-			// Session auth
-			identifier = `session:${session.user.id}`;
-			limitType = "session";
-		}
-
-		const result = checkRateLimit(identifier, limitType);
-
-		// Set rate limit headers
-		set.headers["X-RateLimit-Limit"] = String(result.limit);
-		set.headers["X-RateLimit-Remaining"] = String(result.remaining);
-		set.headers["X-RateLimit-Reset"] = String(result.resetAt);
-
-		if (!result.allowed) {
-			set.status = 429;
-			set.headers["Retry-After"] = String(
-				Math.ceil((result.resetAt - Date.now()) / 1000)
-			);
-			return { error: "Rate limit exceeded" };
-		}
-	}
-);
 
 /**
  * Derive function for rate limiting.

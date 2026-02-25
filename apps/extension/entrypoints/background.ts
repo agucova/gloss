@@ -1,4 +1,3 @@
-import { createApiClient, getServerUrl } from "../utils/api";
 import type {
 	DashboardBookmark,
 	FeedBookmark,
@@ -10,13 +9,26 @@ import type {
 	ServerHighlight,
 } from "../utils/messages";
 
+import { DEFAULT_SERVER_URL, createApiClient } from "../utils/api";
+
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
 		id: browser.runtime.id,
 	});
 
-	// Listen for messages from content scripts
+	// Initialize theme-aware toolbar icon
+	initializeThemeIcon();
+
+	// Handle color scheme reports from the offscreen document
+	// Listen for messages from content scripts and offscreen document
 	browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+		// Handle color scheme from offscreen document
+		if (message.type === "COLOR_SCHEME") {
+			updateToolbarIcon(message.dark as boolean);
+			sendResponse({ success: true });
+			return false;
+		}
+
 		// Handle special utility messages that don't need responses
 		if (message.type === "OPEN_TAB" && message.url) {
 			browser.tabs.create({ url: message.url });
@@ -37,6 +49,51 @@ export default defineBackground(() => {
 		return true;
 	});
 });
+
+function updateToolbarIcon(isDark: boolean): void {
+	const dir = isDark ? "icon-dark" : "icon";
+	console.log(`[Gloss] Setting toolbar icon: ${dir} (isDark=${isDark})`);
+	browser.action.setIcon({
+		path: {
+			16: `${dir}/16.png`,
+			32: `${dir}/32.png`,
+			48: `${dir}/48.png`,
+			128: `${dir}/128.png`,
+		},
+	});
+}
+
+async function ensureOffscreenDocument(): Promise<boolean> {
+	try {
+		const offscreenUrl = chrome.runtime.getURL("offscreen.html");
+		const existingContexts = await chrome.runtime.getContexts?.({
+			contextTypes: ["OFFSCREEN_DOCUMENT" as chrome.runtime.ContextType],
+			documentUrls: [offscreenUrl],
+		});
+		if (existingContexts && existingContexts.length > 0) return true;
+
+		await chrome.offscreen.createDocument({
+			url: "offscreen.html",
+			reasons: ["DOM_SCRAPING" as chrome.offscreen.Reason],
+			justification: "Detect prefers-color-scheme for toolbar icon",
+		});
+		console.log("[Gloss] Offscreen document created for theme detection");
+		return true;
+	} catch (error) {
+		console.error("[Gloss] Failed to create offscreen document:", error);
+		return false;
+	}
+}
+
+async function initializeThemeIcon(): Promise<void> {
+	const success = await ensureOffscreenDocument();
+	if (success) {
+		// Give the offscreen document a moment to load, then request theme
+		setTimeout(() => {
+			chrome.runtime.sendMessage({ action: "detect-theme" }).catch(() => {});
+		}, 100);
+	}
+}
 
 /**
  * Route messages to appropriate handlers.
@@ -72,7 +129,7 @@ async function handleMessage(
 			return await handleLoadPageCommentSummary(message.highlightIds);
 		// Bookmark messages
 		case "GET_PAGE_METADATA":
-			return await handleGetPageMetadata();
+			return await handleGetPageMetadata(message.tabId);
 		case "GET_BOOKMARK_STATUS":
 			return await handleGetBookmarkStatus(message.url);
 		case "SAVE_BOOKMARK":
@@ -286,8 +343,7 @@ async function handleGetAuthStatus(): Promise<{
 	user?: { id: string; name: string | null };
 }> {
 	try {
-		const serverUrl = await getServerUrl();
-		const response = await fetch(`${serverUrl}/api/auth/get-session`, {
+		const response = await fetch(`${DEFAULT_SERVER_URL}/api/auth/get-session`, {
 			credentials: "include",
 		});
 
@@ -590,16 +646,16 @@ interface PageMetadataResponse {
 
 /**
  * Get page metadata from the active tab's content script.
+ * Accepts an optional tabId to avoid race conditions when the popup
+ * itself becomes the active tab.
  */
-async function handleGetPageMetadata(): Promise<{
+async function handleGetPageMetadata(tabId?: number): Promise<{
 	metadata: PageMetadataResponse;
 }> {
 	try {
-		// Get the active tab
-		const [tab] = await browser.tabs.query({
-			active: true,
-			currentWindow: true,
-		});
+		const tab = tabId
+			? await browser.tabs.get(tabId)
+			: (await browser.tabs.query({ active: true, currentWindow: true }))[0];
 
 		if (!(tab?.id && tab.url)) {
 			return {
@@ -623,10 +679,9 @@ async function handleGetPageMetadata(): Promise<{
 	} catch (error) {
 		console.error("[Gloss] Error getting page metadata:", error);
 		// Return basic info from the tab itself
-		const [tab] = await browser.tabs.query({
-			active: true,
-			currentWindow: true,
-		});
+		const tab = tabId
+			? await browser.tabs.get(tabId).catch(() => undefined)
+			: (await browser.tabs.query({ active: true, currentWindow: true }))[0];
 		return {
 			metadata: {
 				title: tab?.title || "",

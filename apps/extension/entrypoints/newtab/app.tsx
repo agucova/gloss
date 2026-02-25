@@ -1,6 +1,8 @@
 import type { DashboardApiClient } from "@gloss/dashboard";
+
 import { Dashboard } from "@gloss/dashboard";
 import { useEffect, useMemo, useState } from "react";
+
 import { Logo } from "../../components/logo";
 import { isErrorResponse, sendMessage } from "../../utils/messages";
 import { initTheme } from "../../utils/theme";
@@ -23,7 +25,7 @@ function Header() {
 					<Logo className="h-6 w-auto" />
 				</a>
 				<a
-					className="text-muted-foreground text-sm transition-colors hover:text-foreground"
+					className="text-sm text-muted-foreground transition-colors hover:text-foreground"
 					href={WEB_APP_URL}
 					rel="noopener noreferrer"
 					target="_blank"
@@ -38,7 +40,7 @@ function Header() {
 function LoadingState() {
 	return (
 		<div className="flex min-h-screen items-center justify-center bg-background">
-			<p className="text-muted-foreground text-sm">Loading...</p>
+			<p className="text-sm text-muted-foreground">Loading...</p>
 		</div>
 	);
 }
@@ -47,11 +49,11 @@ function UnauthenticatedState() {
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
 			<Logo className="h-10 w-auto text-foreground" />
-			<p className="text-muted-foreground text-sm">
+			<p className="text-sm text-muted-foreground">
 				Sign in to see your dashboard
 			</p>
 			<a
-				className="rounded-lg bg-foreground px-4 py-2 text-background text-sm transition-opacity hover:opacity-90"
+				className="rounded-lg bg-foreground px-4 py-2 text-sm text-background transition-opacity hover:opacity-90"
 				href={`${WEB_APP_URL}/login`}
 				rel="noopener noreferrer"
 				target="_blank"

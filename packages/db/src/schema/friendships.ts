@@ -7,6 +7,7 @@ import {
 	timestamp,
 	unique,
 } from "drizzle-orm/pg-core";
+
 import { user } from "./auth";
 
 export const friendshipStatusEnum = pgEnum("friendship_status", [

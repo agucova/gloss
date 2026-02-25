@@ -1,38 +1,41 @@
 {
-  "name": "@gloss/db",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    },
-    "./schema": {
-      "default": "./src/schema/index.ts"
-    },
-    "./*": {
-      "default": "./src/*.ts"
-    }
-  },
-  "scripts": {
-    "db:push": "drizzle-kit push",
-    "db:push:prod": "drizzle-kit push --config=drizzle.config.prod.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
-    "db:studio:prod": "drizzle-kit studio --config=drizzle.config.prod.ts",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "bun run src/seed.ts",
-    "db:seed:prod": "ENV_FILE=../../.env.production bun run src/seed.ts"
-  },
-  "dependencies": {
-    "@gloss/env": "workspace:*",
-    "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
-    "pg": "^8.17.1",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@gloss/config": "workspace:*",
-    "@types/pg": "^8.16.0",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "catalog:"
-  }
+	"name": "@gloss/db",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./schema": {
+			"default": "./src/schema/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {
+		"db:push": "drizzle-kit push",
+		"db:push:prod": "drizzle-kit push --config=drizzle.config.prod.ts",
+		"db:generate": "drizzle-kit generate",
+		"db:studio": "drizzle-kit studio",
+		"db:studio:prod": "drizzle-kit studio --config=drizzle.config.prod.ts",
+		"db:migrate": "drizzle-kit migrate",
+		"db:seed": "bun run src/seed.ts",
+		"db:seed:prod": "ENV_FILE=../../.env.production bun run src/seed.ts",
+		"db:backfill": "bun run src/backfill-search-index.ts"
+	},
+	"dependencies": {
+		"@gloss/env": "workspace:*",
+		"dotenv": "catalog:",
+		"drizzle-orm": "^0.45.1",
+		"pg": "^8.17.1",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@gloss/config": "workspace:*",
+		"@paralleldrive/cuid2": "^3.3.0",
+		"@types/pg": "^8.16.0",
+		"drizzle-kit": "^0.31.8",
+		"openai": "^6.25.0",
+		"typescript": "catalog:"
+	}
 }

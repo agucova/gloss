@@ -102,8 +102,10 @@ export const cliAuth = new Elysia({ prefix: "/auth/cli" })
 
 			// Validate redirect_uri is localhost
 			if (
-				!redirect_uri.startsWith("http://localhost:") &&
-				!redirect_uri.startsWith("http://127.0.0.1:")
+				!(
+					redirect_uri.startsWith("http://localhost:") ||
+					redirect_uri.startsWith("http://127.0.0.1:")
+				)
 			) {
 				set.status = 400;
 				return { error: "redirect_uri must be localhost" };

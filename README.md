@@ -36,6 +36,7 @@ devenv up
 ```
 
 Then copy `.env.example` to `.env` at the repo root and configure your database:
+
 ```
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gloss
 ```
@@ -99,6 +100,7 @@ gloss/
    - Runway will detect `railway.toml` and use the Dockerfile
 
 3. **Set environment variables** in Runway dashboard:
+
    ```
    DATABASE_URL=<your-runway-postgres-url>
    BETTER_AUTH_SECRET=<generate with: openssl rand -base64 32>
@@ -106,6 +108,7 @@ gloss/
    VITE_WEB_URL=https://your-web-app.example.com
    NODE_ENV=production
    ```
+
    Note: `PORT` is injected automatically by Runway.
 
 4. **Run database migrations** (first deploy):
@@ -125,6 +128,7 @@ gloss/
    - **Root directory**: `/` (leave empty)
 
 3. **Set environment variables**:
+
    ```
    VITE_SERVER_URL=https://your-api.example.com
    ```

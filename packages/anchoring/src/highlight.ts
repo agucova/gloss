@@ -4,6 +4,7 @@
  */
 
 import type { HighlightOptions, HighlightResult } from "./types";
+
 import { getTextNodesInRange } from "./utils/text";
 
 /** Default CSS class for highlight elements */

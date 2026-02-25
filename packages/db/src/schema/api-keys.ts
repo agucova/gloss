@@ -7,6 +7,7 @@ import {
 	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
+
 import { user } from "./auth";
 
 export const apiKeyScopeEnum = pgEnum("api_key_scope", ["read", "write"]);

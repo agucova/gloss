@@ -9,28 +9,45 @@ Gloss is a browser extension + web app for highlighting text on web pages and sh
 ## Commands
 
 ### Development
+
 ```bash
 bun run dev              # Start all apps (web on :3001, server on :3000)
 bun run dev:web          # Web app only
 bun run dev:server       # API server only
 ```
 
+### First-time Setup
+
+```bash
+bun run db:setup         # Create required PostgreSQL extensions (pgvector)
+bun run db:push          # Push schema to database
+bun run db:seed          # Optional: seed test data
+```
+
+Or use `bun run db:init` to run setup + push together.
+
 ### Database (Drizzle + PostgreSQL)
+
 ```bash
 bun run db:push          # Push schema changes to database
 bun run db:generate      # Generate migration files
 bun run db:migrate       # Run migrations
 bun run db:studio        # Open Drizzle Studio UI
+bun run db:backfill      # Populate search index embeddings (requires OPENAI_API_KEY)
 ```
 
 ### Code Quality
+
 ```bash
-bun x ultracite fix      # Format and auto-fix lint issues
-bun x ultracite check    # Check for issues without fixing
+bun run lint             # Lint with oxlint
+bun run format           # Format with oxfmt
+bun run lint:fix         # Auto-fix lint issues + format
+bun run format:check     # Check formatting without writing
 bun run check-types      # TypeScript type checking across all packages
 ```
 
 ### Browser Extension (WXT)
+
 ```bash
 cd apps/extension
 bun run dev              # Dev mode with hot reload (port 5555)
@@ -42,6 +59,7 @@ bun run zip              # Package extension as ZIP
 ## Architecture
 
 ### Monorepo Structure (Turborepo + Bun workspaces)
+
 ```
 apps/
   web/          # React SPA (Vite + TanStack Router) - port 3001
@@ -58,17 +76,21 @@ packages/
 ```
 
 ### Data Flow
+
 1. **Web/Extension → Server**: Eden Treaty client (`@elysiajs/eden`) for end-to-end type-safe API calls
 2. **Authentication**: Better-Auth handles `/api/auth/*`, stores sessions in PostgreSQL
 3. **Database**: Drizzle ORM with PostgreSQL, schema in `packages/db/src/schema/`
 
 ### Key Type-Safety Patterns
+
 - **Eden Treaty**: Server exports `App` type from `apps/server/src/index.ts`, clients import it for full type inference
-- **Environment**: Validated via Zod schemas in `packages/env/` - server vars in `server.ts`, client (VITE_) vars in `web.ts`
+- **Environment**: Validated via Zod schemas in `packages/env/` - server vars in `server.ts`, client (VITE\_) vars in `web.ts`
 - **Auth**: Session derived via `.derive()` middleware, available as `session` in route handlers
 
 ### Adding API Routes
+
 Define routes in `apps/server/src/routes/` using Elysia:
+
 ```typescript
 export const myRoutes = new Elysia({ prefix: "/my-prefix" })
   .derive(async ({ request }) => {
@@ -84,9 +106,11 @@ export const myRoutes = new Elysia({ prefix: "/my-prefix" })
     body: t.Object({ field: t.String() })  // Validation with Elysia's t
   });
 ```
+
 Then mount in `apps/server/src/index.ts` with `.use(myRoutes)`.
 
 ### Adding Database Tables
+
 1. Create schema in `packages/db/src/schema/`
 2. Export from `packages/db/src/schema/index.ts`
 3. Run `bun run db:push` (dev) or `bun run db:generate && bun run db:migrate` (prod)
@@ -96,6 +120,7 @@ Then mount in `apps/server/src/index.ts` with `.use(myRoutes)`.
 All env vars live in a single `.env` file at the repo root (see `.env.example`).
 
 ### Development (`.env`)
+
 ```
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/gloss
 BETTER_AUTH_SECRET=<min 32 chars>
@@ -106,7 +131,9 @@ NODE_ENV=development
 ```
 
 ### Production (`.env.production`)
+
 Used for `:prod` script variants (e.g., `db:push:prod`, `db:studio:prod`).
+
 ```
 DATABASE_URL=postgresql://...
 BETTER_AUTH_URL=https://api.gloss.agus.sh
@@ -119,7 +146,7 @@ NODE_ENV=production
 
 ## Code Standards
 
-This project uses **Ultracite** (Biome) for formatting and linting. Most issues are auto-fixable with `bun x ultracite fix`.
+This project uses **oxlint** for linting and **oxfmt** for formatting (both from the OXC project). Most lint issues are auto-fixable with `bun run lint:fix`.
 
 ### React & JSX
 
@@ -157,20 +184,24 @@ This project uses **Ultracite** (Biome) for formatting and linting. Most issues 
 ### Formatting
 
 - Tab indentation, double quotes
-- Tailwind class sorting (via `cn`, `clsx`, `cva` functions)
-- Lefthook runs Biome on pre-commit
+- Tailwind class sorting (via `cn`, `clsx`, `cva` functions) — built into oxfmt
+- Import sorting — built into oxfmt
+- Lefthook runs oxfmt + oxlint on pre-commit
 
 ---
 
 ## Design Context
 
 ### Users
+
 Knowledge workers—researchers, writers, analysts—who highlight text for retention and reference. They're browsing the web with intention, often reading long-form content, and want to capture what resonates. The interface should feel like a tool that respects their focus and gets out of the way.
 
 ### Brand Personality
+
 **Minimal, calm, focused.** Gloss should feel like a quiet companion rather than an attention-seeking app. The interface recedes when not needed and surfaces information without friction. Think library, not social feed.
 
 ### Aesthetic Direction
+
 - **Primary reference**: Are.na / Cosmos—gallery-like presentation, artistic sensibility, community without noise
 - **Visual tone**: Understated, spacious, considered. Every element earns its place.
 - **Typography**: Clean sans-serif (Inter), generous line-height, restrained hierarchy
@@ -179,6 +210,7 @@ Knowledge workers—researchers, writers, analysts—who highlight text for rete
 - **Density**: Spacious—generous whitespace, breathing room, one thing at a time
 
 ### Anti-References (What to Avoid)
+
 - **Corporate SaaS**: No gradient CTAs, generic dashboards, or startup-y enthusiasm
 - **Social media**: No feed-like density, engagement metrics, or notification pressure
 - **Academic/utilitarian**: No dry, unstyled, purely functional interfaces

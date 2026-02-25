@@ -9,7 +9,7 @@ interface ContentTypeFilterProps {
 
 export function ContentTypeFilter({ value, onChange }: ContentTypeFilterProps) {
 	return (
-		<div className="flex gap-1 border-border border-b">
+		<div className="flex gap-1 border-b border-border">
 			<FilterButton
 				active={value === "all"}
 				label="All"
@@ -39,7 +39,7 @@ function FilterButton({ active, label, onClick }: FilterButtonProps) {
 	return (
 		<button
 			className={cn(
-				"border-b-2 px-4 py-2.5 font-medium text-sm outline-none transition-colors focus-visible:bg-muted/50",
+				"border-b-2 px-4 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:bg-muted/50",
 				active
 					? "border-foreground text-foreground"
 					: "border-transparent text-muted-foreground hover:text-foreground"

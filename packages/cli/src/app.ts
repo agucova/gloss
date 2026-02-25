@@ -1,4 +1,5 @@
 import { buildApplication, buildRouteMap } from "@stricli/core";
+
 import { authRoutes } from "./commands/auth/index.js";
 import { bookmarksListCommand } from "./commands/bookmarks.js";
 import { highlightsListCommand } from "./commands/highlights.js";

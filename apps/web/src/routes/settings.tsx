@@ -99,10 +99,10 @@ function SettingsPage() {
 	if (error) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6">
-				<h1 className="mb-2 font-medium text-foreground text-lg">
+				<h1 className="mb-2 text-lg font-medium text-foreground">
 					Failed to load settings
 				</h1>
-				<p className="mb-4 text-muted-foreground text-sm">
+				<p className="mb-4 text-sm text-muted-foreground">
 					Something went wrong. Please try again.
 				</p>
 				<Button
@@ -122,13 +122,13 @@ function SettingsPage() {
 			{/* Header with back link */}
 			<div className="mb-8">
 				<Link
-					className="mb-4 inline-flex items-center gap-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+					className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
 					to="/profile"
 				>
 					<ArrowLeft className="h-4 w-4" />
 					Back to profile
 				</Link>
-				<h1 className="font-semibold text-2xl text-foreground">Settings</h1>
+				<h1 className="text-2xl font-semibold text-foreground">Settings</h1>
 			</div>
 
 			<form
@@ -140,7 +140,7 @@ function SettingsPage() {
 			>
 				{/* Privacy Settings */}
 				<section>
-					<h2 className="mb-6 font-semibold text-foreground text-lg">
+					<h2 className="mb-6 text-lg font-semibold text-foreground">
 						Privacy
 					</h2>
 
@@ -197,7 +197,7 @@ function SettingsPage() {
 
 				{/* Display Preferences */}
 				<section>
-					<h2 className="mb-6 font-semibold text-foreground text-lg">
+					<h2 className="mb-6 text-lg font-semibold text-foreground">
 						Display
 					</h2>
 
@@ -210,7 +210,7 @@ function SettingsPage() {
 									title="Show highlights from"
 								>
 									<select
-										className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+										className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
 										id={field.name}
 										onChange={(e) =>
 											field.handleChange(
@@ -235,7 +235,7 @@ function SettingsPage() {
 									title="Comments"
 								>
 									<select
-										className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+										className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
 										id={field.name}
 										onChange={(e) =>
 											field.handleChange(e.target.value as CommentDisplayMode)
@@ -252,11 +252,11 @@ function SettingsPage() {
 				</section>
 
 				{/* Save button */}
-				<div className="border-border border-t pt-6">
+				<div className="border-t border-border pt-6">
 					<form.Subscribe>
 						{(state) => (
 							<div className="flex items-center justify-between">
-								<p className="text-muted-foreground text-sm">
+								<p className="text-sm text-muted-foreground">
 									{state.isDirty
 										? "You have unsaved changes"
 										: "All changes saved"}
@@ -294,8 +294,8 @@ function SettingRow({ id, title, description, children }: SettingRowProps) {
 	return (
 		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
 			<label className="flex-1 cursor-pointer" htmlFor={id}>
-				<p className="text-foreground text-sm">{title}</p>
-				<p className="text-muted-foreground text-xs">{description}</p>
+				<p className="text-sm text-foreground">{title}</p>
+				<p className="text-xs text-muted-foreground">{description}</p>
 			</label>
 			<div className="w-full sm:w-48 sm:shrink-0">{children}</div>
 		</div>
@@ -311,7 +311,7 @@ interface VisibilitySelectProps {
 function VisibilitySelect({ id, value, onChange }: VisibilitySelectProps) {
 	return (
 		<select
-			className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+			className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
 			id={id}
 			onChange={(e) => onChange(e.target.value as Visibility)}
 			value={value}

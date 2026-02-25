@@ -93,14 +93,14 @@ function RouteComponent() {
 							<MailIcon className="size-8 text-muted-foreground" />
 						</div>
 					</div>
-					<h1 className="font-medium text-foreground text-lg tracking-tight">
+					<h1 className="text-lg font-medium tracking-tight text-foreground">
 						Check your email
 					</h1>
-					<p className="mt-2 text-muted-foreground text-sm leading-relaxed">
+					<p className="mt-2 text-sm leading-relaxed text-muted-foreground">
 						We sent you a magic link to sign in. The link expires in 10 minutes.
 					</p>
 					<button
-						className="mt-6 text-muted-foreground text-sm underline underline-offset-4 transition-colors hover:text-foreground"
+						className="mt-6 text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
 						onClick={() => setMagicLinkSent(false)}
 						type="button"
 					>
@@ -123,7 +123,7 @@ function RouteComponent() {
 				{/* Header */}
 				<div className="mb-10 flex flex-col items-center">
 					<Logo className="mb-4 h-10 w-auto text-foreground" />
-					<p className="text-muted-foreground text-sm leading-relaxed">
+					<p className="text-sm leading-relaxed text-muted-foreground">
 						Capture what resonates
 					</p>
 				</div>
@@ -131,7 +131,7 @@ function RouteComponent() {
 				{/* Social Login Buttons */}
 				<div className="space-y-3">
 					<Button
-						className="h-10 w-full gap-3 rounded-lg font-normal text-sm"
+						className="h-10 w-full gap-3 rounded-lg text-sm font-normal"
 						disabled={socialLoading !== null}
 						onClick={() => handleSocialLogin("google")}
 						type="button"
@@ -145,7 +145,7 @@ function RouteComponent() {
 						Continue with Google
 					</Button>
 					<Button
-						className="h-10 w-full gap-3 rounded-lg font-normal text-sm"
+						className="h-10 w-full gap-3 rounded-lg text-sm font-normal"
 						disabled={socialLoading !== null}
 						onClick={() => handleSocialLogin("apple")}
 						type="button"
@@ -163,7 +163,7 @@ function RouteComponent() {
 				{/* Divider */}
 				<div className="relative my-8">
 					<div className="absolute inset-0 flex items-center">
-						<span className="w-full border-border border-t" />
+						<span className="w-full border-t border-border" />
 					</div>
 					<div className="relative flex justify-center text-xs">
 						<span className="bg-background px-3 text-muted-foreground">or</span>
@@ -174,9 +174,9 @@ function RouteComponent() {
 				<MagicLinkForm onSuccess={() => setMagicLinkSent(true)} />
 
 				{/* Passkey Login */}
-				<div className="mt-6 border-border border-t pt-6">
+				<div className="mt-6 border-t border-border pt-6">
 					<Button
-						className="h-10 w-full gap-3 rounded-lg font-normal text-sm"
+						className="h-10 w-full gap-3 rounded-lg text-sm font-normal"
 						disabled={passkeyLoading}
 						onClick={handlePasskeyLogin}
 						type="button"
@@ -232,7 +232,7 @@ function MagicLinkForm({ onSuccess }: { onSuccess: () => void }) {
 		>
 			<div className="space-y-2">
 				<Label
-					className="font-normal text-muted-foreground text-xs"
+					className="text-xs font-normal text-muted-foreground"
 					htmlFor="email"
 				>
 					Email
@@ -252,7 +252,7 @@ function MagicLinkForm({ onSuccess }: { onSuccess: () => void }) {
 								value={field.state.value}
 							/>
 							{field.state.meta.errors[0]?.message && (
-								<p className="mt-1 text-destructive text-xs" role="alert">
+								<p className="mt-1 text-xs text-destructive" role="alert">
 									{field.state.meta.errors[0].message}
 								</p>
 							)}
@@ -448,11 +448,11 @@ function DevImpersonationPanel() {
 	if (!session?.user) {
 		const adminUser = DEV_USERS[0];
 		return (
-			<div className="mt-8 rounded-lg border border-amber-500/50 border-dashed bg-amber-500/5 p-4">
-				<p className="mb-3 font-medium text-amber-600 text-xs dark:text-amber-400">
+			<div className="mt-8 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-4">
+				<p className="mb-3 text-xs font-medium text-amber-600 dark:text-amber-400">
 					Dev Mode
 				</p>
-				<p className="mb-3 text-muted-foreground text-xs">
+				<p className="mb-3 text-xs text-muted-foreground">
 					Log in as admin ({adminUser.name.split(" ")[0]}) to access
 					impersonation.
 				</p>
@@ -481,8 +481,8 @@ function DevImpersonationPanel() {
 
 	// Logged in as admin or impersonating
 	return (
-		<div className="mt-8 rounded-lg border border-amber-500/50 border-dashed bg-amber-500/5 p-4">
-			<p className="mb-3 font-medium text-amber-600 text-xs dark:text-amber-400">
+		<div className="mt-8 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/5 p-4">
+			<p className="mb-3 text-xs font-medium text-amber-600 dark:text-amber-400">
 				Dev Mode {isImpersonating && "• Impersonating"}
 			</p>
 
@@ -501,7 +501,7 @@ function DevImpersonationPanel() {
 
 			{isAdmin && !isImpersonating && (
 				<div className="space-y-2">
-					<p className="mb-2 text-muted-foreground text-xs">
+					<p className="mb-2 text-xs text-muted-foreground">
 						Impersonate a test user:
 					</p>
 					{DEV_USERS.filter((u) => !("isAdmin" in u && u.isAdmin)).map(
@@ -514,7 +514,7 @@ function DevImpersonationPanel() {
 								type="button"
 							>
 								<span className="font-medium">{user.name}</span>
-								<span className="text-muted-foreground text-xs">
+								<span className="text-xs text-muted-foreground">
 									{user.email}
 								</span>
 								{loading === user.id && (

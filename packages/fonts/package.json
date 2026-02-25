@@ -1,9 +1,9 @@
 {
-  "name": "@gloss/fonts",
-  "version": "0.0.1",
-  "private": true,
-  "exports": {
-    "./satoshi.css": "./satoshi/satoshi.css",
-    "./satoshi/*": "./satoshi/*"
-  }
+	"name": "@gloss/fonts",
+	"version": "0.0.1",
+	"private": true,
+	"exports": {
+		"./satoshi.css": "./satoshi/satoshi.css",
+		"./satoshi/*": "./satoshi/*"
+	}
 }

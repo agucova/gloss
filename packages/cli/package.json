@@ -1,43 +1,43 @@
 {
-  "name": "@gloss/cli",
-  "version": "0.0.1",
-  "description": "Gloss CLI client for highlights, bookmarks, and comments",
-  "author": "Agustín Covarrubias",
-  "license": "MIT",
-  "type": "module",
-  "files": [
-    "dist"
-  ],
-  "bin": {
-    "gloss": "dist/cli.js",
-    "gloss-mcp": "dist/mcp.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "check-types": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@stricli/core": "^1.1.0",
-    "chalk": "^5.4.1",
-    "cli-table3": "^0.6.5",
-    "open": "^10.1.0",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
-    "@gloss/config": "workspace:*",
-    "@types/node": "^22.13.4",
-    "tsup": "^8.4.0",
-    "typescript": "^5.8.2"
-  }
+	"name": "@gloss/cli",
+	"version": "0.0.1",
+	"description": "Gloss CLI client for highlights, bookmarks, and comments",
+	"license": "MIT",
+	"author": "Agustín Covarrubias",
+	"bin": {
+		"gloss": "dist/cli.js",
+		"gloss-mcp": "dist/mcp.js"
+	},
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsup --watch",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.0.0",
+		"@stricli/core": "^1.1.0",
+		"chalk": "^5.4.1",
+		"cli-table3": "^0.6.5",
+		"open": "^10.1.0",
+		"zod": "^3.24.2"
+	},
+	"devDependencies": {
+		"@gloss/config": "workspace:*",
+		"@types/node": "^22.13.4",
+		"tsup": "^8.4.0",
+		"typescript": "^5.8.2"
+	},
+	"engines": {
+		"node": ">=20"
+	}
 }

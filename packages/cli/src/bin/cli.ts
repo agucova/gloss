@@ -1,4 +1,5 @@
 import { run } from "@stricli/core";
+
 import { app } from "../app.js";
 
 // Run the CLI application

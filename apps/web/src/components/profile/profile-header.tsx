@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/utils/api";
 
 const WWW_REGEX = /^www\./;
+const WHITESPACE_RE = /\s+/;
 
 const AVATAR_COLORS = [
 	{
@@ -46,15 +47,21 @@ const AVATAR_COLORS = [
 function getAvatarColor(name: string) {
 	let hash = 0;
 	for (let i = 0; i < name.length; i++) {
+		// biome-ignore lint/suspicious/noBitwiseOperators: intentional hash computation
 		hash = name.charCodeAt(i) + ((hash << 5) - hash);
 	}
-	return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+	// Modular arithmetic guarantees a valid index into the non-empty array
+	return AVATAR_COLORS[
+		Math.abs(hash) % AVATAR_COLORS.length
+	] as (typeof AVATAR_COLORS)[number];
 }
 
 function getInitials(name: string) {
-	const parts = name.trim().split(/\s+/);
-	if (parts.length >= 2) {
-		return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+	const parts = name.trim().split(WHITESPACE_RE);
+	const first = parts[0];
+	if (parts.length >= 2 && first) {
+		const last = parts.at(-1) ?? first;
+		return ((first[0] ?? "") + (last[0] ?? "")).toUpperCase();
 	}
 	return name.slice(0, 2).toUpperCase();
 }
@@ -174,12 +181,12 @@ export function ProfileHeader({ profile, isOwnProfile }: ProfileHeaderProps) {
 					<GeneratedAvatar name={profile.name} size="lg" />
 				)}
 
-				<h1 className="mt-4 font-semibold text-foreground text-xl">
+				<h1 className="mt-4 text-xl font-semibold text-foreground">
 					{profile.name}
 				</h1>
 
 				{profile.username && (
-					<p className="text-muted-foreground text-sm">@{profile.username}</p>
+					<p className="text-sm text-muted-foreground">@{profile.username}</p>
 				)}
 			</div>
 
@@ -201,7 +208,7 @@ export function ProfileHeader({ profile, isOwnProfile }: ProfileHeaderProps) {
 
 			{/* Bio */}
 			{profile.bio && (
-				<div className="max-w-none text-muted-foreground text-sm leading-relaxed [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2 [&_p+p]:mt-2 [&_p]:m-0 [&_strong]:text-foreground">
+				<div className="max-w-none text-sm leading-relaxed text-muted-foreground [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-2 [&_p]:m-0 [&_p+p]:mt-2 [&_strong]:text-foreground">
 					<Markdown
 						allowedElements={["p", "strong", "em", "a", "br"]}
 						components={{
@@ -243,7 +250,7 @@ export function ProfileHeader({ profile, isOwnProfile }: ProfileHeaderProps) {
 			</div>
 
 			{/* Stats */}
-			<div className="flex justify-center gap-6 border-border border-t pt-4 text-center lg:justify-start">
+			<div className="flex justify-center gap-6 border-t border-border pt-4 text-center lg:justify-start">
 				<Stat label="highlights" value={profile.highlightCount} />
 				<Stat label="bookmarks" value={profile.bookmarkCount} />
 				<Stat label="friends" value={profile.friendCount} />
@@ -261,7 +268,7 @@ interface SocialLinkProps {
 function SocialLink({ href, icon, label }: SocialLinkProps) {
 	return (
 		<a
-			className="flex items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground"
+			className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
 			href={href}
 			rel="noopener noreferrer"
 			target="_blank"
@@ -281,7 +288,7 @@ function Stat({ value, label }: StatProps) {
 	return (
 		<div>
 			<p className="font-semibold text-foreground">{value}</p>
-			<p className="text-muted-foreground text-xs">{label}</p>
+			<p className="text-xs text-muted-foreground">{label}</p>
 		</div>
 	);
 }

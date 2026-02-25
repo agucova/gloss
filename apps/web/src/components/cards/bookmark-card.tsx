@@ -38,22 +38,30 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
 					alt=""
 					className="mt-0.5 h-4 w-4 shrink-0 rounded-sm"
 					height={16}
+					onError={(e) => {
+						const img = e.currentTarget;
+						img.style.display = "none";
+						const fallback = img.nextElementSibling as HTMLElement | null;
+						if (fallback) fallback.style.display = "";
+					}}
 					src={bookmark.favicon}
 					width={16}
 				/>
-			) : (
-				<Bookmark className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40" />
-			)}
+			) : null}
+			<Bookmark
+				className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40"
+				style={bookmark.favicon ? { display: "none" } : undefined}
+			/>
 			<div className="min-w-0 flex-1">
-				<h3 className="truncate font-medium text-foreground text-sm">
+				<h3 className="truncate text-sm font-medium text-foreground">
 					{title}
 				</h3>
 				{bookmark.description && (
-					<p className="mt-0.5 line-clamp-1 text-muted-foreground/80 text-sm">
+					<p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground/80">
 						{bookmark.description}
 					</p>
 				)}
-				<div className="mt-1.5 flex items-center gap-2 text-muted-foreground/60 text-xs">
+				<div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground/60">
 					<span className="min-w-0 truncate">{domain}</span>
 					<span className="shrink-0">·</span>
 					<span className="shrink-0">
@@ -66,7 +74,7 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
 							<TagIndicator key={tag.id} tag={tag} />
 						))}
 						{tags.length > 3 && (
-							<span className="shrink-0 text-muted-foreground/50 text-xs">
+							<span className="shrink-0 text-xs text-muted-foreground/50">
 								+{tags.length - 3}
 							</span>
 						)}
@@ -100,7 +108,7 @@ function TagIndicator({ tag }: { tag: BookmarkTag }) {
 	}
 
 	return (
-		<span className="flex items-center gap-1 text-muted-foreground/60 text-xs">
+		<span className="flex items-center gap-1 text-xs text-muted-foreground/60">
 			<span
 				className="h-1.5 w-1.5 shrink-0 rounded-full"
 				style={{ backgroundColor: tag.color ?? "currentColor" }}

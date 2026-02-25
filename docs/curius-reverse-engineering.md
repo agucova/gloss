@@ -23,11 +23,13 @@ dist/
 Base URL: `https://curius.app`
 
 ### Authentication
+
 - `POST /api/login` — Login endpoint
 - Auth uses JWT tokens stored in cookies and localStorage
 - Authorization header: `Bearer <jwt_token>`
 
 ### Links (Bookmarks)
+
 - `POST /api/links` — Add a new link/bookmark
 - `GET /api/links/url` — Get link by URL (check if already saved)
 - `POST /api/links/url/network` — Get network (friends') links for a URL
@@ -37,11 +39,13 @@ Base URL: `https://curius.app`
 - `POST /api/links/{id}/favorite` — Toggle favorite
 
 ### Highlights
+
 - `POST /api/links/{id}/highlights` — Add highlight to a link
 - `DELETE /api/links/{id}/highlights` — Delete highlight
 - `PUT /api/links/{id}/highlight/comment` — Update highlight with comment
 
 ### Topics/Tags
+
 - `GET /api/user/topics?uid={uid}` — Get user's topics
 - `POST /api/links/{id}/classify` — Auto-classify link
 - `POST /api/links/{id}/topics` — Add topic to link
@@ -49,109 +53,119 @@ Base URL: `https://curius.app`
 - `PUT /api/links/{id}/topics` — Upsert link topics
 
 ### Mentions
+
 - `POST /api/links/{id}/mention` — Add user mention to link
 - `PUT /api/links/{id}/mention` — Upsert user mentions
 
 ### Comments
+
 - `POST /api/comments` — Add reply to a comment
 - `DELETE /api/comments` — Delete a comment
 
 ### Users
+
 - `GET /api/user` — Get current user info
 - `GET /api/user/following/` — Get following list
 
 ## Data Structures
 
 ### Highlight Object
+
 ```typescript
 interface Highlight {
-  id: string;
-  linkId: string;
-  highlightText: string;        // The actual highlighted text
-  position: HighlightPosition;  // Position data for re-rendering
-  userId?: string;
+	id: string;
+	linkId: string;
+	highlightText: string; // The actual highlighted text
+	position: HighlightPosition; // Position data for re-rendering
+	userId?: string;
 }
 
 interface HighlightPosition {
-  rawHighlight: string;   // The highlighted text
-  leftContext: string;    // Text to the left (for disambiguation)
-  rightContext: string;   // Text to the right (for disambiguation)
+	rawHighlight: string; // The highlighted text
+	leftContext: string; // Text to the left (for disambiguation)
+	rightContext: string; // Text to the right (for disambiguation)
 }
 ```
 
 The position system uses **text-based matching** rather than DOM positions:
+
 1. When creating a highlight, capture the selected text plus surrounding context
 2. When rendering, search the page text for the highlight
 3. Use `leftContext` and `rightContext` to disambiguate multiple matches
 4. Fall back to fuzzy matching if exact match fails
 
 ### Link Object
+
 ```typescript
 interface Link {
-  id: string;
-  url: string;
-  title: string;
-  link: string;           // URL
-  highlights: Highlight[];
-  nHighlights: number;
-  favorite: boolean;
-  toRead: boolean;
-  topics: Topic[];
-  comments: Comment[];
-  mentions: UserMention[];
-  modifiedDate: string;
-  users: User[];          // Users who saved this link
-  snippets?: string[];    // Extracted snippets
+	id: string;
+	url: string;
+	title: string;
+	link: string; // URL
+	highlights: Highlight[];
+	nHighlights: number;
+	favorite: boolean;
+	toRead: boolean;
+	topics: Topic[];
+	comments: Comment[];
+	mentions: UserMention[];
+	modifiedDate: string;
+	users: User[]; // Users who saved this link
+	snippets?: string[]; // Extracted snippets
 }
 ```
 
 ### User Object
+
 ```typescript
 interface User {
-  id: string;
-  firstName: string;
-  lastName: string;
-  userLink: string;       // Profile URL slug
-  twitter?: string;
-  website?: string;
-  createdDate: string;
-  followingUsers?: User[];
+	id: string;
+	firstName: string;
+	lastName: string;
+	userLink: string; // Profile URL slug
+	twitter?: string;
+	website?: string;
+	createdDate: string;
+	followingUsers?: User[];
 }
 ```
 
 ## Highlight Rendering
 
 ### CSS Classes
+
 ```css
 .curius-highlight {
-  cursor: pointer !important;
+	cursor: pointer !important;
 }
 
 .curius-own-highlight {
-  background-color: #FFE600;
-  border-radius: 4px;
+	background-color: #ffe600;
+	border-radius: 4px;
 }
 
 .curius-other-highlight {
-  background-color: rgba(255, 230, 0, 0.1);
-  border-bottom: 1px solid #FFE600;
+	background-color: rgba(255, 230, 0, 0.1);
+	border-bottom: 1px solid #ffe600;
 }
 
 .curius-other-highlight:hover {
-  background-color: rgba(255, 230, 0, 0.3);
+	background-color: rgba(255, 230, 0, 0.3);
 }
 ```
 
 ### Color Generation
+
 Friend highlights use HSL colors generated from the user's first name:
+
 ```javascript
 function highlightColor(firstName, saturation = 55, lightness = 94) {
-  let hash = 0;
-  for (let i = 0; i < firstName.length; i++) {
-    hash = firstName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = hash % 360;
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+	let hash = 0;
+	for (let i = 0; i < firstName.length; i++) {
+		hash = firstName.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const hue = hash % 360;
+	return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 ```
 
@@ -213,6 +227,7 @@ runtime.sendMessage({
 ## Migration Path for Curius Users
 
 To support importing Curius data:
+
 1. User authenticates with Curius (if API allows)
 2. Fetch user's links via `/api/links`
 3. Import highlights with position data

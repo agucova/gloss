@@ -1,4 +1,5 @@
 import type { FeedBookmark, FeedHighlight } from "../types";
+
 import { formatRelativeTime } from "../utils/relative-time";
 import { UserDot } from "./user-dot";
 
@@ -65,14 +66,14 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 			<UserDot className="mt-1 shrink-0" userId={item.user.id} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline justify-between gap-3">
-					<span className="font-medium text-foreground text-sm">
+					<span className="text-sm font-medium text-foreground">
 						{item.user.name}
 					</span>
-					<span className="shrink-0 text-muted-foreground/60 text-xs">
+					<span className="shrink-0 text-xs text-muted-foreground/60">
 						{formatRelativeTime(item.createdAt)}
 					</span>
 				</div>
-				<p className="mt-0.5 truncate text-muted-foreground text-sm transition-colors group-hover:text-foreground/70">
+				<p className="mt-0.5 truncate text-sm text-muted-foreground transition-colors group-hover:text-foreground/70">
 					in {item.title || domain}
 				</p>
 			</div>
@@ -94,19 +95,19 @@ function HighlightItem({ item }: { item: FeedHighlight }) {
 			target="_blank"
 		>
 			<div className="mb-1.5 flex items-center justify-between gap-3">
-				<div className="flex items-center gap-1.5 text-muted-foreground/70 text-xs">
+				<div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
 					<span>{formatRelativeTime(item.createdAt)}</span>
 					<span>·</span>
 					<span className="truncate">{truncate(domain, 24)}</span>
 				</div>
 				<div className="flex items-center gap-2">
-					<span className="font-medium text-foreground/80 text-xs">
+					<span className="text-xs font-medium text-foreground/80">
 						{item.user.name}
 					</span>
 					<UserDot userId={item.user.id} />
 				</div>
 			</div>
-			<p className="break-words text-foreground/90 text-sm leading-relaxed">
+			<p className="text-sm leading-relaxed break-words text-foreground/90">
 				{truncate(item.text, 180)}
 			</p>
 		</a>

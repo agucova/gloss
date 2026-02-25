@@ -1,7 +1,9 @@
+import type { App } from "server";
+
 import { treaty } from "@elysiajs/eden";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
-import type { App } from "server";
 import { toast } from "sonner";
+
 import { env } from "@/lib/env";
 
 /**

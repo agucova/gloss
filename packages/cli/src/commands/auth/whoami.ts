@@ -1,5 +1,6 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
 import chalk from "chalk";
+
 import { getCurrentUser } from "../../lib/api-client.js";
 import { getApiKey } from "../../lib/config.js";
 

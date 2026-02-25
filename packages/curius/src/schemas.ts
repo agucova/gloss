@@ -55,8 +55,8 @@ export const curiusLinkSchema = z.object({
 	imageUrl: z.string().nullable().optional(),
 	highlights: z.array(curiusHighlightSchema).default([]),
 	nHighlights: z.number().default(0),
-	favorite: z.boolean().optional(),
-	toRead: z.boolean().optional(),
+	favorite: z.boolean().nullable().optional(),
+	toRead: z.boolean().nullable().optional(),
 	createdAt: z.string().optional(),
 	createdDate: z.string().optional(),
 	modifiedDate: z.string().optional(),
@@ -153,16 +153,18 @@ export const getNetworkLinksResponseSchema = z.object({
 	networkInfo: networkInfoSchema,
 });
 
-export const addLinkResponseSchema = curiusLinkSchema;
+export const addLinkResponseSchema = z.object({
+	link: curiusLinkSchema,
+});
 
 export const addHighlightResponseSchema = curiusHighlightSchema;
 
 /**
- * Response from GET /api/links (user's own links)
- * Returns an array of links with their highlights
+ * Response from GET /api/users/:id/links (user's own links).
+ * Returns {userSaved: [...]} with links and their highlights.
  */
 export const getUserLinksResponseSchema = z.object({
-	links: z.array(curiusLinkSchema),
+	userSaved: z.array(curiusLinkSchema),
 });
 
 // ============================================================================

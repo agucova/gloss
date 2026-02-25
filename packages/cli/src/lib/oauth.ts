@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
+
 import { getApiUrl, setApiKey } from "./config.js";
 
 /**
@@ -117,7 +118,7 @@ export async function runOAuthFlow(): Promise<OAuthResult> {
 				return;
 			}
 
-			if (!code || !authId) {
+			if (!(code && authId)) {
 				res.writeHead(400, { "Content-Type": "text/html" });
 				res.end(`
 					<!DOCTYPE html>

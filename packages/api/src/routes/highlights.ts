@@ -3,6 +3,7 @@ import { highlight, user } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
 import { deriveAuth } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import { indexHighlight, removeFromIndex } from "../lib/search-index";

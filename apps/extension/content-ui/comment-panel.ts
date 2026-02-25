@@ -1,628 +1,759 @@
 /**
  * Comment panel for viewing and adding comments on highlights.
- * Replaces the highlight popover with a marginalia-style panel.
+ * Shows when clicking a highlight or a margin annotation.
+ *
+ * Uses FloatingController for positioning and GlossElement for dismiss handling.
  */
 
-import type { ActiveHighlight, Highlight } from "@gloss/anchoring";
+import type { ActiveHighlight } from "@gloss/anchoring";
+
+import { css, html, nothing } from "lit";
+import { unsafeHTML } from "lit/directives/unsafe-html.js";
+
 import type { Friend, ServerComment } from "../utils/messages";
+
 import {
-	createPopoverContainer,
-	hidePopover,
-	setupDismissHandlers,
-} from "./popover";
+	type CommentThread,
+	buildCommentTree,
+	extractMentions,
+	formatRelativeTime,
+	renderMarkdown,
+} from "./comment-utils";
+import { FloatingController, getDefaultPlacement } from "./floating-controller";
+import {
+	GlossElement,
+	glossBaseStyles,
+	glossButtonStyles,
+} from "./gloss-element";
 
-export interface CommentPanelOptions {
-	/** The highlight element that was clicked */
-	element: HTMLElement;
-	/** The highlight data */
-	highlight: ActiveHighlight;
-	/** Whether current user owns this highlight */
-	isOwner: boolean;
-	/** Current user ID (if authenticated) */
-	currentUserId?: string;
-	/** Comments for this highlight */
-	comments: ServerComment[];
-	/** Callback to load comments */
-	onLoadComments: () => Promise<ServerComment[]>;
-	/** Callback to create a comment */
-	onCreateComment: (
-		content: string,
-		mentions: string[]
-	) => Promise<ServerComment | null>;
-	/** Callback to delete a comment */
-	onDeleteComment: (id: string) => Promise<boolean>;
-	/** Callback to delete the highlight */
-	onDeleteHighlight?: () => void;
-	/** Callback to search friends for @mentions */
-	onSearchFriends: (query: string) => Promise<Friend[]>;
-}
-
-const PANEL_ID = "gloss-comment-panel";
-
-let currentHost: HTMLElement | null = null;
-let currentPopover: HTMLElement | null = null;
-let cleanupDismiss: (() => void) | null = null;
-
-/** Helper to get highlight data from ActiveHighlight */
-function getHighlightData(active: ActiveHighlight): Highlight {
-	return active.highlight;
-}
-
-/** Helper to get metadata value safely */
-function getMetadata(active: ActiveHighlight, key: string): string | undefined {
-	const data = getHighlightData(active);
-	return data.metadata?.[key] as string | undefined;
-}
-
-/**
- * Show the comment panel anchored to the highlight.
- */
-export function showCommentPanel(options: CommentPanelOptions): void {
-	const {
-		element,
-		highlight,
-		isOwner,
-		currentUserId,
-		comments,
-		onLoadComments,
-		onCreateComment,
-		onDeleteComment,
-		onDeleteHighlight,
-		onSearchFriends,
-	} = options;
-
-	// Hide existing panel first
-	hideCommentPanel();
-
-	// Create container with shadow DOM
-	const { host, popover } = createPopoverContainer(PANEL_ID);
-	currentHost = host;
-	currentPopover = popover;
-
-	// Override popover class for panel styling
-	popover.classList.add("gloss-comment-panel");
-
-	// Build panel content
-	const container = document.createElement("div");
-	container.className = "gloss-panel-container";
-
-	// Header with highlight info and delete button
-	const header = buildHeader(highlight, isOwner, onDeleteHighlight);
-	container.appendChild(header);
-
-	// Comments list
-	const commentsList = document.createElement("div");
-	commentsList.className = "gloss-comments-list";
-	buildCommentsList(commentsList, comments, currentUserId, onDeleteComment);
-	container.appendChild(commentsList);
-
-	// Input area
-	const inputArea = buildInputArea(
-		onCreateComment,
-		onSearchFriends,
-		async (_newComment) => {
-			// Refresh comments list after adding
-			const updatedComments = await onLoadComments();
-			buildCommentsList(
-				commentsList,
-				updatedComments,
-				currentUserId,
-				onDeleteComment
-			);
-		}
-	);
-	container.appendChild(inputArea);
-
-	popover.appendChild(container);
-
-	// Position the panel to the right of the highlight
-	positionPanel(popover, element);
-
-	// Set up dismiss handlers
-	cleanupDismiss = setupDismissHandlers(host, popover, hideCommentPanel);
-}
-
-/**
- * Hide and remove the comment panel.
- */
-export function hideCommentPanel(): void {
-	if (cleanupDismiss) {
-		cleanupDismiss();
-		cleanupDismiss = null;
-	}
-
-	if (currentHost && currentPopover) {
-		hidePopover(currentHost, currentPopover);
-		currentHost = null;
-		currentPopover = null;
-	}
-}
-
-/**
- * Check if the comment panel is currently visible.
- */
-export function isCommentPanelVisible(): boolean {
-	return currentHost !== null;
-}
-
-/**
- * Position the panel to the right of the highlight.
- */
-function positionPanel(
-	panel: HTMLElement,
-	highlightElement: HTMLElement
-): void {
-	const highlightRect = highlightElement.getBoundingClientRect();
-	const panelWidth = 280;
-	const offset = 16;
-	const viewportWidth = window.innerWidth;
-	const viewportHeight = window.innerHeight;
-
-	// Prefer right side
-	let left = highlightRect.right + offset;
-
-	// Fall back to left if not enough space on right
-	if (left + panelWidth > viewportWidth - 16) {
-		left = highlightRect.left - panelWidth - offset;
-	}
-
-	// If still no space, center below
-	if (left < 16) {
-		left = Math.max(16, (viewportWidth - panelWidth) / 2);
-	}
-
-	// Vertical: align with highlight center, constrain to viewport
-	let top = highlightRect.top;
-	const panelHeight = 300; // Approximate
-	top = Math.max(16, Math.min(top, viewportHeight - panelHeight - 16));
-
-	panel.style.left = `${left}px`;
-	panel.style.top = `${top}px`;
-	panel.style.width = `${panelWidth}px`;
-}
-
-/**
- * Build the header section with highlighter info and delete button.
- */
-function buildHeader(
-	highlight: ActiveHighlight,
-	isOwner: boolean,
-	onDeleteHighlight?: () => void
-): HTMLElement {
-	const header = document.createElement("div");
-	header.className = "gloss-panel-header";
-
-	// Highlighter info
-	const highlighterName = isOwner
-		? "You"
-		: getMetadata(highlight, "userName") || "Someone";
-	const createdAt = getMetadata(highlight, "createdAt");
-
-	const info = document.createElement("span");
-	info.className = "gloss-panel-info";
-	info.textContent = highlighterName;
-	if (createdAt) {
-		const time = formatRelativeTime(createdAt);
-		info.textContent += ` · ${time}`;
-	}
-	header.appendChild(info);
-
-	// Delete button (only for owner)
-	if (isOwner && onDeleteHighlight) {
-		const deleteBtn = document.createElement("button");
-		deleteBtn.className = "gloss-btn gloss-btn-ghost gloss-btn-icon";
-		deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
-		deleteBtn.title = "Delete highlight";
-		deleteBtn.addEventListener("click", (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-			onDeleteHighlight();
-			hideCommentPanel();
-		});
-		header.appendChild(deleteBtn);
-	}
-
-	return header;
-}
-
-/**
- * Build the comments list.
- */
-function buildCommentsList(
-	container: HTMLElement,
-	comments: ServerComment[],
-	currentUserId?: string,
-	onDeleteComment?: (id: string) => Promise<boolean>
-): void {
-	container.innerHTML = "";
-
-	if (comments.length === 0) {
-		return;
-	}
-
-	// Sort by createdAt ascending (oldest first)
-	const sorted = [...comments].sort(
-		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-	);
-
-	for (const comment of sorted) {
-		const commentEl = buildComment(comment, currentUserId, onDeleteComment);
-		container.appendChild(commentEl);
-	}
-}
-
-/**
- * Build a single comment element.
- */
-function buildComment(
-	comment: ServerComment,
-	currentUserId?: string,
-	onDeleteComment?: (id: string) => Promise<boolean>
-): HTMLElement {
-	const el = document.createElement("div");
-	el.className = "gloss-comment";
-
-	// Author line
-	const authorLine = document.createElement("div");
-	authorLine.className = "gloss-comment-author";
-
-	const isOwnComment = currentUserId === comment.authorId;
-	const authorName = isOwnComment ? "You" : comment.author.name || "Someone";
-	const time = formatRelativeTime(comment.createdAt);
-
-	const authorSpan = document.createElement("span");
-	authorSpan.textContent = `${authorName} · ${time}`;
-	authorLine.appendChild(authorSpan);
-
-	// Delete button for own comments
-	if (isOwnComment && onDeleteComment) {
-		const deleteBtn = document.createElement("button");
-		deleteBtn.className = "gloss-comment-delete";
-		deleteBtn.textContent = "Delete";
-		deleteBtn.addEventListener("click", async (e) => {
-			e.preventDefault();
-			e.stopPropagation();
-			const success = await onDeleteComment(comment.id);
-			if (success) {
-				el.remove();
-			}
-		});
-		authorLine.appendChild(deleteBtn);
-	}
-
-	el.appendChild(authorLine);
-
-	// Content with markdown rendering
-	const content = document.createElement("div");
-	content.className = "gloss-comment-content";
-	content.innerHTML = renderMarkdown(comment.content);
-	el.appendChild(content);
-
-	return el;
-}
-
-/** State for mention dropdown handling */
-interface MentionState {
-	query: string;
-	startPos: number;
-	selectedIndex: number;
-	friends: Friend[];
-}
-
-/**
- * Handle mention dropdown keyboard navigation.
- * Returns true if the event was handled.
- */
-function handleMentionKeydown(
-	e: KeyboardEvent,
-	state: MentionState,
-	input: HTMLTextAreaElement,
-	dropdown: HTMLElement
-): boolean {
-	if (dropdown.style.display === "none" || state.friends.length === 0) {
-		return false;
-	}
-
-	switch (e.key) {
-		case "ArrowDown":
-			e.preventDefault();
-			state.selectedIndex = Math.min(
-				state.selectedIndex + 1,
-				state.friends.length - 1
-			);
-			updateMentionSelection(dropdown, state.selectedIndex);
-			return true;
-
-		case "ArrowUp":
-			e.preventDefault();
-			state.selectedIndex = Math.max(state.selectedIndex - 1, 0);
-			updateMentionSelection(dropdown, state.selectedIndex);
-			return true;
-
-		case "Enter":
-		case "Tab": {
-			e.preventDefault();
-			const friend = state.friends[state.selectedIndex];
-			if (friend) {
-				insertMention(input, state.startPos, friend);
-				hideMentionDropdown(dropdown);
-			}
-			return true;
-		}
-
-		case "Escape":
-			hideMentionDropdown(dropdown);
-			return true;
-
-		default:
-			return false;
-	}
-}
-
-/**
- * Build the input area for adding comments.
- */
-function buildInputArea(
-	onCreateComment: (
-		content: string,
-		mentions: string[]
-	) => Promise<ServerComment | null>,
-	onSearchFriends: (query: string) => Promise<Friend[]>,
-	onCommentAdded: (comment: ServerComment) => void
-): HTMLElement {
-	const container = document.createElement("div");
-	container.className = "gloss-comment-input-container";
-
-	const input = document.createElement("textarea");
-	input.className = "gloss-comment-input";
-	input.placeholder = "Write a note...";
-	input.rows = 1;
-
-	// Mention dropdown
-	const mentionDropdown = document.createElement("div");
-	mentionDropdown.className = "gloss-mention-dropdown";
-	mentionDropdown.style.display = "none";
-
-	const mentionState: MentionState = {
-		query: "",
-		startPos: -1,
-		selectedIndex: 0,
-		friends: [],
+export class GlossCommentPanel extends GlossElement {
+	static properties = {
+		highlight: { type: Object },
+		element: { type: Object },
+		isOwner: { type: Boolean },
+		currentUserId: { type: String },
+		comments: { type: Array },
+		visible: { type: Boolean, reflect: true },
+		_replyingTo: { type: String, state: true },
+		_mentionFriends: { type: Array, state: true },
+		_mentionSelectedIndex: { type: Number, state: true },
+		_showMentions: { type: Boolean, state: true },
+		_submitting: { type: Boolean, state: true },
 	};
 
-	// Handle input for @mention detection
-	input.addEventListener("input", async () => {
-		const value = input.value;
-		const cursorPos = input.selectionStart || 0;
+	static styles = [
+		glossBaseStyles,
+		glossButtonStyles,
+		css`
+			:host {
+				position: fixed;
+				z-index: 2147483647;
+				pointer-events: none;
+				display: block;
+			}
 
-		// Find @ symbol before cursor
-		const textBeforeCursor = value.slice(0, cursorPos);
-		const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+			:host([visible]) {
+				pointer-events: auto;
+			}
 
-		if (lastAtIndex !== -1) {
-			const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
-			// Check if we're in a mention (no spaces after @)
-			if (!textAfterAt.includes(" ")) {
-				mentionState.query = textAfterAt;
-				mentionState.startPos = lastAtIndex;
-
-				// Search friends
-				mentionState.friends = await onSearchFriends(mentionState.query);
-				mentionState.selectedIndex = 0;
-
-				if (mentionState.friends.length > 0) {
-					showMentionDropdown(
-						mentionDropdown,
-						mentionState.friends,
-						mentionState.selectedIndex,
-						(friend) => {
-							insertMention(input, mentionState.startPos, friend);
-							hideMentionDropdown(mentionDropdown);
-						}
-					);
-				} else {
-					hideMentionDropdown(mentionDropdown);
+			.panel {
+				background: #ffffff;
+				border: 1px solid rgba(0, 0, 0, 0.08);
+				border-radius: 12px;
+				box-shadow:
+					0 4px 16px rgba(0, 0, 0, 0.12),
+					0 1px 3px rgba(0, 0, 0, 0.08);
+				width: 280px;
+				max-height: 400px;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				animation: fade-in 0.15s ease-out;
+				font-family:
+					"Satoshi",
+					system-ui,
+					-apple-system,
+					sans-serif;
+			}
+			@media (prefers-color-scheme: dark) {
+				.panel {
+					background: #2a2a2a;
+					border-color: rgba(255, 255, 255, 0.1);
+					box-shadow:
+						0 4px 16px rgba(0, 0, 0, 0.4),
+						0 1px 3px rgba(0, 0, 0, 0.2);
 				}
+			}
+			@keyframes fade-in {
+				from {
+					opacity: 0;
+					transform: translateY(4px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+
+			.header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 10px 12px;
+				border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+				flex-shrink: 0;
+			}
+			@media (prefers-color-scheme: dark) {
+				.header {
+					border-bottom-color: rgba(255, 255, 255, 0.08);
+				}
+			}
+			.header-info {
+				font-size: 12px;
+				color: #666666;
+			}
+			@media (prefers-color-scheme: dark) {
+				.header-info {
+					color: #999999;
+				}
+			}
+			.delete-highlight-btn {
+				padding: 4px;
+				border-radius: 4px;
+				color: #999999;
+				background: none;
+				border: none;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+			}
+			.delete-highlight-btn:hover {
+				color: #dc2626;
+				background: rgba(220, 38, 38, 0.1);
+			}
+
+			.comments-list {
+				overflow-y: auto;
+				min-height: 0;
+			}
+			.comments-list:not(:empty) {
+				flex: 1;
+				padding: 8px 12px;
+			}
+
+			.comment {
+				padding: 8px 0;
+				border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+			}
+			.comment:last-child {
+				border-bottom: none;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment {
+					border-bottom-color: rgba(255, 255, 255, 0.06);
+				}
+			}
+
+			.comment-reply {
+				border-left: 2px solid rgba(0, 0, 0, 0.08);
+				padding-left: 8px;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment-reply {
+					border-color: rgba(255, 255, 255, 0.1);
+				}
+			}
+
+			.comment-author {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				font-size: 11px;
+				color: #888888;
+				margin-bottom: 4px;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment-author {
+					color: #777777;
+				}
+			}
+
+			.comment-actions {
+				display: inline-flex;
+				gap: 4px;
+				margin-left: auto;
+				opacity: 0;
+				transition: opacity 0.15s ease;
+			}
+			.comment:hover .comment-actions {
+				opacity: 1;
+			}
+
+			.action-btn {
+				background: none;
+				border: none;
+				color: #999999;
+				font-size: 10px;
+				cursor: pointer;
+				padding: 2px 4px;
+				border-radius: 3px;
+				font-family: inherit;
+			}
+			.action-btn:hover {
+				color: #333333;
+				background: rgba(0, 0, 0, 0.05);
+			}
+			.action-btn.delete:hover {
+				color: #dc2626;
+				background: rgba(220, 38, 38, 0.1);
+			}
+			@media (prefers-color-scheme: dark) {
+				.action-btn:hover {
+					color: #dddddd;
+					background: rgba(255, 255, 255, 0.1);
+				}
+			}
+
+			.comment-content {
+				font-size: 13px;
+				line-height: 1.5;
+				color: #1a1a1a;
+				word-wrap: break-word;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment-content {
+					color: #e5e5e5;
+				}
+			}
+			.comment-content :is(strong) {
+				font-weight: 600;
+			}
+			.comment-content :is(em) {
+				font-style: italic;
+			}
+			.comment-content :is(code) {
+				font-family: ui-monospace, monospace;
+				font-size: 12px;
+				background: rgba(0, 0, 0, 0.06);
+				padding: 1px 4px;
+				border-radius: 3px;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment-content :is(code) {
+					background: rgba(255, 255, 255, 0.1);
+				}
+			}
+			.comment-content :is(a) {
+				color: #2563eb;
+				text-decoration: underline;
+				text-underline-offset: 2px;
+			}
+			@media (prefers-color-scheme: dark) {
+				.comment-content :is(a) {
+					color: #60a5fa;
+				}
+			}
+
+			.input-area {
+				position: relative;
+				padding: 8px 12px 10px;
+				border-top: 1px solid rgba(0, 0, 0, 0.06);
+				flex-shrink: 0;
+			}
+			@media (prefers-color-scheme: dark) {
+				.input-area {
+					border-top-color: rgba(255, 255, 255, 0.08);
+				}
+			}
+
+			.reply-indicator {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 4px 0 6px;
+				font-size: 11px;
+				color: #888888;
+			}
+			@media (prefers-color-scheme: dark) {
+				.reply-indicator {
+					color: #777777;
+				}
+			}
+			.reply-cancel {
+				background: none;
+				border: none;
+				color: #999999;
+				font-size: 14px;
+				cursor: pointer;
+				padding: 0 2px;
+				line-height: 1;
+				border-radius: 3px;
+			}
+			.reply-cancel:hover {
+				color: #666666;
+				background: rgba(0, 0, 0, 0.05);
+			}
+			@media (prefers-color-scheme: dark) {
+				.reply-cancel:hover {
+					color: #cccccc;
+					background: rgba(255, 255, 255, 0.1);
+				}
+			}
+
+			textarea {
+				width: 100%;
+				padding: 8px 10px;
+				font-size: 13px;
+				font-family: inherit;
+				border: 1px solid rgba(0, 0, 0, 0.12);
+				border-radius: 8px;
+				background: #ffffff;
+				color: #1a1a1a;
+				resize: none;
+				min-height: 36px;
+				max-height: 80px;
+			}
+			textarea:focus {
+				outline: none;
+				border-color: #1a1a1a;
+			}
+			textarea::placeholder {
+				color: #999999;
+			}
+			@media (prefers-color-scheme: dark) {
+				textarea {
+					background: #1a1a1a;
+					border-color: rgba(255, 255, 255, 0.12);
+					color: #e5e5e5;
+				}
+				textarea:focus {
+					border-color: #e5e5e5;
+				}
+				textarea::placeholder {
+					color: #666666;
+				}
+			}
+
+			.hint {
+				position: absolute;
+				right: 20px;
+				bottom: 18px;
+				font-size: 10px;
+				color: #bbbbbb;
+				pointer-events: none;
+			}
+			@media (prefers-color-scheme: dark) {
+				.hint {
+					color: #555555;
+				}
+			}
+
+			.mention-dropdown {
+				position: absolute;
+				bottom: 100%;
+				left: 12px;
+				right: 12px;
+				margin-bottom: 4px;
+				background: #ffffff;
+				border: 1px solid rgba(0, 0, 0, 0.1);
+				border-radius: 8px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+				max-height: 160px;
+				overflow-y: auto;
+				z-index: 10;
+			}
+			@media (prefers-color-scheme: dark) {
+				.mention-dropdown {
+					background: #2a2a2a;
+					border-color: rgba(255, 255, 255, 0.15);
+				}
+			}
+			.mention-item {
+				padding: 8px 12px;
+				font-size: 13px;
+				cursor: pointer;
+				color: #1a1a1a;
+			}
+			.mention-item:hover,
+			.mention-item.selected {
+				background: rgba(0, 0, 0, 0.05);
+			}
+			@media (prefers-color-scheme: dark) {
+				.mention-item {
+					color: #e5e5e5;
+				}
+				.mention-item:hover,
+				.mention-item.selected {
+					background: rgba(255, 255, 255, 0.1);
+				}
+			}
+		`,
+	];
+
+	// Public reactive properties
+	declare highlight: ActiveHighlight | null;
+	declare element: HTMLElement | null;
+	declare isOwner: boolean;
+	declare currentUserId: string;
+	declare comments: ServerComment[];
+	declare visible: boolean;
+
+	// Internal reactive state
+	declare _replyingTo: string | null;
+	declare _mentionFriends: Friend[];
+	declare _mentionSelectedIndex: number;
+	declare _showMentions: boolean;
+	declare _submitting: boolean;
+
+	// Non-reactive mention tracking
+	private _mentionStartPos = -1;
+
+	constructor() {
+		super();
+		this.highlight = null;
+		this.element = null;
+		this.isOwner = false;
+		this.currentUserId = "";
+		this.comments = [];
+		this.visible = false;
+		this._replyingTo = null;
+		this._mentionFriends = [];
+		this._mentionSelectedIndex = 0;
+		this._showMentions = false;
+		this._submitting = false;
+	}
+
+	private _floating = new FloatingController(this, {
+		placement: getDefaultPlacement(),
+		offsetDistance: 16,
+		viewportPadding: 16,
+		enableFlip: true,
+		fallbackPlacements: ["left", "bottom", "top"],
+	});
+
+	updated(changed: Map<string, unknown>): void {
+		if (
+			(changed.has("visible") || changed.has("element")) &&
+			this.visible &&
+			this.element
+		) {
+			this._floating.attach(this.element, this);
+			this.setupDismissHandlers(() => {
+				this.visible = false;
+			});
+		}
+		if (
+			changed.has("visible") &&
+			!this.visible &&
+			changed.get("visible") === true
+		) {
+			this._floating.detach();
+			this._dismissCleanup?.();
+			this._dismissCleanup = null;
+			this._replyingTo = null;
+			this._showMentions = false;
+			this.dispatchEvent(
+				new CustomEvent("gloss-panel-closed", {
+					bubbles: true,
+					composed: true,
+				})
+			);
+		}
+	}
+
+	/** Set mention search results from parent. */
+	setMentionResults(friends: Friend[]): void {
+		this._mentionFriends = friends;
+		this._mentionSelectedIndex = 0;
+		this._showMentions = friends.length > 0;
+	}
+
+	render() {
+		if (!this.visible || !this.highlight) return nothing;
+
+		const highlightData = this.highlight.highlight;
+		const highlighterName = this.isOwner
+			? "You"
+			: (highlightData.metadata?.userName as string) || "Someone";
+		const createdAt = highlightData.metadata?.createdAt as string | undefined;
+		const tree = buildCommentTree(this.comments);
+
+		return html`
+			<div class="panel">
+				<div class="header">
+					<span class="header-info">
+						${highlighterName}${
+							createdAt ? ` \u00B7 ${formatRelativeTime(createdAt)}` : ""
+						}
+					</span>
+					${
+						this.isOwner
+							? html`
+								<button
+									class="delete-highlight-btn"
+									title="Delete highlight"
+									@click=${this._onDeleteHighlight}
+								>
+									<svg
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M3 6h18" />
+										<path
+											d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"
+										/>
+										<path
+											d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"
+										/>
+									</svg>
+								</button>
+							`
+							: nothing
+					}
+				</div>
+
+				<div class="comments-list">
+					${tree.map((thread) => this._renderThread(thread, 0))}
+				</div>
+
+				<div class="input-area">
+					${
+						this._replyingTo
+							? html`
+								<div class="reply-indicator">
+									<span>Replying to comment</span>
+									<button
+										class="reply-cancel"
+										@click=${() => {
+											this._replyingTo = null;
+										}}
+									>
+										\u00D7
+									</button>
+								</div>
+							`
+							: nothing
+					}
+					<textarea
+						placeholder=${
+							this._replyingTo ? "Write a reply..." : "Write a note..."
+						}
+						rows="1"
+						?disabled=${this._submitting}
+						@keydown=${this._onInputKeydown}
+						@input=${this._onInputChange}
+					></textarea>
+					${
+						this._showMentions && this._mentionFriends.length > 0
+							? html`
+								<div class="mention-dropdown">
+									${this._mentionFriends.map(
+										(f, i) => html`
+											<div
+												class="mention-item ${i === this._mentionSelectedIndex ? "selected" : ""}"
+												@click=${() => this._selectMention(f)}
+											>
+												${f.name || "Unknown"}
+											</div>
+										`
+									)}
+								</div>
+							`
+							: nothing
+					}
+					<span class="hint">\u21B5 to send</span>
+				</div>
+			</div>
+		`;
+	}
+
+	private _renderThread(
+		thread: CommentThread,
+		depth: number
+	): ReturnType<typeof html> {
+		const { comment, replies } = thread;
+		const isOwn = this.currentUserId === comment.authorId;
+		const authorName = isOwn ? "You" : comment.author.name || "Someone";
+
+		return html`
+			<div
+				class="comment ${depth > 0 ? "comment-reply" : ""}"
+				style="margin-left: ${Math.min(depth, 2) * 16}px"
+			>
+				<div class="comment-author">
+					<span
+						>${authorName} \u00B7
+						${formatRelativeTime(comment.createdAt)}</span
+					>
+					<span class="comment-actions">
+						${
+							depth < 2
+								? html`<button
+									class="action-btn"
+									@click=${() => {
+										this._replyingTo = comment.id;
+										this._focusInput();
+									}}
+								>
+									Reply
+								</button>`
+								: nothing
+						}
+						${
+							isOwn
+								? html`<button
+									class="action-btn delete"
+									@click=${() => this._onDeleteComment(comment.id)}
+								>
+									Delete
+								</button>`
+								: nothing
+						}
+					</span>
+				</div>
+				<div class="comment-content">
+					${unsafeHTML(renderMarkdown(comment.content))}
+				</div>
+			</div>
+			${replies.map((r) => this._renderThread(r, depth + 1))}
+		`;
+	}
+
+	private async _onInputKeydown(e: KeyboardEvent): Promise<void> {
+		if (this._showMentions && this._mentionFriends.length > 0) {
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				this._mentionSelectedIndex = Math.min(
+					this._mentionSelectedIndex + 1,
+					this._mentionFriends.length - 1
+				);
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				this._mentionSelectedIndex = Math.max(
+					this._mentionSelectedIndex - 1,
+					0
+				);
+				return;
+			}
+			if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				const friend = this._mentionFriends[this._mentionSelectedIndex];
+				if (friend) this._selectMention(friend);
+				return;
+			}
+			if (e.key === "Escape") {
+				this._showMentions = false;
 				return;
 			}
 		}
 
-		hideMentionDropdown(mentionDropdown);
-	});
-
-	// Handle keyboard navigation
-	input.addEventListener("keydown", async (e) => {
-		// Check if mention dropdown handled the event
-		if (handleMentionKeydown(e, mentionState, input, mentionDropdown)) {
-			return;
-		}
-
-		// Submit on Enter (without Shift)
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			const content = input.value.trim();
-			if (!content) {
+			const textarea = e.target as HTMLTextAreaElement;
+			const content = textarea.value.trim();
+			if (!content) return;
+
+			this._submitting = true;
+			const mentions = extractMentions(content, this._mentionFriends);
+
+			this.dispatchEvent(
+				new CustomEvent("gloss-create-comment", {
+					detail: {
+						content,
+						mentions,
+						parentId: this._replyingTo ?? undefined,
+					},
+					bubbles: true,
+					composed: true,
+				})
+			);
+
+			textarea.value = "";
+			this._replyingTo = null;
+			this._submitting = false;
+		}
+	}
+
+	private _onInputChange(e: Event): void {
+		const textarea = e.target as HTMLTextAreaElement;
+		const value = textarea.value;
+		const cursorPos = textarea.selectionStart || 0;
+		const before = value.slice(0, cursorPos);
+		const lastAt = before.lastIndexOf("@");
+
+		if (lastAt !== -1) {
+			const query = before.slice(lastAt + 1);
+			if (!query.includes(" ")) {
+				this._mentionStartPos = lastAt;
+				this.dispatchEvent(
+					new CustomEvent("gloss-search-friends", {
+						detail: { query },
+						bubbles: true,
+						composed: true,
+					})
+				);
 				return;
 			}
-
-			// Extract mentions from content
-			const mentions = extractMentions(content, mentionState.friends);
-
-			// Disable input while submitting
-			input.disabled = true;
-
-			const newComment = await onCreateComment(content, mentions);
-
-			input.disabled = false;
-
-			if (newComment) {
-				input.value = "";
-				onCommentAdded(newComment);
-			}
 		}
-	});
 
-	container.appendChild(input);
-	container.appendChild(mentionDropdown);
-
-	// Submit hint
-	const hint = document.createElement("span");
-	hint.className = "gloss-input-hint";
-	hint.textContent = "↵ to send";
-	container.appendChild(hint);
-
-	return container;
-}
-
-/**
- * Show the mention dropdown.
- */
-function showMentionDropdown(
-	dropdown: HTMLElement,
-	friends: Friend[],
-	selectedIndex: number,
-	onSelect: (friend: Friend) => void
-): void {
-	dropdown.innerHTML = "";
-	dropdown.style.display = "block";
-
-	for (let i = 0; i < friends.length; i++) {
-		const friend = friends[i];
-		const item = document.createElement("div");
-		item.className = `gloss-mention-item${i === selectedIndex ? " selected" : ""}`;
-		item.textContent = friend.name || "Unknown";
-		item.addEventListener("click", () => onSelect(friend));
-		dropdown.appendChild(item);
+		this._showMentions = false;
 	}
-}
 
-/**
- * Hide the mention dropdown.
- */
-function hideMentionDropdown(dropdown: HTMLElement): void {
-	dropdown.style.display = "none";
-	dropdown.innerHTML = "";
-}
+	private _selectMention(friend: Friend): void {
+		const textarea = this.shadowRoot!.querySelector(
+			"textarea"
+		) as HTMLTextAreaElement;
+		if (!textarea) return;
 
-/**
- * Update selection in mention dropdown.
- */
-function updateMentionSelection(
-	dropdown: HTMLElement,
-	selectedIndex: number
-): void {
-	const items = dropdown.querySelectorAll(".gloss-mention-item");
-	items.forEach((item, i) => {
-		item.classList.toggle("selected", i === selectedIndex);
-	});
-}
+		const before = textarea.value.slice(0, this._mentionStartPos);
+		const after = textarea.value.slice(textarea.selectionStart || 0);
+		const mention = `@${friend.name} `;
+		textarea.value = before + mention + after;
 
-/**
- * Insert a mention into the input.
- */
-function insertMention(
-	input: HTMLTextAreaElement,
-	startPos: number,
-	friend: Friend
-): void {
-	const before = input.value.slice(0, startPos);
-	const after = input.value.slice(input.selectionStart || 0);
-	const mention = `@${friend.name} `;
+		const newPos = before.length + mention.length;
+		textarea.setSelectionRange(newPos, newPos);
+		textarea.focus();
+		this._showMentions = false;
+	}
 
-	input.value = before + mention + after;
-	const newPos = before.length + mention.length;
-	input.setSelectionRange(newPos, newPos);
-	input.focus();
-}
+	private _focusInput(): void {
+		this.updateComplete.then(() => {
+			const textarea = this.shadowRoot!.querySelector(
+				"textarea"
+			) as HTMLTextAreaElement;
+			textarea?.focus();
+		});
+	}
 
-/**
- * Extract mention user IDs from content.
- */
-function extractMentions(content: string, knownFriends: Friend[]): string[] {
-	const mentionRegex = /@(\w+)/g;
-	const mentions: string[] = [];
-
-	for (const match of content.matchAll(mentionRegex)) {
-		const name = match[1];
-		const friend = knownFriends.find(
-			(f) => f.name?.toLowerCase() === name.toLowerCase()
+	private _onDeleteHighlight(): void {
+		this.dispatchEvent(
+			new CustomEvent("gloss-delete-highlight", {
+				bubbles: true,
+				composed: true,
+			})
 		);
-		if (friend) {
-			mentions.push(friend.id);
-		}
+		this.visible = false;
 	}
 
-	return [...new Set(mentions)];
+	private _onDeleteComment(id: string): void {
+		this.dispatchEvent(
+			new CustomEvent("gloss-delete-comment", {
+				detail: { commentId: id },
+				bubbles: true,
+				composed: true,
+			})
+		);
+	}
 }
 
-/**
- * Simple markdown renderer for comments.
- * Supports: **bold**, *italic*, `code`, [links](url), @mentions
- */
-function renderMarkdown(text: string): string {
-	let html = escapeHtml(text);
-
-	// Bold: **text**
-	html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-
-	// Italic: *text*
-	html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
-
-	// Code: `text`
-	html = html.replace(/`(.+?)`/g, "<code>$1</code>");
-
-	// Links: [text](url)
-	html = html.replace(
-		/\[(.+?)\]\((.+?)\)/g,
-		'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
-	);
-
-	// @mentions
-	html = html.replace(/@(\w+)/g, '<span class="gloss-mention">@$1</span>');
-
-	// Line breaks
-	html = html.replace(/\n/g, "<br>");
-
-	return html;
-}
-
-/**
- * Escape HTML special characters.
- */
-function escapeHtml(text: string): string {
-	const div = document.createElement("div");
-	div.textContent = text;
-	return div.innerHTML;
-}
-
-/**
- * Format a timestamp as relative time.
- */
-function formatRelativeTime(dateString?: string): string {
-	if (!dateString) {
-		return "";
-	}
-
-	const date = new Date(dateString);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffSeconds = Math.floor(diffMs / 1000);
-	const diffMinutes = Math.floor(diffSeconds / 60);
-	const diffHours = Math.floor(diffMinutes / 60);
-	const diffDays = Math.floor(diffHours / 24);
-
-	if (diffSeconds < 60) {
-		return "just now";
-	}
-	if (diffMinutes < 60) {
-		return `${diffMinutes}m ago`;
-	}
-	if (diffHours < 24) {
-		return `${diffHours}h ago`;
-	}
-	if (diffDays < 30) {
-		return `${diffDays}d ago`;
-	}
-
-	return date.toLocaleDateString();
+if (!window.customElements.get("gloss-comment-panel")) {
+	window.customElements.define("gloss-comment-panel", GlossCommentPanel);
 }

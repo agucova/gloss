@@ -1,5 +1,6 @@
-import { buildCommand, numberParser, type CommandContext } from "@stricli/core";
+import { buildCommand, type CommandContext, numberParser } from "@stricli/core";
 import chalk from "chalk";
+
 import { listHighlights } from "../lib/api-client.js";
 import { loadConfig } from "../lib/config.js";
 import {

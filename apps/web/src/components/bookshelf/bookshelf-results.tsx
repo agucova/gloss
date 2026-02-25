@@ -1,6 +1,13 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Bookmark, Highlighter, Library, Search, Sparkles } from "lucide-react";
+import {
+	AlertTriangle,
+	Bookmark,
+	Highlighter,
+	Library,
+	Search,
+	Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { BookmarkCard, HighlightCard } from "@/components/cards";
@@ -148,8 +155,12 @@ function HybridSearchResults({
 		enabled: searchQuery.length > 0,
 	});
 
-	// Check if semantic search was used (for badge display)
-	const semanticSearchUsed = data?.pages[0]?.meta?.semanticSearchUsed ?? false;
+	// Check search metadata for indicator display
+	const meta = data?.pages[0]?.meta;
+	const semanticSearchUsed = meta?.semanticSearchUsed ?? false;
+	const searchError = (meta as Record<string, unknown> | undefined)?.error as
+		| string
+		| undefined;
 
 	const results = useMemo(() => {
 		const allResults = data?.pages.flatMap((page) => page?.results ?? []) ?? [];
@@ -246,7 +257,7 @@ function HybridSearchResults({
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to search
 			</p>
 		);
@@ -256,7 +267,7 @@ function HybridSearchResults({
 		return (
 			<div className="py-12 text-center">
 				<Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					No results matching "{searchQuery}"
 				</p>
 			</div>
@@ -265,13 +276,26 @@ function HybridSearchResults({
 
 	return (
 		<div className="flex flex-col">
-			{/* Semantic search indicator */}
-			{semanticSearchUsed && (
-				<div className="mb-3 flex items-center gap-1.5 text-muted-foreground text-xs">
-					<Sparkles className="h-3 w-3" />
-					<span>Semantic search enabled</span>
-				</div>
-			)}
+			{/* Search mode indicator */}
+			<div className="mb-3 flex items-center gap-3 text-xs">
+				{semanticSearchUsed ? (
+					<div className="flex items-center gap-1.5 text-muted-foreground">
+						<Sparkles className="h-3 w-3" />
+						<span>Semantic search enabled</span>
+					</div>
+				) : (
+					<div className="flex items-center gap-1.5 text-muted-foreground/60">
+						<Search className="h-3 w-3" />
+						<span>Text search only</span>
+					</div>
+				)}
+				{searchError && (
+					<div className="flex items-center gap-1.5 text-amber-500/80 dark:text-amber-400/70">
+						<AlertTriangle className="h-3 w-3" />
+						<span>Search limited: {searchError}</span>
+					</div>
+				)}
+			</div>
 
 			<div className="h-[calc(100vh-19rem)] overflow-auto" ref={parentRef}>
 				<div
@@ -298,7 +322,7 @@ function HybridSearchResults({
 											<Loader />
 										</div>
 									)
-								) : (
+								) : item ? (
 									<div className="pb-2">
 										{item.type === "bookmark" ? (
 											<BookmarkCard bookmark={item} />
@@ -306,7 +330,7 @@ function HybridSearchResults({
 											<HighlightCard highlight={item} />
 										)}
 									</div>
-								)}
+								) : null}
 							</div>
 						);
 					})}
@@ -435,7 +459,7 @@ function MergedBrowseList({ userId }: { userId: string }) {
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to load items
 			</p>
 		);
@@ -445,8 +469,8 @@ function MergedBrowseList({ userId }: { userId: string }) {
 		return (
 			<div className="py-12 text-center">
 				<Library className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="mb-1 text-foreground text-sm">Your library is empty</p>
-				<p className="text-muted-foreground text-xs">
+				<p className="mb-1 text-sm text-foreground">Your library is empty</p>
+				<p className="text-xs text-muted-foreground">
 					Start saving bookmarks and highlights to see them here
 				</p>
 			</div>
@@ -479,7 +503,7 @@ function MergedBrowseList({ userId }: { userId: string }) {
 										<Loader />
 									</div>
 								)
-							) : (
+							) : item ? (
 								<div className="pb-2">
 									{item.type === "bookmark" ? (
 										<BookmarkCard bookmark={item} />
@@ -487,7 +511,7 @@ function MergedBrowseList({ userId }: { userId: string }) {
 										<HighlightCard highlight={item} />
 									)}
 								</div>
-							)}
+							) : null}
 						</div>
 					);
 				})}
@@ -588,7 +612,7 @@ function BookmarksBrowseList({
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to load bookmarks
 			</p>
 		);
@@ -599,7 +623,7 @@ function BookmarksBrowseList({
 			return (
 				<div className="py-12 text-center">
 					<Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No bookmarks matching "{searchQuery}"
 					</p>
 				</div>
@@ -609,7 +633,7 @@ function BookmarksBrowseList({
 			return (
 				<div className="py-12 text-center">
 					<Bookmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No bookmarks with this tag
 					</p>
 				</div>
@@ -618,8 +642,8 @@ function BookmarksBrowseList({
 		return (
 			<div className="py-12 text-center">
 				<Bookmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="mb-1 text-foreground text-sm">No bookmarks yet</p>
-				<p className="text-muted-foreground text-xs">
+				<p className="mb-1 text-sm text-foreground">No bookmarks yet</p>
+				<p className="text-xs text-muted-foreground">
 					Save pages with the browser extension
 				</p>
 			</div>
@@ -652,11 +676,11 @@ function BookmarksBrowseList({
 										<Loader />
 									</div>
 								)
-							) : (
+							) : bookmark ? (
 								<div className="pb-2">
 									<BookmarkCard bookmark={bookmark} />
 								</div>
-							)}
+							) : null}
 						</div>
 					);
 				})}
@@ -747,7 +771,7 @@ function HighlightsBrowseList({
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to load highlights
 			</p>
 		);
@@ -758,7 +782,7 @@ function HighlightsBrowseList({
 			return (
 				<div className="py-12 text-center">
 					<Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No highlights matching "{searchQuery}"
 					</p>
 				</div>
@@ -767,8 +791,8 @@ function HighlightsBrowseList({
 		return (
 			<div className="py-12 text-center">
 				<Highlighter className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="mb-1 text-foreground text-sm">No highlights yet</p>
-				<p className="text-muted-foreground text-xs">
+				<p className="mb-1 text-sm text-foreground">No highlights yet</p>
+				<p className="text-xs text-muted-foreground">
 					Highlight text on any page with the browser extension
 				</p>
 			</div>
@@ -801,11 +825,11 @@ function HighlightsBrowseList({
 										<Loader />
 									</div>
 								)
-							) : (
+							) : highlight ? (
 								<div className="pb-2">
 									<HighlightCard highlight={highlight} />
 								</div>
-							)}
+							) : null}
 						</div>
 					);
 				})}

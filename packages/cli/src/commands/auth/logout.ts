@@ -1,5 +1,6 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
 import chalk from "chalk";
+
 import { clearApiKey, getApiKey } from "../../lib/config.js";
 
 export const logoutCommand = buildCommand({

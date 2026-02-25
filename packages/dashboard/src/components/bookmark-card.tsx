@@ -1,4 +1,5 @@
 import { Bookmark } from "lucide-react";
+
 import type { Bookmark as BookmarkType } from "../types";
 
 interface BookmarkCardProps {
@@ -35,11 +36,11 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
 		>
 			<div className="mb-2 flex items-center gap-2">
 				<Bookmark className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />
-				<span className="truncate text-muted-foreground/70 text-xs">
+				<span className="truncate text-xs text-muted-foreground/70">
 					{domain}
 				</span>
 			</div>
-			<h3 className="line-clamp-2 font-medium text-foreground text-sm leading-snug">
+			<h3 className="line-clamp-2 text-sm leading-snug font-medium text-foreground">
 				{title}
 			</h3>
 		</a>

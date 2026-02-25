@@ -1,59 +1,66 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "ui": "tui",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": ["dist/**"]
-    },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "check-types": {
-      "dependsOn": ["^check-types"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "dev:firefox": {
-      "cache": false,
-      "persistent": true
-    },
-    "db:push": {
-      "cache": false
-    },
-    "db:push:prod": {
-      "cache": false
-    },
-    "db:studio": {
-      "cache": false,
-      "persistent": true
-    },
-    "db:studio:prod": {
-      "cache": false,
-      "persistent": true
-    },
-    "db:migrate": {
-      "cache": false
-    },
-    "db:generate": {
-      "cache": false
-    },
-    "db:seed": {
-      "cache": false
-    },
-    "db:seed:prod": {
-      "cache": false
-    },
-    "deploy": {
-      "dependsOn": ["build"],
-      "cache": false
-    },
-    "deploy:preview": {
-      "dependsOn": ["build"],
-      "cache": false
-    }
-  }
+	"$schema": "https://turbo.build/schema.json",
+	"ui": "tui",
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": ["$TURBO_DEFAULT$", ".env*"],
+			"outputs": ["dist/**"]
+		},
+		"lint": {
+			"dependsOn": ["^lint"],
+			"inputs": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"]
+		},
+		"check-types": {
+			"dependsOn": ["^check-types"],
+			"inputs": ["src/**/*.ts", "src/**/*.tsx", "tsconfig.json"]
+		},
+		"test": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.test.ts"],
+			"cache": false
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"dev:firefox": {
+			"cache": false,
+			"persistent": true
+		},
+		"db:push": {
+			"cache": false
+		},
+		"db:push:prod": {
+			"cache": false
+		},
+		"db:studio": {
+			"cache": false,
+			"persistent": true
+		},
+		"db:studio:prod": {
+			"cache": false,
+			"persistent": true
+		},
+		"db:migrate": {
+			"cache": false
+		},
+		"db:generate": {
+			"cache": false
+		},
+		"db:seed": {
+			"cache": false
+		},
+		"db:seed:prod": {
+			"cache": false
+		},
+		"deploy": {
+			"dependsOn": ["build"],
+			"cache": false
+		},
+		"deploy:preview": {
+			"dependsOn": ["build"],
+			"cache": false
+		}
+	}
 }

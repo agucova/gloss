@@ -1,4 +1,5 @@
 import Table from "cli-table3";
+
 import type { Bookmark, Highlight, SearchResult, Tag } from "./api-client.js";
 
 export type OutputFormat = "json" | "table" | "csv" | "markdown";
@@ -118,7 +119,7 @@ export function formatBookmarksTable(bookmarks: Bookmark[]): string {
 	});
 
 	for (const b of bookmarks) {
-		const tagNames = b.tags.map((t) => t.name).join(", ");
+		const tagNames = (b.tags ?? []).map((t) => t.name).join(", ");
 		table.push([
 			b.id.slice(0, 10),
 			truncate(b.title, 50) || "(no title)",
@@ -141,7 +142,7 @@ export function formatBookmarksCSV(bookmarks: Bookmark[]): string {
 		b.title,
 		b.url,
 		b.description,
-		b.tags.map((t) => t.name).join(";"),
+		(b.tags ?? []).map((t) => t.name).join(";"),
 		b.createdAt,
 	]);
 	return formatCSV(headers, rows);
@@ -154,8 +155,8 @@ export function formatBookmarksMarkdown(bookmarks: Bookmark[]): string {
 	return bookmarks
 		.map((b) => {
 			const tagStr =
-				b.tags.length > 0
-					? `- **Tags**: ${b.tags.map((t) => `\`${t.name}\``).join(", ")}\n`
+				(b.tags ?? []).length > 0
+					? `- **Tags**: ${(b.tags ?? []).map((t) => `\`${t.name}\``).join(", ")}\n`
 					: "";
 			const descStr = b.description ? `\n${b.description}\n` : "";
 			return `## [${b.title || b.url}](${b.url})\n${descStr}${tagStr}- **Created**: ${formatDate(b.createdAt)}\n`;

@@ -8,6 +8,9 @@ import {
 } from "@gloss/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
+import type { SearchEntityType } from "../lib/search-index";
+
 import { deriveAuth } from "../lib/auth";
 import { isSemanticSearchAvailable } from "../lib/embeddings";
 import {
@@ -16,7 +19,6 @@ import {
 	type SearchResult,
 	type SearchSortBy,
 } from "../lib/hybrid-search";
-import type { SearchEntityType } from "../lib/search-index";
 
 /**
  * Tag info included in bookmark results.
@@ -407,38 +409,54 @@ export const search = new Elysia({ prefix: "/search" })
 				effectiveMode = "fts";
 			}
 
-			// Perform search
-			const results = await hybridSearch({
-				query: q,
-				userId: session.user.id,
-				mode: effectiveMode,
-				entityTypes,
-				limit,
-				offset,
-				tagId: validatedTagId,
-				urlPattern,
-				domain,
-				after: afterDate,
-				before: beforeDate,
-				sortBy: sortBy as SearchSortBy,
-			});
-
-			// Hydrate results with full entity data
-			const hydrated = await hydrateResults(results);
-
-			return {
-				results: hydrated,
-				meta: {
+			// Perform search with graceful error handling
+			try {
+				const results = await hybridSearch({
 					query: q,
+					userId: session.user.id,
 					mode: effectiveMode,
-					semanticSearchUsed:
-						effectiveMode !== "fts" && isSemanticSearchAvailable(),
-					total: hydrated.length,
+					entityTypes,
 					limit,
 					offset,
-					sortBy,
-				},
-			};
+					tagId: validatedTagId,
+					urlPattern,
+					domain,
+					after: afterDate,
+					before: beforeDate,
+					sortBy: sortBy as SearchSortBy,
+				});
+
+				const hydrated = await hydrateResults(results);
+
+				return {
+					results: hydrated,
+					meta: {
+						query: q,
+						mode: effectiveMode,
+						semanticSearchUsed:
+							effectiveMode !== "fts" && isSemanticSearchAvailable(),
+						total: hydrated.length,
+						limit,
+						offset,
+						sortBy,
+					},
+				};
+			} catch (error) {
+				console.error("[search] Search failed:", error);
+				return {
+					results: [],
+					meta: {
+						query: q,
+						mode: "fts" as SearchMode,
+						semanticSearchUsed: false,
+						total: 0,
+						limit,
+						offset,
+						sortBy,
+						error: "Search temporarily unavailable",
+					},
+				};
+			}
 		},
 		{
 			query: t.Object({

@@ -1,9 +1,10 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
 import { apiKey } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
+import { deriveAuth } from "../lib/auth";
 
 const API_KEY_PREFIX = "gloss_sk_";
 
@@ -99,12 +100,7 @@ export function updateKeyLastUsed(keyId: string): void {
  */
 export const apiKeys = new Elysia({ prefix: "/keys" })
 	// Derive session for all routes
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
 	// Create a new API key
 	.post(

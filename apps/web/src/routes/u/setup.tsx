@@ -96,10 +96,10 @@ function UsernameSetupPage() {
 				const errObj = error as { error?: string };
 				throw new Error(errObj.error ?? "Failed to set username");
 			}
-			if (!data || "error" in data) {
+			if (!data || (typeof data === "object" && "error" in data)) {
 				throw new Error("Failed to set username");
 			}
-			return data;
+			return data as { username: string };
 		},
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: ["user"] });
@@ -154,10 +154,10 @@ function UsernameSetupPage() {
 
 			<div className="relative w-full max-w-sm">
 				<div className="mb-10 text-center">
-					<h1 className="font-medium text-foreground text-lg tracking-tight">
+					<h1 className="text-lg font-medium tracking-tight text-foreground">
 						Choose your username
 					</h1>
-					<p className="mt-2 text-muted-foreground text-sm leading-relaxed">
+					<p className="mt-2 text-sm leading-relaxed text-muted-foreground">
 						This will be your profile URL: gloss.agus.sh/u/
 						<span className="font-medium text-foreground">
 							{checkingUsername || "username"}
@@ -176,7 +176,7 @@ function UsernameSetupPage() {
 					<form.Field name="username">
 						{(field) => (
 							<div className="space-y-2">
-								<Label className="font-normal text-muted-foreground text-xs">
+								<Label className="text-xs font-normal text-muted-foreground">
 									Username
 								</Label>
 								<div className="relative">
@@ -216,7 +216,7 @@ function UsernameSetupPage() {
 
 								{/* Validation error */}
 								{field.state.meta.errors[0]?.message && (
-									<p className="text-destructive text-xs" role="alert">
+									<p className="text-xs text-destructive" role="alert">
 										{field.state.meta.errors[0].message}
 									</p>
 								)}
@@ -244,7 +244,7 @@ function UsernameSetupPage() {
 					</form.Subscribe>
 				</form>
 
-				<p className="mt-6 text-center text-muted-foreground text-xs">
+				<p className="mt-6 text-center text-xs text-muted-foreground">
 					You can change your username later in your profile settings.
 				</p>
 			</div>

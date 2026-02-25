@@ -5,11 +5,6 @@
  * a high-level API for managing highlights in browser extensions.
  */
 
-import { anchor } from "./anchor";
-import { describe, describeSelection } from "./describe";
-import { highlightRange, injectHighlightStyles } from "./highlight";
-import { DomMutationObserver } from "./observers/mutation";
-import { NavigationObserver } from "./observers/navigation";
 import type {
 	ActiveHighlight,
 	AnchorResult,
@@ -20,6 +15,12 @@ import type {
 	HighlightManagerOptions,
 	HighlightManagerState,
 } from "./types";
+
+import { anchor } from "./anchor";
+import { describe, describeSelection } from "./describe";
+import { highlightRange, injectHighlightStyles } from "./highlight";
+import { DomMutationObserver } from "./observers/mutation";
+import { NavigationObserver } from "./observers/navigation";
 
 /** Default highlight color (semi-transparent yellow) */
 const DEFAULT_COLOR = "rgba(255, 235, 59, 0.4)";

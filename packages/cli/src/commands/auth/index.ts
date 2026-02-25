@@ -1,4 +1,5 @@
 import { buildRouteMap } from "@stricli/core";
+
 import { loginCommand } from "./login.js";
 import { logoutCommand } from "./logout.js";
 import { setKeyCommand } from "./set-key.js";

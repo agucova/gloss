@@ -1,5 +1,5 @@
 import { Link, useMatches } from "@tanstack/react-router";
-import { Library } from "lucide-react";
+import { Clock, Library } from "lucide-react";
 
 import { Logo } from "./logo";
 import { ModeToggle } from "./mode-toggle";
@@ -11,6 +11,7 @@ export default function Header() {
 		(match) => match.pathname.startsWith("/u/") && match.pathname !== "/u/setup"
 	);
 	const isLibrary = matches.some((match) => match.pathname === "/library");
+	const isReadLater = matches.some((match) => match.pathname === "/read-later");
 
 	return (
 		<header className="bg-background">
@@ -22,6 +23,17 @@ export default function Header() {
 				<div className="flex items-center gap-6">
 					<Link className="text-foreground" to="/">
 						<Logo className="h-6 w-auto" />
+					</Link>
+					<Link
+						className={`flex items-center gap-1.5 text-sm transition-colors ${
+							isReadLater
+								? "text-foreground"
+								: "text-muted-foreground hover:text-foreground"
+						}`}
+						to="/read-later"
+					>
+						<Clock className="h-4 w-4" />
+						<span>Read Later</span>
 					</Link>
 					<Link
 						className={`flex items-center gap-1.5 text-sm transition-colors ${

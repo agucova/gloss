@@ -85,7 +85,7 @@ export function BookshelfPage() {
 	if (!user) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6">
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					Unable to load your library
 				</p>
 			</div>

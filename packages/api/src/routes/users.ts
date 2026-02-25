@@ -1,4 +1,3 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
 import {
 	bookmark,
@@ -8,8 +7,22 @@ import {
 	tag,
 	user,
 } from "@gloss/db/schema";
-import { and, count, desc, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gt,
+	ilike,
+	inArray,
+	lt,
+	or,
+	sql,
+} from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
+import { deriveAuth } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import {
 	CursorPaginationSchema,
@@ -61,12 +74,7 @@ async function getFriendshipStatus(
  * Users routes for profile management.
  */
 export const users = new Elysia({ prefix: "/users" })
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
 	// Check if username is available
 	.get(
@@ -552,13 +560,15 @@ export const users = new Elysia({ prefix: "/users" })
 				: userFilter;
 
 			const limit = query.limit ?? 20;
+			const orderDir = query.order === "asc" ? asc : desc;
+			const cursorOp = query.order === "asc" ? gt : lt;
 			const cursorFilter = query.cursor
-				? lt(bookmark.createdAt, new Date(query.cursor))
+				? cursorOp(bookmark.createdAt, new Date(query.cursor))
 				: undefined;
 
 			const results = await db.query.bookmark.findMany({
 				where: cursorFilter ? and(baseFilter, cursorFilter) : baseFilter,
-				orderBy: [desc(bookmark.createdAt)],
+				orderBy: [orderDir(bookmark.createdAt)],
 				limit: limit + 1,
 				with: {
 					bookmarkTags: {

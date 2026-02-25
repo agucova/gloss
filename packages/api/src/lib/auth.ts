@@ -1,4 +1,5 @@
 import { auth } from "@gloss/auth";
+
 import { updateKeyLastUsed, validateApiKey } from "../routes/api-keys";
 
 export type AuthMethod = "session" | "api_key";
@@ -82,8 +83,14 @@ export async function deriveAuth(request: Request): Promise<AuthContext> {
  * API key auth needs "write" scope.
  */
 export function hasWriteAccess(ctx: AuthContext): boolean {
-	if (!ctx.session) return false;
-	if (ctx.authMethod === "session") return true;
-	if (ctx.authMethod === "api_key") return ctx.apiKeyScope === "write";
+	if (!ctx.session) {
+		return false;
+	}
+	if (ctx.authMethod === "session") {
+		return true;
+	}
+	if (ctx.authMethod === "api_key") {
+		return ctx.apiKeyScope === "write";
+	}
 	return false;
 }

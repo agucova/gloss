@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import type { DashboardApiClient, FeedBookmark } from "../types";
 
 interface UseFriendsBookmarksOptions {

@@ -299,3 +299,63 @@ export function findAllOccurrences(text: string, substring: string): number[] {
 export function textEquals(a: string, b: string): boolean {
 	return normalizeText(a) === normalizeText(b);
 }
+
+/**
+ * Result of normalizing text with a position offset mapping.
+ * Allows searching in normalized space while creating DOM ranges in raw space.
+ */
+export interface OffsetMapping {
+	/** The normalized text (whitespace collapsed) */
+	text: string;
+	/** Convert a normalized-text index to the corresponding raw-text index */
+	toRaw(normalizedIndex: number): number;
+}
+
+/**
+ * Normalize text while building an offset map from normalized to raw positions.
+ *
+ * Standard `normalizeText` collapses whitespace runs into single spaces,
+ * which changes character positions. This function tracks those position
+ * changes so callers can convert indices found in the normalized string
+ * back to indices in the original (raw) string.
+ *
+ * @param rawText - The original text with original whitespace
+ * @returns OffsetMapping with normalized text and index conversion
+ */
+export function normalizeWithMap(rawText: string): OffsetMapping {
+	const chars: string[] = [];
+	const rawOffsets: number[] = [];
+	let inWhitespace = false;
+
+	for (let i = 0; i < rawText.length; i++) {
+		const char = rawText.charAt(i);
+		const isWs =
+			char === " " || char === "\t" || char === "\n" || char === "\r";
+
+		if (isWs) {
+			if (!inWhitespace) {
+				rawOffsets.push(i);
+				chars.push(" ");
+				inWhitespace = true;
+			}
+		} else {
+			rawOffsets.push(i);
+			chars.push(char);
+			inWhitespace = false;
+		}
+	}
+
+	// End sentinel: normalized length maps to raw length
+	rawOffsets.push(rawText.length);
+
+	const text = chars.join("");
+
+	return {
+		text,
+		toRaw(normalizedIndex: number): number {
+			if (normalizedIndex <= 0) return 0;
+			if (normalizedIndex >= rawOffsets.length) return rawText.length;
+			return rawOffsets[normalizedIndex] ?? rawText.length;
+		},
+	};
+}

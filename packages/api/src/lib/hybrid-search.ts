@@ -1,9 +1,35 @@
 import { db } from "@gloss/db";
 import { bookmarkTag, searchIndex } from "@gloss/db/schema";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+
+import type { SearchEntityType, SearchVisibility } from "./search-index";
+
 import { generateEmbedding, isSemanticSearchAvailable } from "./embeddings";
 import { getFriendIds } from "./friends";
-import type { SearchEntityType, SearchVisibility } from "./search-index";
+
+/**
+ * Cached pgvector availability state.
+ * When pgvector fails, we cache the unavailability for 60 seconds
+ * to avoid repeated failing queries.
+ */
+let pgvectorUnavailableUntil = 0;
+
+function isPgvectorAvailable(): boolean {
+	return Date.now() >= pgvectorUnavailableUntil;
+}
+
+function markPgvectorUnavailable(): void {
+	pgvectorUnavailableUntil = Date.now() + 60_000;
+}
+
+function isPgvectorError(error: unknown): boolean {
+	const message = error instanceof Error ? error.message : String(error);
+	return (
+		message.includes("vector") ||
+		message.includes("operator does not exist") ||
+		message.includes("<=>")
+	);
+}
 
 /**
  * Search mode determines which scoring methods are used.
@@ -87,11 +113,12 @@ export async function hybridSearch(
 	// Get friend IDs for visibility filtering
 	const friendIds = await getFriendIds(userId);
 
-	// Generate query embedding for semantic search
+	// Generate query embedding for semantic search (skip if pgvector is known-unavailable)
 	let queryEmbedding: number[] | null = null;
 	if (
 		(mode === "hybrid" || mode === "semantic") &&
-		isSemanticSearchAvailable()
+		isSemanticSearchAvailable() &&
+		isPgvectorAvailable()
 	) {
 		queryEmbedding = await generateEmbedding(query);
 	}
@@ -207,91 +234,114 @@ export async function hybridSearch(
 			score: row.ftsRank,
 		}));
 	} else if (mode === "semantic") {
-		// Semantic-only search
-		const embeddingStr = `[${queryEmbedding.join(",")}]`;
+		// Semantic-only search (with FTS fallback if pgvector fails)
+		try {
+			const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
-		const rows = await db
-			.select({
-				id: searchIndex.id,
-				entityType: searchIndex.entityType,
-				entityId: searchIndex.entityId,
-				userId: searchIndex.userId,
-				content: searchIndex.content,
-				url: searchIndex.url,
-				visibility: searchIndex.visibility,
-				createdAt: searchIndex.createdAt,
-				similarity:
-					sql<number>`1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector)`.as(
-						"similarity"
-					),
-			})
-			.from(searchIndex)
-			.where(and(...conditions, sql`${searchIndex.embedding} IS NOT NULL`))
-			.orderBy(
-				sortBy === "created"
-					? sql`${searchIndex.createdAt} DESC`
-					: sql`similarity DESC`
-			)
-			.limit(limit)
-			.offset(offset);
+			const rows = await db
+				.select({
+					id: searchIndex.id,
+					entityType: searchIndex.entityType,
+					entityId: searchIndex.entityId,
+					userId: searchIndex.userId,
+					content: searchIndex.content,
+					url: searchIndex.url,
+					visibility: searchIndex.visibility,
+					createdAt: searchIndex.createdAt,
+					similarity:
+						sql<number>`1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector)`.as(
+							"similarity"
+						),
+				})
+				.from(searchIndex)
+				.where(and(...conditions, sql`${searchIndex.embedding} IS NOT NULL`))
+				.orderBy(
+					sortBy === "created"
+						? sql`${searchIndex.createdAt} DESC`
+						: sql`similarity DESC`
+				)
+				.limit(limit)
+				.offset(offset);
 
-		results = rows.map((row) => ({
-			...row,
-			visibility: row.visibility as SearchVisibility | null,
-			ftsScore: 0,
-			semanticScore: row.similarity,
-			score: row.similarity,
-		}));
+			results = rows.map((row) => ({
+				...row,
+				visibility: row.visibility as SearchVisibility | null,
+				ftsScore: 0,
+				semanticScore: row.similarity,
+				score: row.similarity,
+			}));
+		} catch (error) {
+			if (isPgvectorError(error)) {
+				console.warn(
+					"[search] pgvector unavailable, falling back to FTS-only:",
+					error instanceof Error ? error.message : error
+				);
+				markPgvectorUnavailable();
+				return hybridSearch({ ...params, mode: "fts" });
+			}
+			throw error;
+		}
 	} else {
-		// Hybrid search: combine FTS and semantic scores
-		const ftsQuery = sql`plainto_tsquery('english', ${query})`;
-		const embeddingStr = `[${queryEmbedding.join(",")}]`;
+		// Hybrid search: combine FTS and semantic scores (with FTS fallback if pgvector fails)
+		try {
+			const ftsQuery = sql`plainto_tsquery('english', ${query})`;
+			const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
-		// Use a CTE to compute both scores and combine them
-		const rows = await db
-			.select({
-				id: searchIndex.id,
-				entityType: searchIndex.entityType,
-				entityId: searchIndex.entityId,
-				userId: searchIndex.userId,
-				content: searchIndex.content,
-				url: searchIndex.url,
-				visibility: searchIndex.visibility,
-				createdAt: searchIndex.createdAt,
-				ftsRank:
-					sql<number>`COALESCE(ts_rank(${searchIndex.contentTsv}, ${ftsQuery}), 0)`.as(
-						"fts_rank"
-					),
-				similarity:
-					sql<number>`COALESCE(1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector), 0)`.as(
-						"similarity"
-					),
-			})
-			.from(searchIndex)
-			.where(
-				and(
-					...conditions,
-					or(
-						sql`${searchIndex.contentTsv} @@ ${ftsQuery}`,
-						sql`${searchIndex.embedding} IS NOT NULL`
+			const rows = await db
+				.select({
+					id: searchIndex.id,
+					entityType: searchIndex.entityType,
+					entityId: searchIndex.entityId,
+					userId: searchIndex.userId,
+					content: searchIndex.content,
+					url: searchIndex.url,
+					visibility: searchIndex.visibility,
+					createdAt: searchIndex.createdAt,
+					ftsRank:
+						sql<number>`COALESCE(ts_rank(${searchIndex.contentTsv}, ${ftsQuery}), 0)`.as(
+							"fts_rank"
+						),
+					similarity:
+						sql<number>`COALESCE(1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector), 0)`.as(
+							"similarity"
+						),
+				})
+				.from(searchIndex)
+				.where(
+					and(
+						...conditions,
+						or(
+							sql`${searchIndex.contentTsv} @@ ${ftsQuery}`,
+							sql`${searchIndex.embedding} IS NOT NULL`
+						)
 					)
 				)
-			)
-			.orderBy(
-				sortBy === "created"
-					? sql`${searchIndex.createdAt} DESC`
-					: sql`(COALESCE(ts_rank(${searchIndex.contentTsv}, ${ftsQuery}), 0) * 0.5 + COALESCE(1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector), 0) * 0.5) DESC`
-			)
-			.limit(limit)
-			.offset(offset);
+				.orderBy(
+					sortBy === "created"
+						? sql`${searchIndex.createdAt} DESC`
+						: sql`(COALESCE(ts_rank(${searchIndex.contentTsv}, ${ftsQuery}), 0) * 0.5 + COALESCE(1 - (${searchIndex.embedding} <=> ${embeddingStr}::vector), 0) * 0.5) DESC`
+				)
+				.limit(limit)
+				.offset(offset);
 
-		results = rows.map((row) => ({
-			...row,
-			visibility: row.visibility as SearchVisibility | null,
-			ftsScore: row.ftsRank,
-			semanticScore: row.similarity,
-			score: row.ftsRank * 0.5 + row.similarity * 0.5,
-		}));
+			results = rows.map((row) => ({
+				...row,
+				visibility: row.visibility as SearchVisibility | null,
+				ftsScore: row.ftsRank,
+				semanticScore: row.similarity,
+				score: row.ftsRank * 0.5 + row.similarity * 0.5,
+			}));
+		} catch (error) {
+			if (isPgvectorError(error)) {
+				console.warn(
+					"[search] pgvector unavailable, falling back to FTS-only:",
+					error instanceof Error ? error.message : error
+				);
+				markPgvectorUnavailable();
+				return hybridSearch({ ...params, mode: "fts" });
+			}
+			throw error;
+		}
 	}
 
 	return results;

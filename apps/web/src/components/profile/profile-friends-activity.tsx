@@ -48,7 +48,7 @@ export function ProfileFriendsActivity({
 					))}
 
 					{friends.length > 10 && (
-						<p className="pt-2 text-muted-foreground text-xs">
+						<p className="pt-2 text-xs text-muted-foreground">
 							+{friends.length - 10} more friends
 						</p>
 					)}
@@ -57,7 +57,7 @@ export function ProfileFriendsActivity({
 		}
 
 		return (
-			<p className="py-4 text-muted-foreground text-sm">
+			<p className="py-4 text-sm text-muted-foreground">
 				{isOwnProfile
 					? "You haven't added any friends yet"
 					: "No friends to show"}
@@ -67,7 +67,7 @@ export function ProfileFriendsActivity({
 
 	return (
 		<div>
-			<h2 className="mb-4 font-medium text-foreground text-sm">
+			<h2 className="mb-4 text-sm font-medium text-foreground">
 				{isOwnProfile ? "Your friends" : `${userName}'s friends`}
 			</h2>
 			{renderFriendsList()}
@@ -104,11 +104,11 @@ function FriendItem({ friend }: FriendItemProps) {
 				<GeneratedAvatar name={friend.name} size="sm" />
 			)}
 			<div className="min-w-0 flex-1">
-				<p className="truncate font-medium text-foreground text-sm">
+				<p className="truncate text-sm font-medium text-foreground">
 					{friend.name}
 				</p>
 				{friend.username && (
-					<p className="truncate text-muted-foreground text-xs">
+					<p className="truncate text-xs text-muted-foreground">
 						@{friend.username}
 					</p>
 				)}

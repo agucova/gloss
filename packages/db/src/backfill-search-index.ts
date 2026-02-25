@@ -10,14 +10,15 @@
  * - Progress logging
  */
 
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createId } from "@paralleldrive/cuid2";
 import { config } from "dotenv";
 import { gt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
+
 import { bookmark, comment, highlight, searchIndex } from "./schema";
 
 // Load .env from monorepo root
@@ -177,7 +178,7 @@ async function indexBatch(
 					await db
 						.update(searchIndex)
 						.set({ embedding })
-						.where(sql`${searchIndex.id} = ${batch[j].id}`);
+						.where(sql`${searchIndex.id} = ${batch[j]!.id}`);
 				}
 			}
 
@@ -225,7 +226,7 @@ async function backfillBookmarks(): Promise<number> {
 
 		await indexBatch(records);
 		processed += bookmarks.length;
-		cursor = bookmarks[bookmarks.length - 1].id;
+		cursor = bookmarks.at(-1)!.id;
 		console.log(`  Processed ${processed} bookmarks...`);
 	}
 
@@ -269,7 +270,7 @@ async function backfillHighlights(): Promise<number> {
 
 		await indexBatch(records);
 		processed += highlights.length;
-		cursor = highlights[highlights.length - 1].id;
+		cursor = highlights.at(-1)!.id;
 		console.log(`  Processed ${processed} highlights...`);
 	}
 
@@ -321,7 +322,7 @@ async function backfillComments(): Promise<number> {
 
 		await indexBatch(records);
 		processed += comments.length;
-		cursor = comments[comments.length - 1].comment.id;
+		cursor = comments.at(-1)!.comment.id;
 		console.log(`  Processed ${processed} comments...`);
 	}
 

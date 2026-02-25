@@ -1,5 +1,6 @@
-import { useFriendsBookmarks } from "../hooks/use-friends-bookmarks";
 import type { DashboardApiClient } from "../types";
+
+import { useFriendsBookmarks } from "../hooks/use-friends-bookmarks";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentLinksSkeleton } from "./skeleton-loaders";
 
@@ -19,7 +20,7 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 
 	return (
 		<section className={className}>
-			<h2 className="mb-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
+			<h2 className="mb-4 text-xs font-medium tracking-wider text-muted-foreground uppercase">
 				Recent bookmarks
 			</h2>
 
@@ -28,7 +29,7 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 
 				{error && (
 					<div className="flex h-24 items-center justify-center">
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							Unable to load recent bookmarks
 						</p>
 					</div>
@@ -36,7 +37,7 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 
 				{data && data.items.length === 0 && (
 					<div className="flex h-24 items-center justify-center">
-						<p className="text-muted-foreground text-sm">
+						<p className="text-sm text-muted-foreground">
 							No recent bookmarks from friends yet
 						</p>
 					</div>

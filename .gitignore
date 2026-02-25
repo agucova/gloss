@@ -39,6 +39,8 @@ lerna-debug.log*
 
 # WXT (browser extension generated files)
 .wxt
+.dev-chrome-profile
+.dev-firefox-profile
 
 # Better-T-Stack
 .alchemy
@@ -46,6 +48,12 @@ lerna-debug.log*
 # Testing
 coverage
 .nyc_output
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 
 # Misc
 *.tgz

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ReadLaterRouteImport } from './routes/read-later'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LibraryRouteImport } from './routes/library'
@@ -20,6 +21,11 @@ import { Route as UUsernameRouteImport } from './routes/u/$username'
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReadLaterRoute = ReadLaterRouteImport.update({
+  id: '/read-later',
+  path: '/read-later',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/library'
     | '/login'
     | '/profile'
+    | '/read-later'
     | '/settings'
     | '/u/$username'
     | '/u/setup'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/library'
     | '/login'
     | '/profile'
+    | '/read-later'
     | '/settings'
     | '/u/$username'
     | '/u/setup'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/library'
     | '/login'
     | '/profile'
+    | '/read-later'
     | '/settings'
     | '/u/$username'
     | '/u/setup'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
+  ReadLaterRoute: typeof ReadLaterRoute
   SettingsRoute: typeof SettingsRoute
   UUsernameRoute: typeof UUsernameRoute
   USetupRoute: typeof USetupRoute
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/read-later': {
+      id: '/read-later'
+      path: '/read-later'
+      fullPath: '/read-later'
+      preLoaderRoute: typeof ReadLaterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -180,6 +200,7 @@ const rootRouteChildren: RootRouteChildren = {
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
+  ReadLaterRoute: ReadLaterRoute,
   SettingsRoute: SettingsRoute,
   UUsernameRoute: UUsernameRoute,
   USetupRoute: USetupRoute,

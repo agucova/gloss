@@ -69,17 +69,17 @@ export function PasskeyPrompt() {
 	}
 
 	return (
-		<div className="fade-in slide-in-from-bottom-4 fixed right-4 bottom-4 left-4 z-50 mx-auto max-w-sm animate-in duration-300 sm:left-auto">
+		<div className="fixed right-4 bottom-4 left-4 z-50 mx-auto max-w-sm animate-in duration-300 fade-in slide-in-from-bottom-4 sm:left-auto">
 			<div className="rounded-xl border border-border bg-background p-4 shadow-lg">
 				<div className="flex items-start gap-3">
 					<div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
 						<KeyIcon className="size-5 text-muted-foreground" />
 					</div>
 					<div className="flex-1">
-						<h3 className="font-medium text-foreground text-sm">
+						<h3 className="text-sm font-medium text-foreground">
 							Add a passkey for faster login
 						</h3>
-						<p className="mt-1 text-muted-foreground text-xs leading-relaxed">
+						<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
 							Use Face ID, Touch ID, or your device PIN to sign in instantly
 							next time.
 						</p>

@@ -50,7 +50,7 @@ export function TagFilterPills({
 				{/* "All" pill */}
 				<button
 					className={cn(
-						"shrink-0 rounded-full px-3 py-1.5 font-medium text-xs transition-colors",
+						"shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
 						selectedTagId === null
 							? "bg-foreground text-background"
 							: "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -83,15 +83,42 @@ interface TagPillProps {
 	onClick: () => void;
 }
 
+function getSystemTagIcon(tag: Tag, isSelected: boolean) {
+	const colorStyle = isSelected ? undefined : (tag.color ?? undefined);
+
+	if (tag.name === "favorites") {
+		return (
+			<Star
+				className="h-3 w-3"
+				fill={isSelected ? "currentColor" : (tag.color ?? "currentColor")}
+				style={{ color: colorStyle }}
+			/>
+		);
+	}
+	if (tag.name === "to-read") {
+		return <Clock className="h-3 w-3" style={{ color: colorStyle }} />;
+	}
+	return null;
+}
+
 function TagPill({ tag, isSelected, onClick }: TagPillProps) {
-	const isSystemTag = tag.isSystem;
-	const isFavorites = tag.name === "favorites";
-	const isToRead = tag.name === "to-read";
+	const tagIcon = tag.isSystem ? (
+		getSystemTagIcon(tag, isSelected)
+	) : (
+		<span
+			className="h-2 w-2 shrink-0 rounded-full"
+			style={{
+				backgroundColor: isSelected
+					? "currentColor"
+					: (tag.color ?? "currentColor"),
+			}}
+		/>
+	);
 
 	return (
 		<button
 			className={cn(
-				"flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-xs transition-colors",
+				"flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
 				isSelected
 					? "bg-foreground text-background"
 					: "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -100,29 +127,7 @@ function TagPill({ tag, isSelected, onClick }: TagPillProps) {
 			type="button"
 		>
 			{/* Icon for system tags, colored dot for custom tags */}
-			{isSystemTag ? (
-				isFavorites ? (
-					<Star
-						className="h-3 w-3"
-						fill={isSelected ? "currentColor" : (tag.color ?? "currentColor")}
-						style={{ color: isSelected ? undefined : (tag.color ?? undefined) }}
-					/>
-				) : isToRead ? (
-					<Clock
-						className="h-3 w-3"
-						style={{ color: isSelected ? undefined : (tag.color ?? undefined) }}
-					/>
-				) : null
-			) : (
-				<span
-					className="h-2 w-2 shrink-0 rounded-full"
-					style={{
-						backgroundColor: isSelected
-							? "currentColor"
-							: (tag.color ?? "currentColor"),
-					}}
-				/>
-			)}
+			{tagIcon}
 
 			{/* Tag name */}
 			<span>{tag.name === "to-read" ? "To Read" : tag.name}</span>

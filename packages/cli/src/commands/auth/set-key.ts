@@ -1,5 +1,6 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
 import chalk from "chalk";
+
 import { setApiKey } from "../../lib/config.js";
 
 export const setKeyCommand = buildCommand({

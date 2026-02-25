@@ -3,7 +3,10 @@ import { api, cliAuth } from "@gloss/api";
 import { auth } from "@gloss/auth";
 import { env } from "@gloss/env/server";
 import { Elysia } from "elysia";
+
 import { curiusRoutes } from "./routes/curius";
+
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 /**
  * Check if an origin is allowed for CORS.
@@ -28,11 +31,8 @@ function isAllowedOrigin(origin: string | null): boolean {
 	}
 
 	// Development: allow localhost variants
-	if (env.NODE_ENV === "development") {
-		const localhostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-		if (localhostPattern.test(origin)) {
-			return true;
-		}
+	if (env.NODE_ENV === "development" && LOCALHOST_ORIGIN_RE.test(origin)) {
+		return true;
 	}
 
 	return false;

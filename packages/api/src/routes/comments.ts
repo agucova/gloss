@@ -1,9 +1,10 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
 import { comment, commentMention, highlight } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
+import { deriveAuth } from "../lib/auth";
 import { areFriends, getFriendIds } from "../lib/friends";
 import { indexComment, removeFromIndex } from "../lib/search-index";
 
@@ -88,12 +89,7 @@ async function validateMentions(
  * Comments routes.
  */
 export const comments = new Elysia({ prefix: "/comments" })
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
 	// Get comments for a highlight
 	.get(

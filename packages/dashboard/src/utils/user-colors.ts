@@ -25,5 +25,6 @@ export function getUserColor(userId: string): string {
 		// biome-ignore lint/suspicious/noBitwiseOperators: convert to 32-bit integer
 		hash &= hash;
 	}
-	return FRIEND_COLORS[Math.abs(hash) % FRIEND_COLORS.length];
+	// Modular arithmetic guarantees a valid index into the non-empty array
+	return FRIEND_COLORS[Math.abs(hash) % FRIEND_COLORS.length] as string;
 }

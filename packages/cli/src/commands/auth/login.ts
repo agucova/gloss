@@ -1,5 +1,6 @@
 import { buildCommand, type CommandContext } from "@stricli/core";
 import chalk from "chalk";
+
 import { runOAuthFlow } from "../../lib/oauth.js";
 
 export const loginCommand = buildCommand({

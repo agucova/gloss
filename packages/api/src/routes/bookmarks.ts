@@ -3,6 +3,7 @@ import { bookmark, bookmarkTag, tag } from "@gloss/db/schema";
 import { createId } from "@paralleldrive/cuid2";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+
 import { deriveAuth } from "../lib/auth";
 import { indexBookmark, removeFromIndex } from "../lib/search-index";
 import {

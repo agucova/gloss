@@ -38,9 +38,11 @@ function App() {
 	const [highlights, setHighlights] = useState<ServerHighlight[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [settingsOpen, setSettingsOpen] = useState(false);
-	const [serverUrl, setServerUrl] = useState("");
 	const [theme, setTheme] = useState<Theme>("system");
 	const [currentPage, setCurrentPage] = useState<PageMetadata | null>(null);
+	const [currentDomain, setCurrentDomain] = useState<string | null>(null);
+	const [siteDisabled, setSiteDisabled] = useState(false);
+	const [needsReload, setNeedsReload] = useState(false);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once on mount
 	useEffect(() => {
@@ -54,8 +56,37 @@ function App() {
 			const authResponse = await sendMessage({ type: "GET_AUTH_STATUS" });
 			setAuthState(authResponse);
 
-			const metadataResponse = await sendMessage({ type: "GET_PAGE_METADATA" });
+			// Query the active non-extension tab. When the popup opens as a real
+			// extension popup, the active tab is the page the user is viewing. When
+			// opened as a tab (e.g. in tests), the popup itself becomes active, so
+			// we filter for http/https URLs and fall back to any non-extension tab.
+			let [activeTab] = await browser.tabs.query({
+				active: true,
+				currentWindow: true,
+				url: ["http://*/*", "https://*/*"],
+			});
+			if (!activeTab) {
+				const httpTabs = await browser.tabs.query({
+					currentWindow: true,
+					url: ["http://*/*", "https://*/*"],
+				});
+				activeTab = httpTabs[httpTabs.length - 1];
+			}
+			const metadataResponse = await sendMessage({
+				type: "GET_PAGE_METADATA",
+				tabId: activeTab?.id,
+			});
 			setCurrentPage(metadataResponse.metadata);
+
+			// Load current domain's disabled status
+			if (metadataResponse.metadata?.url) {
+				const domain = getDomain(metadataResponse.metadata.url);
+				setCurrentDomain(domain);
+				const stored = await browser.storage.sync.get(DISABLED_DOMAINS_KEY);
+				const disabledDomains =
+					(stored[DISABLED_DOMAINS_KEY] as string[]) || [];
+				setSiteDisabled(disabledDomains.includes(domain));
+			}
 
 			if (authResponse.authenticated) {
 				const highlightsResponse = await sendMessage({
@@ -74,27 +105,35 @@ function App() {
 	}
 
 	async function loadSettings() {
-		const stored = await browser.storage.sync.get("serverUrl");
-		const url = stored.serverUrl;
-		setServerUrl(typeof url === "string" ? url : "");
-
 		const currentTheme = await getTheme();
 		setTheme(currentTheme);
+	}
+
+	async function handleToggleSiteDisabled() {
+		if (!currentDomain) return;
+		const stored = await browser.storage.sync.get(DISABLED_DOMAINS_KEY);
+		const domains = (stored[DISABLED_DOMAINS_KEY] as string[]) || [];
+
+		if (siteDisabled) {
+			// Re-enable: remove from list
+			const updated = domains.filter((d) => d !== currentDomain);
+			await browser.storage.sync.set({ [DISABLED_DOMAINS_KEY]: updated });
+			setSiteDisabled(false);
+		} else {
+			// Disable: add to list
+			if (!domains.includes(currentDomain)) {
+				domains.push(currentDomain);
+			}
+			await browser.storage.sync.set({ [DISABLED_DOMAINS_KEY]: domains });
+			setSiteDisabled(true);
+		}
+		setNeedsReload(true);
 	}
 
 	async function handleThemeChange(newTheme: Theme) {
 		setTheme(newTheme);
 		applyTheme(newTheme);
 		await saveTheme(newTheme);
-	}
-
-	async function saveServerUrl(url: string) {
-		setServerUrl(url);
-		if (url.trim()) {
-			await browser.storage.sync.set({ serverUrl: url.trim() });
-		} else {
-			await browser.storage.sync.remove("serverUrl");
-		}
 	}
 
 	function handleSignIn() {
@@ -105,11 +144,21 @@ function App() {
 	async function handleSignOut() {
 		try {
 			const baseUrl =
-				serverUrl || import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+				import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
 			await fetch(`${baseUrl}/api/auth/sign-out`, {
 				method: "POST",
 				credentials: "include",
 			});
+			// Try to explicitly clear the session cookie via extension cookies API
+			// (requires "cookies" permission — fails gracefully if not available)
+			try {
+				await browser.cookies.remove({
+					name: "better-auth.session_token",
+					url: baseUrl,
+				});
+			} catch {
+				// cookies permission may not be available
+			}
 			setAuthState({ authenticated: false });
 			setHighlights([]);
 		} catch (error) {
@@ -131,29 +180,70 @@ function App() {
 
 	if (loading) {
 		return (
-			<div className="flex max-h-[480px] min-h-[200px] flex-col">
-				<header className="border-border border-b p-4">
+			<div className="flex max-h-[600px] min-h-[200px] flex-col">
+				<header className="flex items-center justify-between border-b border-border p-4">
 					<Logo className="h-5 w-auto text-foreground" />
 				</header>
 				<main className="overflow-y-auto px-4 py-2 pb-4">
-					<p className="text-muted-foreground text-xs">Loading...</p>
+					<p className="text-xs text-muted-foreground">Loading...</p>
 				</main>
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex max-h-[480px] min-h-[200px] flex-col">
-			<header className="border-border border-b p-4">
-				<Logo className="h-5 w-auto text-foreground" />
+		<div className="flex max-h-[600px] min-h-[200px] flex-col">
+			<header className="border-b border-border p-4">
+				<div className="flex items-center justify-between">
+					<Logo className="h-5 w-auto text-foreground" />
+					{currentDomain && (
+						<div className="flex items-center gap-2">
+							<span
+								className={cn(
+									"max-w-[140px] truncate text-[11px]",
+									siteDisabled ? "text-destructive/70" : "text-muted-foreground"
+								)}
+							>
+								{currentDomain}
+							</span>
+							<button
+								onClick={handleToggleSiteDisabled}
+								className={cn(
+									"relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full border-none transition-colors",
+									siteDisabled ? "bg-muted" : "bg-primary dark:bg-green-600"
+								)}
+								title={
+									siteDisabled
+										? `Re-enable Gloss on ${currentDomain}`
+										: `Disable Gloss on ${currentDomain}`
+								}
+								type="button"
+								role="switch"
+								aria-checked={!siteDisabled}
+							>
+								<span
+									className={cn(
+										"inline-block size-3.5 rounded-full bg-white shadow-sm transition-transform",
+										siteDisabled ? "translate-x-[3px]" : "translate-x-[19px]"
+									)}
+								/>
+							</button>
+						</div>
+					)}
+				</div>
+				{needsReload && (
+					<p className="mt-1.5 text-right text-[10px] text-muted-foreground/70">
+						Reload the page to apply
+					</p>
+				)}
 			</header>
 
 			<main className="overflow-y-auto px-4 py-2 pb-4">
 				{/* Auth Prompt */}
 				{!authState?.authenticated && (
-					<section className="border-border border-b py-3">
+					<section className="border-b border-border py-3">
 						<div className="py-2 text-center">
-							<p className="mb-3 text-muted-foreground text-xs">
+							<p className="mb-3 text-xs text-muted-foreground">
 								Sign in to bookmark and highlight
 							</p>
 							<Button onClick={handleSignIn} variant="primary">
@@ -170,8 +260,8 @@ function App() {
 
 				{/* Recent Highlights */}
 				{authState?.authenticated && (
-					<section className="border-border border-b py-2 last:border-b-0">
-						<h2 className="mb-1.5 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wide">
+					<section className="border-b border-border py-2 last:border-b-0">
+						<h2 className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase">
 							Recent highlights
 						</h2>
 						{highlights.length > 0 ? (
@@ -179,11 +269,11 @@ function App() {
 								{highlights.map((highlight) => (
 									<li key={highlight.id}>
 										<button
-											className="flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg border border-border bg-transparent px-2.5 py-2 text-left transition-colors hover:bg-highlight"
+											className="hover:bg-highlight flex w-full cursor-pointer flex-col items-start gap-1 rounded-lg border border-border bg-transparent px-2.5 py-2 text-left transition-colors"
 											onClick={() => openHighlight(highlight.url)}
 											type="button"
 										>
-											<span className="line-clamp-2 text-foreground text-xs leading-snug">
+											<span className="line-clamp-2 text-xs leading-snug text-foreground">
 												"{truncate(highlight.text, 80)}"
 											</span>
 											<span className="text-[10px] text-muted-foreground">
@@ -195,7 +285,7 @@ function App() {
 								))}
 							</ul>
 						) : (
-							<p className="text-muted-foreground text-xs">No highlights yet</p>
+							<p className="text-xs text-muted-foreground">No highlights yet</p>
 						)}
 					</section>
 				)}
@@ -207,10 +297,10 @@ function App() {
 						onClick={() => setSettingsOpen(!settingsOpen)}
 						type="button"
 					>
-						<span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wide">
+						<span className="text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase">
 							Settings
 						</span>
-						<span className="text-muted-foreground text-sm">
+						<span className="text-sm text-muted-foreground">
 							{settingsOpen ? "−" : "+"}
 						</span>
 					</button>
@@ -233,7 +323,7 @@ function App() {
 							)}
 
 							{/* Theme selector */}
-							<label className="text-muted-foreground text-xs" htmlFor="theme">
+							<label className="text-xs text-muted-foreground" htmlFor="theme">
 								Theme
 							</label>
 							<div className="mb-3 flex gap-1.5">
@@ -242,7 +332,7 @@ function App() {
 										"flex flex-1 cursor-pointer items-center justify-center rounded-md border p-2 text-base transition-all",
 										theme === "light"
 											? "border-primary bg-primary text-primary-foreground"
-											: "border-border bg-secondary hover:bg-highlight"
+											: "hover:bg-highlight border-border bg-secondary"
 									)}
 									onClick={() => handleThemeChange("light")}
 									title="Light"
@@ -255,7 +345,7 @@ function App() {
 										"flex flex-1 cursor-pointer items-center justify-center rounded-md border p-2 text-base transition-all",
 										theme === "dark"
 											? "border-primary bg-primary text-primary-foreground"
-											: "border-border bg-secondary hover:bg-highlight"
+											: "hover:bg-highlight border-border bg-secondary"
 									)}
 									onClick={() => handleThemeChange("dark")}
 									title="Dark"
@@ -268,7 +358,7 @@ function App() {
 										"flex flex-1 cursor-pointer items-center justify-center rounded-md border p-2 text-base transition-all",
 										theme === "system"
 											? "border-primary bg-primary text-primary-foreground"
-											: "border-border bg-secondary hover:bg-highlight"
+											: "hover:bg-highlight border-border bg-secondary"
 									)}
 									onClick={() => handleThemeChange("system")}
 									title="System"
@@ -278,23 +368,8 @@ function App() {
 								</button>
 							</div>
 
-							<label
-								className="text-muted-foreground text-xs"
-								htmlFor="serverUrl"
-							>
-								Server URL
-							</label>
-							<input
-								className="w-full rounded-md border border-border bg-secondary px-3 py-2 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/70 focus:border-muted-foreground focus:outline-none"
-								id="serverUrl"
-								onChange={(e) => saveServerUrl(e.target.value)}
-								placeholder="https://gloss.example.com"
-								type="url"
-								value={serverUrl}
-							/>
-							<p className="text-[11px] text-muted-foreground/80">
-								Leave blank to use the default server
-							</p>
+							{/* Disabled sites */}
+							<DisabledSitesSection />
 						</div>
 					)}
 				</section>
@@ -524,7 +599,7 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 		return (
 			<section className="my-2 mb-3 rounded-xl border border-border bg-gradient-to-b from-secondary to-background p-4 dark:from-card dark:to-background">
 				<div className="flex items-center justify-center py-3">
-					<span className="text-muted-foreground text-xs">Checking...</span>
+					<span className="text-xs text-muted-foreground">Checking...</span>
 				</div>
 			</section>
 		);
@@ -549,8 +624,8 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 						width={20}
 					/>
 				)}
-				<span className="flex-1 truncate font-medium text-foreground text-sm">
-					{truncate(metadata.title || getDomain(metadata.url), 40)}
+				<span className="line-clamp-2 flex-1 text-sm leading-snug font-medium text-foreground">
+					{metadata.title || getDomain(metadata.url)}
 				</span>
 			</div>
 
@@ -562,7 +637,7 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 						className={cn(
 							"flex size-8 cursor-pointer items-center justify-center rounded-lg border bg-transparent transition-all hover:-translate-y-px",
 							isFavorite
-								? "border-transparent bg-favorite-bg text-favorite-text"
+								? "bg-favorite-bg text-favorite-text border-transparent"
 								: "border-border text-muted-foreground hover:border-muted-foreground"
 						)}
 						onClick={handleToggleFavorite}
@@ -575,7 +650,7 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 						className={cn(
 							"flex size-8 cursor-pointer items-center justify-center rounded-lg border bg-transparent transition-all hover:-translate-y-px",
 							isToRead
-								? "border-transparent bg-read-later-bg text-read-later-text"
+								? "bg-read-later-bg text-read-later-text border-transparent"
 								: "border-border text-muted-foreground hover:border-muted-foreground"
 						)}
 						onClick={handleToggleToRead}
@@ -589,7 +664,7 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 				{/* Primary CTA */}
 				{isBookmarked ? (
 					<button
-						className="cursor-pointer rounded-lg border border-border bg-secondary px-4 py-2 font-medium text-[13px] text-foreground transition-all hover:-translate-y-px hover:border-muted-foreground hover:bg-background"
+						className="cursor-pointer rounded-lg border border-border bg-secondary px-4 py-2 text-[13px] font-medium text-foreground transition-all hover:-translate-y-px hover:border-muted-foreground hover:bg-background"
 						onClick={handleUnbookmark}
 						type="button"
 					>
@@ -597,7 +672,7 @@ function BookmarkSection({ metadata }: BookmarkSectionProps) {
 					</button>
 				) : (
 					<button
-						className="cursor-pointer rounded-lg border-none bg-primary px-4 py-2 font-medium text-[13px] text-primary-foreground transition-all hover:-translate-y-px hover:opacity-90 disabled:transform-none disabled:cursor-not-allowed disabled:opacity-60"
+						className="cursor-pointer rounded-lg border-none bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-all hover:-translate-y-px hover:opacity-90 disabled:transform-none disabled:cursor-not-allowed disabled:opacity-60"
 						disabled={saving}
 						onClick={handleBookmark}
 						type="button"
@@ -694,13 +769,13 @@ function TagInput({
 			<div className="flex min-h-8 flex-wrap items-center gap-1.5 rounded-md border border-border bg-background p-1.5 px-2">
 				{tags.map((tag) => (
 					<span
-						className="inline-flex items-center gap-0.5 rounded-full bg-highlight px-1.5 py-0.5 font-medium text-[10px] text-foreground"
+						className="bg-highlight inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-foreground"
 						key={tag}
 					>
 						{tag}
 						<button
 							aria-label={`Remove ${tag}`}
-							className="ml-0.5 cursor-pointer border-none bg-transparent p-0 text-muted-foreground text-xs leading-none opacity-70 hover:opacity-100"
+							className="ml-0.5 cursor-pointer border-none bg-transparent p-0 text-xs leading-none text-muted-foreground opacity-70 hover:opacity-100"
 							onClick={() => removeTag(tag)}
 							type="button"
 						>
@@ -709,7 +784,7 @@ function TagInput({
 					</span>
 				))}
 				<input
-					className="min-w-[60px] flex-1 border-none bg-transparent px-1 py-0.5 text-foreground text-xs outline-none placeholder:text-muted-foreground/60"
+					className="min-w-[60px] flex-1 border-none bg-transparent px-1 py-0.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
 					onBlur={() => {
 						setTimeout(() => setShowSuggestions(false), 150);
 					}}
@@ -729,7 +804,7 @@ function TagInput({
 				<div className="absolute top-full right-0 left-0 z-10 mt-1 max-h-[120px] overflow-y-auto rounded-md border border-border bg-background shadow-lg">
 					{filteredSuggestions.slice(0, 3).map((suggestion) => (
 						<button
-							className="block w-full cursor-pointer border-none bg-transparent px-3 py-2 text-left text-foreground text-xs transition-colors first:rounded-t-md last:rounded-b-md hover:bg-secondary"
+							className="block w-full cursor-pointer border-none bg-transparent px-3 py-2 text-left text-xs text-foreground transition-colors first:rounded-t-md last:rounded-b-md hover:bg-secondary"
 							key={suggestion.id}
 							onClick={() => addTag(suggestion.name)}
 							type="button"
@@ -739,6 +814,61 @@ function TagInput({
 					))}
 				</div>
 			)}
+		</div>
+	);
+}
+
+// =============================================================================
+// DisabledSitesSection Component
+// =============================================================================
+
+const DISABLED_DOMAINS_KEY = "glossDisabledDomains";
+
+function DisabledSitesSection() {
+	const [domains, setDomains] = useState<string[]>([]);
+
+	useEffect(() => {
+		browser.storage.sync
+			.get(DISABLED_DOMAINS_KEY)
+			.then((result) => {
+				setDomains((result[DISABLED_DOMAINS_KEY] as string[]) || []);
+				return undefined;
+			})
+			.catch(() => {});
+	}, []);
+
+	async function removeDomain(domain: string) {
+		const updated = domains.filter((d) => d !== domain);
+		setDomains(updated);
+		await browser.storage.sync.set({ [DISABLED_DOMAINS_KEY]: updated });
+	}
+
+	if (domains.length === 0) return null;
+
+	return (
+		<div className="mt-3">
+			<p className="text-xs text-muted-foreground">Disabled sites</p>
+			<ul className="mt-1.5 flex flex-col gap-1">
+				{domains.map((domain) => (
+					<li
+						key={domain}
+						className="flex items-center justify-between rounded-md bg-secondary px-2.5 py-1.5"
+					>
+						<span className="text-xs text-foreground">{domain}</span>
+						<button
+							onClick={() => removeDomain(domain)}
+							className="cursor-pointer border-none bg-transparent p-0 text-sm leading-none text-muted-foreground hover:text-destructive"
+							title={`Re-enable Gloss on ${domain}`}
+							type="button"
+						>
+							×
+						</button>
+					</li>
+				))}
+			</ul>
+			<p className="mt-1 text-[11px] text-muted-foreground/80">
+				Reload the page after re-enabling
+			</p>
 		</div>
 	);
 }

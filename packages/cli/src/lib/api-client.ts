@@ -57,7 +57,7 @@ export interface Bookmark {
 	description: string | null;
 	favicon: string | null;
 	createdAt: string;
-	tags: Tag[];
+	tags?: Tag[];
 }
 
 /**

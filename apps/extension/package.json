@@ -1,39 +1,41 @@
 {
-  "name": "@gloss/extension",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Gloss browser extension for highlighting and sharing",
-  "type": "module",
-  "scripts": {
-    "dev": "wxt --port 5555",
-    "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
-    "compile": "tsc --noEmit",
-    "postinstall": "wxt prepare"
-  },
-  "dependencies": {
-    "@elysiajs/eden": "^1.4.0",
-    "@floating-ui/dom": "^1.7.4",
-    "@gloss/anchoring": "workspace:*",
-    "@gloss/dashboard": "workspace:*",
-    "@tanstack/react-query": "^5.90.12",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.473.0",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "tailwind-merge": "^3.3.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.0.15",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@wxt-dev/module-react": "^1.1.5",
-    "server": "workspace:*",
-    "tailwindcss": "^4.0.15",
-    "typescript": "^5.9.3",
-    "wxt": "^0.20.6"
-  }
+	"name": "@gloss/extension",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Gloss browser extension for highlighting and sharing",
+	"type": "module",
+	"scripts": {
+		"dev": "wxt --port 5555",
+		"dev:firefox": "wxt -b firefox",
+		"build": "wxt build",
+		"build:firefox": "wxt build -b firefox",
+		"zip": "wxt zip",
+		"zip:firefox": "wxt zip -b firefox",
+		"compile": "tsc --noEmit",
+		"postinstall": "wxt prepare"
+	},
+	"dependencies": {
+		"@elysiajs/eden": "^1.4.0",
+		"@floating-ui/dom": "^1.7.4",
+		"@gloss/anchoring": "workspace:*",
+		"@gloss/dashboard": "workspace:*",
+		"@tanstack/react-query": "^5.90.12",
+		"@webcomponents/custom-elements": "^1.6.0",
+		"clsx": "^2.1.1",
+		"lit": "^3.3.2",
+		"lucide-react": "^0.473.0",
+		"react": "^19.2.3",
+		"react-dom": "^19.2.3",
+		"tailwind-merge": "^3.3.1"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.0.15",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"@wxt-dev/module-react": "^1.1.5",
+		"server": "workspace:*",
+		"tailwindcss": "^4.0.15",
+		"typescript": "^5.9.3",
+		"wxt": "^0.20.6"
+	}
 }

@@ -1,10 +1,10 @@
-import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
+import path from "node:path";
 import { defineConfig } from "vite";
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
 	plugins: [tailwindcss(), tanstackRouter({}), react()],
 	// Load .env from monorepo root
 	envDir: path.resolve(__dirname, "../.."),
@@ -12,14 +12,6 @@ export default defineConfig(({ mode }) => ({
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
 		},
-	},
-	define: {
-		// Ensure VITE_SERVER_URL is defined for production builds
-		...(mode === "production" && {
-			"import.meta.env.VITE_SERVER_URL": JSON.stringify(
-				"https://api.gloss.agus.sh"
-			),
-		}),
 	},
 	server: {
 		port: 3001,

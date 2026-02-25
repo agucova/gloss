@@ -7,6 +7,7 @@ import {
 	text,
 	timestamp,
 } from "drizzle-orm/pg-core";
+
 import { apiKey } from "./api-keys";
 import { bookmark } from "./bookmarks";
 import { curiusCredentials } from "./curius";

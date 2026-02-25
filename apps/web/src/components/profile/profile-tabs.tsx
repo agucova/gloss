@@ -67,7 +67,7 @@ export function ProfileTabs({ profile, isOwnProfile }: ProfileTabsProps) {
 	return (
 		<div className="flex min-h-[calc(100vh-12rem)] flex-col">
 			{/* Tab headers */}
-			<div className="flex gap-1 border-border border-b">
+			<div className="flex gap-1 border-b border-border">
 				<TabButton
 					active={activeTab === "highlights"}
 					icon={<Highlighter className="h-4 w-4" />}
@@ -149,7 +149,7 @@ function TabButton({ active, icon, label, onClick }: TabButtonProps) {
 	return (
 		<button
 			className={cn(
-				"flex items-center gap-2 border-b-2 px-4 py-2.5 font-medium text-sm outline-none transition-colors focus-visible:bg-muted/50",
+				"flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:bg-muted/50",
 				active
 					? "border-foreground text-foreground"
 					: "border-transparent text-muted-foreground hover:text-foreground"
@@ -242,7 +242,7 @@ function HighlightsList({
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to load highlights
 			</p>
 		);
@@ -253,7 +253,7 @@ function HighlightsList({
 			return (
 				<div className="py-12 text-center">
 					<Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No highlights matching "{searchQuery}"
 					</p>
 				</div>
@@ -262,7 +262,7 @@ function HighlightsList({
 		return (
 			<div className="py-12 text-center">
 				<Highlighter className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="text-muted-foreground text-sm">No highlights yet</p>
+				<p className="text-sm text-muted-foreground">No highlights yet</p>
 			</div>
 		);
 	}
@@ -293,11 +293,11 @@ function HighlightsList({
 										<Loader />
 									</div>
 								)
-							) : (
+							) : highlight ? (
 								<div className="pb-2">
 									<HighlightCard highlight={highlight} />
 								</div>
-							)}
+							) : null}
 						</div>
 					);
 				})}
@@ -388,7 +388,7 @@ function BookmarksList({
 
 	if (error) {
 		return (
-			<p className="py-12 text-center text-muted-foreground text-sm">
+			<p className="py-12 text-center text-sm text-muted-foreground">
 				Failed to load bookmarks
 			</p>
 		);
@@ -399,7 +399,7 @@ function BookmarksList({
 			return (
 				<div className="py-12 text-center">
 					<Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No bookmarks matching "{searchQuery}"
 					</p>
 				</div>
@@ -409,7 +409,7 @@ function BookmarksList({
 			return (
 				<div className="py-12 text-center">
 					<Bookmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-					<p className="text-muted-foreground text-sm">
+					<p className="text-sm text-muted-foreground">
 						No bookmarks with this tag
 					</p>
 				</div>
@@ -418,7 +418,7 @@ function BookmarksList({
 		return (
 			<div className="py-12 text-center">
 				<Bookmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-				<p className="text-muted-foreground text-sm">No bookmarks yet</p>
+				<p className="text-sm text-muted-foreground">No bookmarks yet</p>
 			</div>
 		);
 	}
@@ -449,11 +449,11 @@ function BookmarksList({
 										<Loader />
 									</div>
 								)
-							) : (
+							) : bookmark ? (
 								<div className="pb-2">
 									<BookmarkCard bookmark={bookmark} />
 								</div>
-							)}
+							) : null}
 						</div>
 					);
 				})}

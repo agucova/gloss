@@ -121,30 +121,32 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 	}
 
 	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: Escape key is handled via document-level keydown listener
+		// biome-ignore lint/a11y/noStaticElementInteractions: Backdrop overlay dismisses dialog on click
+		// biome-ignore lint/a11y/noNoninteractiveElementInteractions: Backdrop overlay dismisses dialog on click
 		<div
-			aria-labelledby="edit-profile-title"
-			className="fade-in fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 p-4 duration-150"
+			className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 p-4 duration-150 fade-in"
 			onClick={() => setIsOpen(false)}
-			onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}
-			role="dialog"
 		>
 			{/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Dialog content area needs stopPropagation */}
 			<div
+				aria-labelledby="edit-profile-title"
 				aria-modal="true"
-				className="zoom-in-95 fade-in w-full max-w-md animate-in rounded-xl border border-border bg-background p-6 shadow-lg duration-150"
+				className="w-full max-w-md animate-in rounded-xl border border-border bg-background p-6 shadow-lg duration-150 zoom-in-95 fade-in"
 				onClick={(e) => e.stopPropagation()}
 				onKeyDown={(e) => e.stopPropagation()}
+				role="dialog"
 			>
 				<div className="mb-6 flex items-center justify-between">
 					<h2
-						className="font-semibold text-foreground text-lg"
+						className="text-lg font-semibold text-foreground"
 						id="edit-profile-title"
 					>
 						Edit Profile
 					</h2>
 					<button
 						aria-label="Close dialog"
-						className="-m-2 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="-m-2 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 						onClick={() => setIsOpen(false)}
 						type="button"
 					>
@@ -186,7 +188,7 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 								label="Bio"
 							>
 								<textarea
-									className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
+									className="flex min-h-[80px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
 									id={field.name}
 									maxLength={280}
 									name={field.name}
@@ -195,7 +197,7 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 									placeholder="A short bio about yourself"
 									value={field.state.value}
 								/>
-								<p className="mt-1 flex justify-between text-muted-foreground text-xs">
+								<p className="mt-1 flex justify-between text-xs text-muted-foreground">
 									<span className="flex items-center gap-1">
 										<svg
 											aria-hidden="true"
@@ -243,11 +245,11 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 								label="Twitter"
 							>
 								<div className="flex">
-									<span className="flex h-9 items-center rounded-l-lg border border-input border-r-0 bg-muted px-3 text-muted-foreground text-sm">
+									<span className="flex h-9 items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
 										@
 									</span>
 									<Input
-										className="h-9 flex-1 rounded-r-lg rounded-l-none"
+										className="h-9 flex-1 rounded-l-none rounded-r-lg"
 										id={field.name}
 										name={field.name}
 										onBlur={field.handleBlur}
@@ -267,11 +269,11 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 								label="GitHub"
 							>
 								<div className="flex">
-									<span className="flex h-9 items-center rounded-l-lg border border-input border-r-0 bg-muted px-3 text-muted-foreground text-sm">
+									<span className="flex h-9 items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
 										@
 									</span>
 									<Input
-										className="h-9 flex-1 rounded-r-lg rounded-l-none"
+										className="h-9 flex-1 rounded-l-none rounded-r-lg"
 										id={field.name}
 										name={field.name}
 										onBlur={field.handleBlur}
@@ -291,7 +293,7 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 								label="Bookmark visibility"
 							>
 								<select
-									className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
+									className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 dark:bg-input/30"
 									id={field.name}
 									name={field.name}
 									onBlur={field.handleBlur}
@@ -348,12 +350,12 @@ interface FormFieldProps {
 function FormField({ label, error, children }: FormFieldProps) {
 	return (
 		<div className="space-y-1.5">
-			<Label className="font-normal text-muted-foreground text-xs">
+			<Label className="text-xs font-normal text-muted-foreground">
 				{label}
 			</Label>
 			{children}
 			{error && (
-				<p className="text-destructive text-xs" role="alert">
+				<p className="text-xs text-destructive" role="alert">
 					{error}
 				</p>
 			)}

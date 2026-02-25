@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import { index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+
 import { user } from "./auth";
 import { bookmarkTag } from "./tags";
 

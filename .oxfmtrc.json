@@ -1,0 +1,41 @@
+{
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"useTabs": true,
+	"tabWidth": 2,
+	"printWidth": 80,
+	"singleQuote": false,
+	"jsxSingleQuote": false,
+	"quoteProps": "as-needed",
+	"trailingComma": "es5",
+	"semi": true,
+	"arrowParens": "always",
+	"bracketSameLine": false,
+	"bracketSpacing": true,
+	"endOfLine": "lf",
+	"sortImports": {
+		"groups": [
+			"type-import",
+			["value-builtin", "value-external"],
+			"type-internal",
+			"value-internal",
+			["type-parent", "type-sibling", "type-index"],
+			["value-parent", "value-sibling", "value-index"],
+			"unknown"
+		],
+		"newlinesBetween": true
+	},
+	"sortTailwindcss": {
+		"stylesheet": "./apps/web/src/index.css",
+		"functions": ["clsx", "cva", "cn", "twMerge", "twJoin", "tv"]
+	},
+	"sortPackageJson": {
+		"sortScripts": false
+	},
+	"ignorePatterns": [
+		"**/routeTree.gen.ts",
+		"**/wrangler.jsonc",
+		"bts.jsonc",
+		"test-results/**",
+		"playwright-report/**"
+	]
+}

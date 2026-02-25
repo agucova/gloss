@@ -1,5 +1,6 @@
-import { useSearch } from "../hooks/use-search";
 import type { DashboardApiClient } from "../types";
+
+import { useSearch } from "../hooks/use-search";
 import { formatRelativeTime } from "../utils/relative-time";
 
 interface SearchResultsProps {
@@ -19,7 +20,7 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 
 	if (isLoading) {
 		return (
-			<div className="mt-12 text-center text-muted-foreground text-sm">
+			<div className="mt-12 text-center text-sm text-muted-foreground">
 				Searching...
 			</div>
 		);
@@ -27,7 +28,7 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 
 	if (error) {
 		return (
-			<div className="mt-12 text-center text-muted-foreground text-sm">
+			<div className="mt-12 text-center text-sm text-muted-foreground">
 				Unable to search
 			</div>
 		);
@@ -43,7 +44,7 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 
 	if (!hasResults) {
 		return (
-			<div className="mt-12 text-center text-muted-foreground text-sm">
+			<div className="mt-12 text-center text-sm text-muted-foreground">
 				No results found for "{query}"
 			</div>
 		);
@@ -53,7 +54,7 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 		<div className="mt-12 grid grid-cols-1 gap-12 lg:grid-cols-2">
 			{hasBookmarks && (
 				<section>
-					<h2 className="mb-4 font-medium text-muted-foreground text-sm">
+					<h2 className="mb-4 text-sm font-medium text-muted-foreground">
 						Bookmarks
 					</h2>
 					<div className="space-y-3">
@@ -65,15 +66,15 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 								rel="noopener noreferrer"
 								target="_blank"
 							>
-								<h3 className="font-medium text-foreground text-sm">
+								<h3 className="text-sm font-medium text-foreground">
 									{bookmark.title || bookmark.url}
 								</h3>
 								{bookmark.description && (
-									<p className="mt-1 line-clamp-2 text-muted-foreground text-xs">
+									<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
 										{bookmark.description}
 									</p>
 								)}
-								<span className="mt-2 block text-muted-foreground text-xs">
+								<span className="mt-2 block text-xs text-muted-foreground">
 									{formatRelativeTime(bookmark.createdAt)}
 								</span>
 							</a>
@@ -84,7 +85,7 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 
 			{hasHighlights && (
 				<section>
-					<h2 className="mb-4 font-medium text-muted-foreground text-sm">
+					<h2 className="mb-4 text-sm font-medium text-muted-foreground">
 						Highlights
 					</h2>
 					<div className="space-y-3">
@@ -96,15 +97,15 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 								rel="noopener noreferrer"
 								target="_blank"
 							>
-								<p className="text-foreground text-sm leading-relaxed">
+								<p className="text-sm leading-relaxed text-foreground">
 									{highlight.text}
 								</p>
 								{highlight.note && (
-									<p className="mt-2 text-muted-foreground text-xs italic">
+									<p className="mt-2 text-xs text-muted-foreground italic">
 										{highlight.note}
 									</p>
 								)}
-								<span className="mt-2 block text-muted-foreground text-xs">
+								<span className="mt-2 block text-xs text-muted-foreground">
 									{formatRelativeTime(highlight.createdAt)}
 								</span>
 							</a>

@@ -4,6 +4,7 @@
  */
 
 import search, { type Match } from "approx-string-match";
+
 import { normalizeText } from "./text";
 
 /**

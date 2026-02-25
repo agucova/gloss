@@ -1,29 +1,29 @@
 {
-  "name": "@gloss/dashboard",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    },
-    "./*": {
-      "default": "./src/*.ts"
-    }
-  },
-  "scripts": {},
-  "dependencies": {
-    "@tanstack/react-query": "^5.90.12",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.473.0",
-    "tailwind-merge": "^3.3.1"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {
-    "@gloss/config": "workspace:*",
-    "@types/react": "19.2.7",
-    "@types/react-dom": "19.2.3",
-    "typescript": "catalog:"
-  }
+	"name": "@gloss/dashboard",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {},
+	"dependencies": {
+		"@tanstack/react-query": "^5.90.12",
+		"clsx": "^2.1.1",
+		"lucide-react": "^0.473.0",
+		"tailwind-merge": "^3.3.1"
+	},
+	"devDependencies": {
+		"@gloss/config": "workspace:*",
+		"@types/react": "19.2.7",
+		"@types/react-dom": "19.2.3",
+		"typescript": "catalog:"
+	},
+	"peerDependencies": {
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	}
 }

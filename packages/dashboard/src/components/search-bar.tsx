@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+
 import { cn } from "../utils/cn";
 
 interface SearchBarProps {
@@ -31,7 +32,7 @@ export function SearchBar({
 		>
 			<Search className="size-4 shrink-0 text-muted-foreground/60" />
 			<input
-				className="h-full flex-1 bg-transparent text-foreground text-sm placeholder:text-muted-foreground/50 focus:outline-none"
+				className="h-full flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
 				onChange={(e) => onChange(e.target.value)}
 				placeholder={placeholder}
 				type="search"

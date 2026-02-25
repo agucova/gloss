@@ -1,8 +1,9 @@
-import { auth } from "@gloss/auth";
 import { db } from "@gloss/db";
 import { bookmark, highlight } from "@gloss/db/schema";
 import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { Elysia } from "elysia";
+
+import { deriveAuth } from "../lib/auth";
 import { getFriendIds } from "../lib/friends";
 import { CursorPaginationSchema } from "../models";
 
@@ -12,12 +13,7 @@ import { CursorPaginationSchema } from "../models";
  */
 export const feed = new Elysia({ prefix: "/feed" })
 	// Derive session for all feed routes
-	.derive(async ({ request }) => {
-		const session = await auth.api.getSession({
-			headers: request.headers,
-		});
-		return { session };
-	})
+	.derive(async ({ request }) => deriveAuth(request))
 
 	// Get friends' recent highlights (paginated)
 	.get(

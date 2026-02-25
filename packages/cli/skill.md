@@ -20,7 +20,9 @@ gloss auth set-key gloss_sk_your_key_here
 ## Commands
 
 ### Search
+
 Search across all your content:
+
 ```bash
 gloss search "machine learning"
 gloss search "react hooks" --type highlight --format json
@@ -29,18 +31,21 @@ gloss search "reading list" --tag to-read --sortBy created
 ```
 
 ### List Highlights
+
 ```bash
 gloss highlights
 gloss highlights --limit 50 --format markdown
 ```
 
 ### List Bookmarks
+
 ```bash
 gloss bookmarks
 gloss bookmarks --limit 100 --format csv
 ```
 
 ### List Tags
+
 ```bash
 gloss tags
 gloss tags --format json
@@ -49,6 +54,7 @@ gloss tags --format json
 ## Output Formats
 
 All commands support `--format` with these options:
+
 - `table` (default) - Human-readable table
 - `json` - JSON output for piping to other tools
 - `csv` - CSV for spreadsheets
@@ -70,13 +76,13 @@ Configure in Claude Desktop or other MCP clients:
 
 ```json
 {
-  "mcpServers": {
-    "gloss": {
-      "command": "npx",
-      "args": ["@gloss/cli", "mcp"],
-      "env": { "GLOSS_API_KEY": "gloss_sk_..." }
-    }
-  }
+	"mcpServers": {
+		"gloss": {
+			"command": "npx",
+			"args": ["@gloss/cli", "mcp"],
+			"env": { "GLOSS_API_KEY": "gloss_sk_..." }
+		}
+	}
 }
 ```
 

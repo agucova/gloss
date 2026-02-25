@@ -59,10 +59,10 @@ function ProfilePage() {
 	if (error || !profile) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6">
-				<h1 className="mb-2 font-medium text-foreground text-lg">
+				<h1 className="mb-2 text-lg font-medium text-foreground">
 					User not found
 				</h1>
-				<p className="text-muted-foreground text-sm">
+				<p className="text-sm text-muted-foreground">
 					The user @{username} doesn't exist.
 				</p>
 			</div>

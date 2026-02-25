@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+
 import { CuriusClient } from "./client";
 import {
 	CuriusAuthError,
@@ -17,7 +18,7 @@ describe("CuriusClient", () => {
 		options: { status?: number; headers?: Record<string, string> } = {}
 	) {
 		const { status = 200, headers = {} } = options;
-		fetchSpy.mockResolvedValue(
+		fetchSpy.mockResolvedValueOnce(
 			new Response(JSON.stringify(body), {
 				status,
 				headers: { "Content-Type": "application/json", ...headers },
@@ -30,7 +31,7 @@ describe("CuriusClient", () => {
 		body?: unknown,
 		headers?: Record<string, string>
 	) {
-		fetchSpy.mockResolvedValue(
+		fetchSpy.mockResolvedValueOnce(
 			new Response(body ? JSON.stringify(body) : null, {
 				status,
 				headers: headers ?? {},
@@ -136,42 +137,113 @@ describe("CuriusClient", () => {
 	// Link endpoints
 	// =========================================================================
 
-	describe("addLink", () => {
-		test("creates a link successfully", async () => {
-			const mockLink = {
-				id: "link-123",
-				url: "https://example.com",
-				title: "Example Site",
-				highlights: [],
-				nHighlights: 0,
-			};
-			mockFetchResponse(mockLink);
+	describe("getUserLinks", () => {
+		test("fetches user ID then requests /api/users/:id/links", async () => {
+			// First call: getUser to get the user ID
+			mockFetchResponse({
+				user: {
+					id: "42",
+					firstName: "Test",
+					lastName: "User",
+					userLink: "test",
+				},
+			});
+			// Second call: getUserLinks
+			mockFetchResponse({
+				userSaved: [
+					{
+						id: "link-1",
+						link: "https://example.com",
+						highlights: [],
+						nHighlights: 0,
+					},
+				],
+			});
 
-			const link = await client.addLink({ url: "https://example.com" });
+			const links = await client.getUserLinks();
 
-			expect(link.id).toBe("link-123");
-			expect(link.url).toBe("https://example.com");
+			expect(links).toHaveLength(1);
+			expect(links[0]?.id).toBe("link-1");
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"https://curius.app/api/users/42/links",
+				expect.anything()
+			);
 		});
 
-		test("sends correct request body", async () => {
-			const mockLink = {
-				id: "link-123",
+		test("caches user ID for subsequent calls", async () => {
+			// First call gets user
+			mockFetchResponse({
+				user: {
+					id: "42",
+					firstName: "Test",
+					lastName: "User",
+					userLink: "test",
+				},
+			});
+			mockFetchResponse({ userSaved: [] });
+			await client.getUserLinks();
+
+			// Second call should NOT fetch user again
+			mockFetchResponse({ userSaved: [] });
+			await client.getUserLinks();
+
+			// getUser called once, getUserLinks called twice = 3 total
+			expect(fetchSpy).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe("addLink", () => {
+		test("creates a link successfully", async () => {
+			const mockResponse = {
+				link: {
+					id: "link-123",
+					link: "https://example.com",
+					title: "Example Site",
+					snippet: "Some text",
+					highlights: [],
+					nHighlights: 0,
+				},
+			};
+			mockFetchResponse(mockResponse);
+
+			const link = await client.addLink({
+				url: "https://example.com",
+				title: "Example Site",
+				snippet: "Some text",
+			});
+
+			expect(link.id).toBe("link-123");
+		});
+
+		test("sends correct nested request body", async () => {
+			mockFetchResponse({
+				link: {
+					id: "link-123",
+					link: "https://example.com",
+					title: "My Title",
+					snippet: "Text",
+					highlights: [],
+					nHighlights: 0,
+				},
+			});
+
+			await client.addLink({
 				url: "https://example.com",
 				title: "My Title",
-				highlights: [],
-				nHighlights: 0,
-			};
-			mockFetchResponse(mockLink);
-
-			await client.addLink({ url: "https://example.com", title: "My Title" });
+				snippet: "Text",
+			});
 
 			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links",
 				expect.objectContaining({
 					method: "POST",
 					body: JSON.stringify({
-						url: "https://example.com",
-						title: "My Title",
+						link: {
+							link: "https://example.com",
+							title: "My Title",
+							snippet: "Text",
+							classify: false,
+						},
 					}),
 				})
 			);
@@ -194,7 +266,15 @@ describe("CuriusClient", () => {
 			expect(link?.id).toBe("link-123");
 		});
 
-		test("returns null when not found", async () => {
+		test("returns null when API returns empty object", async () => {
+			mockFetchResponse({});
+
+			const link = await client.getLinkByUrl("https://notfound.com");
+
+			expect(link).toBeNull();
+		});
+
+		test("returns null when API returns 404", async () => {
 			mockFetchError(404);
 
 			const link = await client.getLinkByUrl("https://notfound.com");
@@ -234,26 +314,18 @@ describe("CuriusClient", () => {
 
 			const info = await client.getNetworkInfo("https://example.com");
 
-			expect(info.users).toHaveLength(1);
-			expect(info.users[0]?.firstName).toBe("Alice");
-			expect(info.highlights).toHaveLength(1);
+			expect(info).not.toBeNull();
+			expect(info!.users).toHaveLength(1);
+			expect(info!.users[0]?.firstName).toBe("Alice");
+			expect(info!.highlights).toHaveLength(1);
 		});
 
-		test("returns empty users/highlights when no network info", async () => {
-			const mockResponse = {
-				networkInfo: {
-					id: 456,
-					link: "https://example.com",
-					users: [],
-					highlights: [],
-				},
-			};
-			mockFetchResponse(mockResponse);
+		test("returns null when API returns empty object", async () => {
+			mockFetchResponse({});
 
 			const info = await client.getNetworkInfo("https://example.com");
 
-			expect(info.users).toHaveLength(0);
-			expect(info.highlights).toHaveLength(0);
+			expect(info).toBeNull();
 		});
 	});
 
@@ -275,12 +347,8 @@ describe("CuriusClient", () => {
 	// =========================================================================
 
 	describe("addHighlight", () => {
-		test("adds highlight with position data", async () => {
-			const mockHighlight = {
-				id: "h-123",
-				highlight: "Selected text",
-			};
-			mockFetchResponse(mockHighlight);
+		test("sends highlight with flat {highlightText, rawHighlight, leftContext, rightContext}", async () => {
+			mockFetchResponse({ success: true });
 
 			const position = {
 				rawHighlight: "Selected text",
@@ -288,14 +356,20 @@ describe("CuriusClient", () => {
 				rightContext: " after",
 			};
 
-			const highlight = await client.addHighlight("link-123", position);
+			await client.addHighlight("link-123", position);
 
-			expect(highlight.id).toBe("h-123");
 			expect(fetchSpy).toHaveBeenCalledWith(
 				"https://curius.app/api/links/link-123/highlights",
 				expect.objectContaining({
 					method: "POST",
-					body: expect.stringContaining("Selected text"),
+					body: JSON.stringify({
+						highlight: {
+							highlightText: "Selected text",
+							rawHighlight: "Selected text",
+							leftContext: "before ",
+							rightContext: " after",
+						},
+					}),
 				})
 			);
 		});
@@ -364,7 +438,7 @@ describe("CuriusClient", () => {
 			mockFetchError(400, { error: "Custom error message" });
 
 			try {
-				await client.addLink({ url: "invalid" });
+				await client.addLink({ url: "invalid", title: "t", snippet: "s" });
 				expect.unreachable("Should have thrown");
 			} catch (error) {
 				expect(error).toBeInstanceOf(CuriusError);
@@ -393,8 +467,16 @@ describe("CuriusClient", () => {
 			expect(isValid).toBe(true);
 		});
 
-		test("returns false for invalid token", async () => {
+		test("returns false for invalid token (401)", async () => {
 			mockFetchError(401);
+
+			const isValid = await client.verifyToken();
+
+			expect(isValid).toBe(false);
+		});
+
+		test("returns false for malformed token (400 with token error)", async () => {
+			mockFetchError(400, { error: "Token error: jwt malformed" });
 
 			const isValid = await client.verifyToken();
 
