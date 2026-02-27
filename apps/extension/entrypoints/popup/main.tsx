@@ -1,14 +1,9 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
+import { render } from "solid-js/web";
 
-import App from "./app.tsx";
+import App from "./app";
 import "./style.css";
 
 const rootElement = document.getElementById("root");
 if (rootElement) {
-	ReactDOM.createRoot(rootElement).render(
-		<React.StrictMode>
-			<App />
-		</React.StrictMode>
-	);
+	render(() => <App />, rootElement);
 }

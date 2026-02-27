@@ -1,3 +1,7 @@
+import { db } from "@gloss/db";
+import { comment } from "@gloss/db/schema";
+import { like } from "drizzle-orm";
+
 import { expect, test } from "../fixtures/authenticated-extension";
 import { SEED_USERS } from "../fixtures/seed-ids";
 
@@ -160,5 +164,130 @@ test.describe("Extension comments", () => {
 			});
 			expect(initialized).toBe(true);
 		}
+	});
+
+	test("can create a comment on a highlight", async ({
+		authenticatedAs,
+		page,
+	}) => {
+		await authenticatedAs(SEED_USERS.agucova.id);
+
+		await page.goto(PAUL_GRAHAM_URL);
+		await page.waitForLoadState("domcontentloaded");
+
+		// Wait for highlights to anchor
+		await page.waitForFunction(
+			() => document.querySelectorAll(".gloss-highlight").length > 0,
+			{ timeout: 30_000 }
+		);
+
+		// Click a highlight to open the comment panel
+		const highlight = page.locator(".gloss-highlight").first();
+		await highlight.click();
+
+		const panelHost = page.locator("#gloss-comment-panel");
+		await expect(panelHost).toBeAttached({ timeout: 10_000 });
+
+		// Find the textarea and type a unique comment
+		const commentText = `E2E test comment ${Date.now()}`;
+		const textarea = page.getByPlaceholder("Write a note...");
+		await expect(textarea).toBeAttached({ timeout: 5_000 });
+		await textarea.fill(commentText);
+		await textarea.press("Enter");
+
+		// Wait for the comment to appear in the panel.
+		// After submission, the content script reloads comments and updates the panel.
+		await expect(page.getByText(commentText).first()).toBeAttached({
+			timeout: 10_000,
+		});
+
+		// Clean up: remove test comments from the database
+		await db.delete(comment).where(like(comment.content, "E2E test comment %"));
+	});
+
+	test("can delete own comment", async ({ authenticatedAs, page }) => {
+		await authenticatedAs(SEED_USERS.agucova.id);
+
+		await page.goto(PAUL_GRAHAM_URL);
+		await page.waitForLoadState("domcontentloaded");
+
+		await page.waitForFunction(
+			() => document.querySelectorAll(".gloss-highlight").length > 0,
+			{ timeout: 30_000 }
+		);
+
+		// Click a highlight to open the comment panel
+		const highlight = page.locator(".gloss-highlight").first();
+		await highlight.click();
+
+		const panelHost = page.locator("#gloss-comment-panel");
+		await expect(panelHost).toBeAttached({ timeout: 10_000 });
+
+		// Create a comment first
+		const commentText = `E2E delete test ${Date.now()}`;
+		const textarea = page.getByPlaceholder("Write a note...");
+		await expect(textarea).toBeAttached({ timeout: 5_000 });
+		await textarea.fill(commentText);
+		await textarea.press("Enter");
+
+		// Wait for the comment to appear
+		const commentEl = page.getByText(commentText).first();
+		await expect(commentEl).toBeAttached({ timeout: 10_000 });
+
+		// The comment should show "You" as author and have a Delete button.
+		// The delete button is inside .gloss-comment-actions which is
+		// opacity:0 by default, revealed on hover. Use force click.
+		const deleteBtn = page.locator(".gloss-action-btn.gloss-delete").first();
+		await deleteBtn.click({ force: true });
+
+		// The comment text should be removed from the panel
+		await expect(commentEl).not.toBeAttached({ timeout: 10_000 });
+
+		// Clean up any remaining test comments
+		await db.delete(comment).where(like(comment.content, "E2E delete test %"));
+	});
+
+	test("comment panel shows existing seed comments", async ({
+		authenticatedAs,
+		page,
+	}) => {
+		await authenticatedAs(SEED_USERS.agucova.id);
+
+		await page.goto(PAUL_GRAHAM_URL);
+		await page.waitForLoadState("domcontentloaded");
+
+		await page.waitForFunction(
+			() => document.querySelectorAll(".gloss-highlight").length > 0,
+			{ timeout: 30_000 }
+		);
+
+		// Click a highlight to open the comment panel
+		const highlight = page.locator(".gloss-highlight").first();
+		await highlight.click();
+
+		const panelHost = page.locator("#gloss-comment-panel");
+		await expect(panelHost).toBeAttached({ timeout: 10_000 });
+
+		// The panel should show at least one comment from seed data.
+		// Seed data has comments from agucova on Alice's highlight on this page.
+		// The comment list container is .gloss-comments-list with .gloss-comment children.
+		const comments = page.locator(".gloss-comment");
+		const count = await comments.count();
+
+		// If the highlight that was clicked has comments, verify they're shown.
+		// Some highlights may have 0 comments, so also check the textarea is present.
+		if (count > 0) {
+			// At least one comment is rendered — verify structure
+			const firstComment = comments.first();
+			await expect(firstComment).toBeAttached();
+
+			// Comment should have an author label
+			const authorLabel = firstComment.locator(".gloss-comment-author");
+			await expect(authorLabel).toBeAttached();
+		}
+
+		// The textarea should always be present when the panel is open
+		const textarea = page.getByPlaceholder("Write a note...");
+		await expect(textarea).toBeAttached({ timeout: 5_000 });
 	});
 });

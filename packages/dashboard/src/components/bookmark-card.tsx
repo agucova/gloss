@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { Bookmark } from "lucide-react";
 
 import type { Bookmark as BookmarkType } from "../types";

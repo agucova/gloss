@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { Search } from "lucide-react";
 
 import { cn } from "../utils/cn";

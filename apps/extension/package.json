@@ -20,22 +20,23 @@
 		"@gloss/anchoring": "workspace:*",
 		"@gloss/dashboard": "workspace:*",
 		"@tanstack/react-query": "^5.90.12",
-		"@webcomponents/custom-elements": "^1.6.0",
 		"clsx": "^2.1.1",
-		"lit": "^3.3.2",
 		"lucide-react": "^0.473.0",
 		"react": "^19.2.3",
 		"react-dom": "^19.2.3",
+		"solid-js": "^1.9.11",
 		"tailwind-merge": "^3.3.1"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.0.15",
+		"@types/chrome": "^0.0.304",
 		"@types/react": "^19.2.7",
 		"@types/react-dom": "^19.2.3",
-		"@wxt-dev/module-react": "^1.1.5",
+		"@vitejs/plugin-react": "^4.5.2",
 		"server": "workspace:*",
 		"tailwindcss": "^4.0.15",
 		"typescript": "^5.9.3",
+		"vite-plugin-solid": "^2.11.10",
 		"wxt": "^0.20.6"
 	}
 }

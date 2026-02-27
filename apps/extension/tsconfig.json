@@ -2,8 +2,8 @@
 	"extends": "./.wxt/tsconfig.json",
 	"compilerOptions": {
 		"allowImportingTsExtensions": true,
-		"jsx": "react-jsx",
-		"experimentalDecorators": true,
-		"useDefineForClassFields": false
-	}
+		"jsx": "preserve",
+		"jsxImportSource": "solid-js"
+	},
+	"exclude": [".output", "node_modules"]
 }

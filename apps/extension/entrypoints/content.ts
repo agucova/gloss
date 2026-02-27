@@ -1,34 +1,42 @@
-// Polyfill customElements for Chrome content scripts (isolated world has customElements === null)
-// See: https://issues.chromium.org/issues/41118431
-import "@webcomponents/custom-elements";
 import { type Highlight, HighlightManager } from "@gloss/anchoring";
+import { render } from "solid-js/web";
 
-// Import Lit components (registers custom elements as side effect)
-import "../content-ui/annotation-item";
-import "../content-ui/comment-indicator";
-import "../content-ui/comment-panel";
-import "../content-ui/margin-annotations";
-import "../content-ui/selection-popover";
-import type { GlossCommentIndicator } from "../content-ui/comment-indicator";
-import type { GlossCommentPanel } from "../content-ui/comment-panel";
-import type { GlossSelectionPopover } from "../content-ui/selection-popover";
-
+// Import content CSS as inline string for shadow DOM injection
+import contentCss from "../content-ui/content.css?inline";
 import {
 	isDomainDisabled,
 	loadIndicatorCorner,
 	saveIndicatorCorner,
-} from "../content-ui/comment-indicator";
-import { ensureFontLoaded, generateId } from "../content-ui/gloss-element";
+} from "../content-ui/domain-settings";
+import { ensureFontLoaded } from "../content-ui/font";
+import {
+	type GlossAppApi,
+	type GlossAppCallbacks,
+	GlossApp,
+} from "../content-ui/gloss-app";
 import {
 	captureSelection,
 	clearSavedSelection,
 	getSavedSelector,
 	getSavedText,
 } from "../content-ui/selection-popover";
-import { glossState } from "../content-ui/store";
+import {
+	annotationsVisible,
+	commentSummary,
+	currentUserId,
+	isAuthenticated,
+	setAnnotationsVisible,
+	setCommentSummary,
+	setCurrentUserId,
+	setHighlightCommentCounts,
+	setIsAuthenticated,
+	setManager,
+	setUserSettings,
+	userSettings,
+} from "../content-ui/store";
+import { generateId } from "../content-ui/utils";
 import { OWN_HIGHLIGHT_COLOR, userHighlightColor } from "../utils/colors";
 import {
-	type PageCommentSummary,
 	type ServerComment,
 	type ServerHighlight,
 	isErrorResponse,
@@ -57,11 +65,11 @@ async function saveAnnotationToggleState(visible: boolean): Promise<void> {
 	}
 }
 
-async function loadUserSettings(): Promise<void> {
+async function loadUserSettingsFromServer(): Promise<void> {
 	try {
 		const response = await sendMessage({ type: "GET_USER_SETTINGS" });
 		if (!isErrorResponse(response)) {
-			glossState.userSettings.value = response.settings;
+			setUserSettings(response.settings);
 			console.log("[Gloss] User settings loaded:", response.settings);
 		}
 	} catch (error) {
@@ -72,16 +80,16 @@ async function loadUserSettings(): Promise<void> {
 async function refreshAuthState(): Promise<void> {
 	try {
 		const response = await sendMessage({ type: "GET_AUTH_STATUS" });
-		glossState.isAuthenticated.value = response.authenticated;
-		glossState.currentUserId.value = response.user?.id ?? null;
+		setIsAuthenticated(response.authenticated);
+		setCurrentUserId(response.user?.id ?? null);
 		console.log("[Gloss] Auth state:", {
-			isAuthenticated: glossState.isAuthenticated.value,
-			currentUserId: glossState.currentUserId.value,
+			isAuthenticated: isAuthenticated(),
+			currentUserId: currentUserId(),
 		});
 	} catch (error) {
 		console.error("[Gloss] Failed to get auth status:", error);
-		glossState.isAuthenticated.value = false;
-		glossState.currentUserId.value = null;
+		setIsAuthenticated(false);
+		setCurrentUserId(null);
 	}
 }
 
@@ -107,6 +115,7 @@ export default defineContentScript({
 				import("../utils/metadata").then(({ extractPageMetadata }) => {
 					const metadata = extractPageMetadata();
 					sendResponse({ metadata });
+					return undefined;
 				});
 				return true;
 			}
@@ -114,22 +123,23 @@ export default defineContentScript({
 
 		// Fetch initial auth state and user settings
 		await refreshAuthState();
-		if (glossState.isAuthenticated.value) {
-			await loadUserSettings();
+		if (isAuthenticated()) {
+			await loadUserSettingsFromServer();
 		}
 
+		// =====================================================================
 		// Create highlight manager
+		// =====================================================================
+
+		// We need a reference to the app API, which is set after render
+		let appApi: GlossAppApi | null = null;
+
 		const manager = new HighlightManager({
 			onEvent: (event) => {
 				switch (event.type) {
 					case "click": {
 						const element = event.event.target as HTMLElement;
-						handleHighlightClick(
-							manager,
-							commentPanel,
-							event.highlightId,
-							element
-						);
+						handleHighlightClick(manager, event.highlightId, element);
 						break;
 					}
 					case "anchored": {
@@ -148,203 +158,181 @@ export default defineContentScript({
 			},
 		});
 
-		glossState.manager.value = manager;
+		setManager(manager);
 		manager.observe();
 
 		// =====================================================================
-		// Create Lit components (once, attached to DOM for lifetime of script)
+		// Create shadow DOM host and render Solid app
 		// =====================================================================
 
-		const selectionPopover = document.createElement(
-			"gloss-selection-popover"
-		) as GlossSelectionPopover;
-		selectionPopover.isAuthenticated = glossState.isAuthenticated.value;
+		const host = document.createElement("div");
+		host.id = "gloss-root";
+		host.style.cssText =
+			"all: initial; position: fixed; top: 0; left: 0; z-index: 2147483645; pointer-events: none;";
+		const shadow = host.attachShadow({ mode: "open" });
 
-		const commentIndicator = document.createElement(
-			"gloss-comment-indicator"
-		) as GlossCommentIndicator;
+		// Inject styles
+		const style = document.createElement("style");
+		style.textContent = contentCss;
+		shadow.appendChild(style);
 
-		// Margin annotations reads from glossState signals automatically
-		const marginAnnotations = document.createElement(
-			"gloss-margin-annotations"
-		);
+		// Container for Solid to render into
+		const container = document.createElement("div");
+		container.id = "gloss-container";
+		shadow.appendChild(container);
 
-		const commentPanel = document.createElement(
-			"gloss-comment-panel"
-		) as GlossCommentPanel;
+		document.body.appendChild(host);
 
-		document.body.append(
-			selectionPopover,
-			commentIndicator,
-			marginAnnotations,
-			commentPanel
-		);
-
-		// =====================================================================
-		// Wire up component events
-		// =====================================================================
-
-		// Selection popover events
-		selectionPopover.addEventListener("gloss-highlight", async () => {
-			await createHighlight(manager);
-		});
-		selectionPopover.addEventListener("gloss-sign-in", () => {
-			browser.runtime.sendMessage({
-				type: "OPEN_TAB",
-				url: `${import.meta.env.VITE_WEB_URL || "http://localhost:3001"}/login`,
-			});
-		});
-
-		// Comment indicator events
-		commentIndicator.addEventListener("gloss-toggle-annotations", async () => {
-			glossState.annotationsVisible.value =
-				!glossState.annotationsVisible.value;
-			await saveAnnotationToggleState(glossState.annotationsVisible.value);
-			commentIndicator.annotationsVisible = glossState.annotationsVisible.value;
-		});
-		commentIndicator.addEventListener("gloss-corner-change", (e: Event) => {
-			const detail = (e as CustomEvent).detail;
-			saveIndicatorCorner(detail.corner);
-		});
-		commentIndicator.addEventListener("gloss-disable-domain", () => {
-			commentPanel.visible = false;
-			glossState.commentSummary.value = null;
-			glossState.annotationsVisible.value = false;
-			glossState.highlightCommentCounts.value = new Map();
-			manager.clear();
-		});
-
-		// Margin annotation click → open comment panel
-		marginAnnotations.addEventListener("gloss-annotation-click", (e: Event) => {
-			const detail = (e as CustomEvent).detail;
-			handleHighlightClick(
-				manager,
-				commentPanel,
-				detail.highlightId,
-				detail.element
-			);
-		});
-
-		// Comment panel events
-		commentPanel.addEventListener("gloss-create-comment", async (e: Event) => {
-			const detail = (e as CustomEvent).detail;
-			const serverId = commentPanel.dataset.serverId;
-			if (!serverId) return;
-
-			try {
-				const response = await sendMessage({
-					type: "CREATE_COMMENT",
-					highlightId: serverId,
-					content: detail.content,
-					mentions: detail.mentions,
-					parentId: detail.parentId,
+		// Define callbacks
+		const callbacks: GlossAppCallbacks = {
+			onHighlight: async () => {
+				await createHighlight(manager);
+			},
+			onSignIn: () => {
+				browser.runtime.sendMessage({
+					type: "OPEN_TAB",
+					url: `${import.meta.env.VITE_WEB_URL || "http://localhost:3001"}/login`,
 				});
-				if (!isErrorResponse(response)) {
-					console.log("[Gloss] Comment created:", response.comment.id);
-					// Reload comments for this highlight
-					const commentsResp = await sendMessage({
-						type: "LOAD_COMMENTS",
-						highlightId: serverId,
-					});
-					if (!isErrorResponse(commentsResp)) {
-						commentPanel.comments = commentsResp.comments;
-					}
+			},
+			onToggleAnnotations: async () => {
+				setAnnotationsVisible(!annotationsVisible());
+				await saveAnnotationToggleState(annotationsVisible());
+			},
+			onCornerChange: (corner) => {
+				saveIndicatorCorner(corner);
+			},
+			onDisableDomain: () => {
+				appApi?.hidePanel();
+				setCommentSummary(null);
+				setAnnotationsVisible(false);
+				setHighlightCommentCounts(new Map());
+				manager.clear();
+			},
+			onAnnotationClick: (highlightId, element) => {
+				if (element) {
+					handleHighlightClick(manager, highlightId, element);
 				}
-			} catch (error) {
-				console.error("[Gloss] Error creating comment:", error);
-			}
-		});
+			},
+			onCreateComment: async (content, mentions, parentId) => {
+				const serverId = appApi?.panelServerId;
+				if (!serverId) return;
 
-		commentPanel.addEventListener("gloss-delete-comment", async (e: Event) => {
-			const detail = (e as CustomEvent).detail;
-			try {
-				const response = await sendMessage({
-					type: "DELETE_COMMENT",
-					id: detail.commentId,
-				});
-				if (!isErrorResponse(response)) {
-					console.log("[Gloss] Comment deleted:", detail.commentId);
-					// Re-fetch comment summary — margin annotations auto-update via signal
-					const highlightIds =
-						glossState.commentSummary.value?.highlightComments.map(
-							(hc) => hc.highlightId
-						) ?? [];
-					if (highlightIds.length > 0) {
-						await refreshCommentSummary(highlightIds);
-					}
-					// Also reload comments in the panel
-					const serverId = commentPanel.dataset.serverId;
-					if (serverId) {
+				try {
+					const response = await sendMessage({
+						type: "CREATE_COMMENT",
+						highlightId: serverId,
+						content,
+						mentions,
+						parentId,
+					});
+					if (!isErrorResponse(response)) {
+						console.log("[Gloss] Comment created:", response.comment.id);
 						const commentsResp = await sendMessage({
 							type: "LOAD_COMMENTS",
 							highlightId: serverId,
 						});
 						if (!isErrorResponse(commentsResp)) {
-							commentPanel.comments = commentsResp.comments;
+							appApi?.setPanelComments(commentsResp.comments);
 						}
 					}
+				} catch (error) {
+					console.error("[Gloss] Error creating comment:", error);
 				}
-			} catch (error) {
-				console.error("[Gloss] Error deleting comment:", error);
-			}
-		});
-
-		commentPanel.addEventListener("gloss-delete-highlight", async () => {
-			const highlightId = commentPanel.dataset.highlightId;
-			const serverId = commentPanel.dataset.serverId;
-			if (!(highlightId && serverId)) return;
-
-			try {
-				manager.remove(highlightId);
-				const response = await sendMessage({
-					type: "DELETE_HIGHLIGHT",
-					id: serverId,
-				});
-				if (isErrorResponse(response)) {
-					console.error("[Gloss] Failed to delete highlight:", response.error);
-				} else {
-					console.log("[Gloss] Highlight deleted");
-					// Refresh summary since a highlight was removed
-					const highlightIds =
-						glossState.commentSummary.value?.highlightComments
-							.map((hc) => hc.highlightId)
-							.filter((id) => id !== serverId) ?? [];
-					if (highlightIds.length > 0) {
-						await refreshCommentSummary(highlightIds);
-					} else {
-						glossState.commentSummary.value = null;
+			},
+			onDeleteComment: async (commentId) => {
+				try {
+					const response = await sendMessage({
+						type: "DELETE_COMMENT",
+						id: commentId,
+					});
+					if (!isErrorResponse(response)) {
+						console.log("[Gloss] Comment deleted:", commentId);
+						const highlightIds =
+							commentSummary()?.highlightComments.map((hc) => hc.highlightId) ??
+							[];
+						if (highlightIds.length > 0) {
+							await refreshCommentSummary(highlightIds);
+						}
+						const serverId = appApi?.panelServerId;
+						if (serverId) {
+							const commentsResp = await sendMessage({
+								type: "LOAD_COMMENTS",
+								highlightId: serverId,
+							});
+							if (!isErrorResponse(commentsResp)) {
+								appApi?.setPanelComments(commentsResp.comments);
+							}
+						}
 					}
+				} catch (error) {
+					console.error("[Gloss] Error deleting comment:", error);
 				}
-			} catch (error) {
-				console.error("[Gloss] Error deleting highlight:", error);
-			}
-		});
+			},
+			onDeleteHighlight: async () => {
+				const highlightId = appApi?.panelHighlightId;
+				const serverId = appApi?.panelServerId;
+				if (!(highlightId && serverId)) return;
 
-		commentPanel.addEventListener("gloss-search-friends", async (e: Event) => {
-			const detail = (e as CustomEvent).detail;
-			try {
-				const response = await sendMessage({
-					type: "SEARCH_FRIENDS",
-					query: detail.query,
-				});
-				if (!isErrorResponse(response)) {
-					commentPanel.setMentionResults(response.friends);
+				try {
+					manager.remove(highlightId);
+					const response = await sendMessage({
+						type: "DELETE_HIGHLIGHT",
+						id: serverId,
+					});
+					if (isErrorResponse(response)) {
+						console.error(
+							"[Gloss] Failed to delete highlight:",
+							response.error
+						);
+					} else {
+						console.log("[Gloss] Highlight deleted");
+						const highlightIds =
+							commentSummary()
+								?.highlightComments.map((hc) => hc.highlightId)
+								.filter((id) => id !== serverId) ?? [];
+						if (highlightIds.length > 0) {
+							await refreshCommentSummary(highlightIds);
+						} else {
+							setCommentSummary(null);
+						}
+					}
+				} catch (error) {
+					console.error("[Gloss] Error deleting highlight:", error);
 				}
-			} catch (error) {
-				console.error("[Gloss] Error searching friends:", error);
-			}
-		});
+			},
+			onSearchFriends: async (query) => {
+				try {
+					const response = await sendMessage({
+						type: "SEARCH_FRIENDS",
+						query,
+					});
+					if (!isErrorResponse(response)) {
+						appApi?.setMentionResults(response.friends);
+					}
+				} catch (error) {
+					console.error("[Gloss] Error searching friends:", error);
+				}
+			},
+			onPanelClosed: async () => {
+				const highlightIds =
+					commentSummary()?.highlightComments.map((hc) => hc.highlightId) ?? [];
+				if (highlightIds.length > 0) {
+					await refreshCommentSummary(highlightIds);
+				}
+			},
+		};
 
-		commentPanel.addEventListener("gloss-panel-closed", async () => {
-			// Re-fetch comment summary when panel closes (catches all mutations)
-			const highlightIds =
-				glossState.commentSummary.value?.highlightComments.map(
-					(hc) => hc.highlightId
-				) ?? [];
-			if (highlightIds.length > 0) {
-				await refreshCommentSummary(highlightIds);
-			}
-		});
+		// Render the Solid app
+		const dispose = render(
+			() =>
+				GlossApp({
+					callbacks,
+					apiRef: (api) => {
+						appApi = api;
+					},
+				}),
+			container
+		);
 
 		// =====================================================================
 		// Selection handling
@@ -352,7 +340,7 @@ export default defineContentScript({
 
 		const handleMouseUp = (e: MouseEvent) => {
 			setTimeout(() => {
-				handleSelection(e, selectionPopover);
+				handleSelection(e);
 			}, 10);
 		};
 		document.addEventListener("mouseup", handleMouseUp);
@@ -361,11 +349,12 @@ export default defineContentScript({
 		// Load initial data
 		// =====================================================================
 
-		loadHighlights(manager).then(async (highlightIds) => {
+		void loadHighlights(manager).then(async (highlightIds) => {
 			console.log("[Gloss] Highlights loaded");
 			if (highlightIds.length > 0) {
-				await loadCommentSummary(manager, commentIndicator, highlightIds);
+				await loadCommentSummary(manager, highlightIds, appApi);
 			}
+			return undefined;
 		});
 
 		// =====================================================================
@@ -378,16 +367,17 @@ export default defineContentScript({
 				lastUrl = location.href;
 				console.log("[Gloss] URL changed, reloading highlights");
 				manager.clear();
-				selectionPopover.hide();
-				commentPanel.visible = false;
-				glossState.commentSummary.value = null;
-				glossState.annotationsVisible.value = false;
-				glossState.highlightCommentCounts.value = new Map();
+				appApi?.hidePopover();
+				appApi?.hidePanel();
+				setCommentSummary(null);
+				setAnnotationsVisible(false);
+				setHighlightCommentCounts(new Map());
 
-				loadHighlights(manager).then(async (highlightIds) => {
+				void loadHighlights(manager).then(async (highlightIds) => {
 					if (highlightIds.length > 0) {
-						await loadCommentSummary(manager, commentIndicator, highlightIds);
+						await loadCommentSummary(manager, highlightIds, appApi);
 					}
+					return undefined;
 				});
 			}
 		}, 500);
@@ -400,25 +390,102 @@ export default defineContentScript({
 			console.log("[Gloss] Content script invalidated, cleaning up");
 			clearInterval(navigationCheck);
 			document.removeEventListener("mouseup", handleMouseUp);
-			selectionPopover.remove();
-			commentIndicator.remove();
-			marginAnnotations.remove();
-			commentPanel.remove();
-			glossState.manager.value = null;
-			glossState.commentSummary.value = null;
-			glossState.highlightCommentCounts.value = new Map();
+			dispose();
+			host.remove();
+			setManager(null);
+			setCommentSummary(null);
+			setHighlightCommentCounts(new Map());
 			manager.destroy();
 		});
+
+		// =====================================================================
+		// Helper functions (scoped to have access to appApi)
+		// =====================================================================
+
+		function handleSelection(e: MouseEvent): void {
+			const selection = window.getSelection();
+
+			if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+				appApi?.hidePopover();
+				return;
+			}
+
+			const target = e.target as Element;
+			if (
+				target.closest(
+					'input, textarea, [contenteditable="true"], .gloss-highlight'
+				)
+			) {
+				appApi?.hidePopover();
+				return;
+			}
+
+			// Ignore if inside our shadow DOM host
+			if (target.closest("#gloss-root")) {
+				return;
+			}
+
+			if (!captureSelection()) return;
+
+			const range = selection.getRangeAt(0);
+			const rect = range.getBoundingClientRect();
+
+			appApi?.showPopover(rect);
+		}
+
+		async function handleHighlightClick(
+			mgr: HighlightManager,
+			highlightId: string,
+			element: HTMLElement
+		): Promise<void> {
+			const active = mgr.get(highlightId);
+			if (!active) {
+				console.error("[Gloss] Highlight not found:", highlightId);
+				return;
+			}
+
+			const highlightData = active.highlight;
+			const userId = currentUserId();
+			const isOwner =
+				(highlightData.metadata?.userId as string | undefined) === userId;
+			const serverId =
+				(highlightData.metadata?.serverId as string | undefined) ?? highlightId;
+
+			let comments: ServerComment[] = [];
+			try {
+				const response = await Promise.race([
+					sendMessage({ type: "LOAD_COMMENTS", highlightId: serverId }),
+					new Promise<{ error: string }>((_, reject) =>
+						setTimeout(
+							() => reject(new Error("Timeout loading comments")),
+							5000
+						)
+					),
+				]);
+				if (!isErrorResponse(response)) {
+					comments = response.comments;
+				}
+			} catch (error) {
+				console.error("[Gloss] Error loading comments:", error);
+			}
+
+			appApi?.showPanel({
+				highlight: active,
+				element,
+				isOwner,
+				currentUserId: userId ?? "",
+				comments,
+				serverId,
+				highlightId,
+			});
+		}
 	},
 });
 
 // =============================================================================
-// Helper functions
+// Standalone helper functions
 // =============================================================================
 
-/**
- * Re-fetch comment summary and update the signal (margin annotations auto-update).
- */
 async function refreshCommentSummary(highlightIds: string[]): Promise<void> {
 	try {
 		const response = await sendMessage({
@@ -426,25 +493,22 @@ async function refreshCommentSummary(highlightIds: string[]): Promise<void> {
 			highlightIds,
 		});
 		if (!isErrorResponse(response)) {
-			glossState.commentSummary.value = response;
+			setCommentSummary(response);
 			const counts = new Map<string, number>();
 			for (const hc of response.highlightComments) {
 				counts.set(hc.highlightId, hc.comments.length);
 			}
-			glossState.highlightCommentCounts.value = counts;
+			setHighlightCommentCounts(counts);
 		}
 	} catch (error) {
 		console.error("[Gloss] Error refreshing comment summary:", error);
 	}
 }
 
-/**
- * Load comment summary for all highlights on the page.
- */
 async function loadCommentSummary(
 	manager: HighlightManager,
-	commentIndicator: GlossCommentIndicator,
-	highlightIds: string[]
+	highlightIds: string[],
+	appApi: GlossAppApi | null
 ): Promise<void> {
 	try {
 		const response = await sendMessage({
@@ -457,26 +521,24 @@ async function loadCommentSummary(
 			return;
 		}
 
-		// Update signal — margin annotations auto-render
-		glossState.commentSummary.value = response;
+		setCommentSummary(response);
 
-		// Populate comment counts
 		const counts = new Map<string, number>();
 		for (const hc of response.highlightComments) {
 			counts.set(hc.highlightId, hc.comments.length);
 		}
-		glossState.highlightCommentCounts.value = counts;
+		setHighlightCommentCounts(counts);
 
 		console.log(
 			`[Gloss] Comment summary loaded: ${response.totalComments} comments from ${response.commenters.length} people`
 		);
 
 		if (response.totalComments > 0) {
-			const settingDefault =
-				glossState.userSettings.value?.commentDisplayMode === "expanded";
+			const settingDefault = userSettings()?.commentDisplayMode === "expanded";
 			const manualToggle = await loadAnnotationToggleState();
-			glossState.annotationsVisible.value =
-				manualToggle !== null ? manualToggle : settingDefault;
+			setAnnotationsVisible(
+				manualToggle !== null ? manualToggle : settingDefault
+			);
 
 			const anchoredHighlightCount = response.highlightComments.filter((hc) => {
 				const active = manager.get(hc.highlightId);
@@ -485,63 +547,14 @@ async function loadCommentSummary(
 
 			const savedCorner = await loadIndicatorCorner();
 
-			// Update indicator properties
-			commentIndicator.summary = response;
-			commentIndicator.annotationsVisible = glossState.annotationsVisible.value;
-			commentIndicator.anchoredHighlightCount = anchoredHighlightCount;
-			commentIndicator.corner = savedCorner;
+			appApi?.setAnchoredHighlightCount(anchoredHighlightCount);
+			appApi?.setIndicatorCorner(savedCorner);
 		}
 	} catch (error) {
 		console.error("[Gloss] Error loading comment summary:", error);
 	}
 }
 
-/**
- * Handle text selection and show popover if valid.
- */
-function handleSelection(
-	e: MouseEvent,
-	selectionPopover: GlossSelectionPopover
-): void {
-	const selection = window.getSelection();
-
-	if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-		selectionPopover.hide();
-		return;
-	}
-
-	const target = e.target as Element;
-	if (
-		target.closest(
-			'input, textarea, [contenteditable="true"], .gloss-highlight'
-		)
-	) {
-		selectionPopover.hide();
-		return;
-	}
-
-	// Ignore if inside our components
-	if (
-		target.closest(
-			"gloss-selection-popover, gloss-comment-panel, gloss-comment-indicator"
-		)
-	) {
-		return;
-	}
-
-	// Capture selection immediately before DOM can change
-	if (!captureSelection()) return;
-
-	const range = selection.getRangeAt(0);
-	const rect = range.getBoundingClientRect();
-
-	selectionPopover.isAuthenticated = glossState.isAuthenticated.value;
-	selectionPopover.show(rect);
-}
-
-/**
- * Create a highlight from the saved selector.
- */
 async function createHighlight(manager: HighlightManager): Promise<void> {
 	const selector = getSavedSelector();
 	const text = getSavedText();
@@ -564,7 +577,7 @@ async function createHighlight(manager: HighlightManager): Promise<void> {
 			id,
 			selector,
 			color: OWN_HIGHLIGHT_COLOR,
-			metadata: { userId: glossState.currentUserId.value },
+			metadata: { userId: currentUserId() },
 		};
 		manager.add(highlight);
 		clearSavedSelection();
@@ -608,63 +621,9 @@ async function createHighlight(manager: HighlightManager): Promise<void> {
 	}
 }
 
-/**
- * Handle click on an existing highlight — open comment panel.
- */
-async function handleHighlightClick(
-	manager: HighlightManager,
-	commentPanel: GlossCommentPanel,
-	highlightId: string,
-	element: HTMLElement
-): Promise<void> {
-	const active = manager.get(highlightId);
-	if (!active) {
-		console.error("[Gloss] Highlight not found:", highlightId);
-		return;
-	}
-
-	const highlightData = active.highlight;
-	const currentUserId = glossState.currentUserId.value;
-	const isOwner =
-		(highlightData.metadata?.userId as string | undefined) === currentUserId;
-	const serverId =
-		(highlightData.metadata?.serverId as string | undefined) ?? highlightId;
-
-	// Load comments
-	let comments: ServerComment[] = [];
-	try {
-		const response = await Promise.race([
-			sendMessage({ type: "LOAD_COMMENTS", highlightId: serverId }),
-			new Promise<{ error: string }>((_, reject) =>
-				setTimeout(() => reject(new Error("Timeout loading comments")), 5000)
-			),
-		]);
-		if (!isErrorResponse(response)) {
-			comments = response.comments;
-		}
-	} catch (error) {
-		console.error("[Gloss] Error loading comments:", error);
-	}
-
-	// Store IDs for event handlers
-	commentPanel.dataset.highlightId = highlightId;
-	commentPanel.dataset.serverId = serverId;
-
-	// Set properties and show
-	commentPanel.highlight = active;
-	commentPanel.element = element;
-	commentPanel.isOwner = isOwner;
-	commentPanel.currentUserId = currentUserId ?? "";
-	commentPanel.comments = comments;
-	commentPanel.visible = true;
-}
-
-/**
- * Convert server highlight to anchoring library format.
- */
 function toHighlight(serverHighlight: ServerHighlight): Highlight {
-	const currentUserId = glossState.currentUserId.value;
-	const isOwnHighlight = serverHighlight.userId === currentUserId;
+	const userId = currentUserId();
+	const isOwnHighlight = serverHighlight.userId === userId;
 	const color = isOwnHighlight
 		? OWN_HIGHLIGHT_COLOR
 		: userHighlightColor(serverHighlight.user?.name ?? "Friend");
@@ -684,9 +643,6 @@ function toHighlight(serverHighlight: ServerHighlight): Highlight {
 	};
 }
 
-/**
- * Load and apply highlights for the current page.
- */
 async function loadHighlights(manager: HighlightManager): Promise<string[]> {
 	const url = location.href;
 

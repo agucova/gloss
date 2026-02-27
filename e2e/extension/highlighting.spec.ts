@@ -117,9 +117,9 @@ test.describe("Highlighting", () => {
 		const popoverHost = page.locator("#gloss-selection-popover");
 		await expect(popoverHost).toBeAttached({ timeout: 5_000 });
 
-		// Verify the host element is in the DOM (fixed position, high z-index)
+		// Verify the host element is positioned (top/left set by popover placement)
 		const hostStyle = await popoverHost.getAttribute("style");
-		expect(hostStyle).toContain("z-index");
+		expect(hostStyle).toContain("top:");
 	});
 
 	test("clicking highlight button creates a highlight mark element", async ({

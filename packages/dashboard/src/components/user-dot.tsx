@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { cn } from "../utils/cn";
 import { getUserColor } from "../utils/user-colors";
 

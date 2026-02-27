@@ -1,5 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
 import { mkdirSync } from "node:fs";
+import solid from "vite-plugin-solid";
 import { defineConfig } from "wxt";
 
 // Ensure dev browser profile directories exist so chrome-launcher doesn't fail
@@ -9,7 +11,7 @@ for (const dir of [".dev-chrome-profile", ".dev-firefox-profile"]) {
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-	modules: ["@wxt-dev/module-react"],
+	modules: [],
 	// Use port 5555 to avoid conflict with API server on port 3000
 	dev: {
 		server: {
@@ -17,7 +19,17 @@ export default defineConfig({
 		},
 	},
 	vite: () => ({
-		plugins: [tailwindcss()],
+		plugins: [
+			tailwindcss(),
+			solid({
+				// Content-UI and popup use Solid
+				include: [/content-ui\/.*\.tsx$/, /entrypoints\/popup\/.*\.tsx$/],
+			}),
+			react({
+				// Newtab uses React (via @gloss/dashboard)
+				include: [/entrypoints\/newtab\/.*\.tsx$/, /components\/.*\.tsx$/],
+			}),
+		],
 	}),
 	manifest: {
 		name: "Gloss",

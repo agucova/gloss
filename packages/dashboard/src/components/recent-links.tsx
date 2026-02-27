@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { DashboardApiClient } from "../types";
 
 import { useFriendsBookmarks } from "../hooks/use-friends-bookmarks";

@@ -957,13 +957,32 @@ async function handleGetMyBookmarks(
 
 /**
  * Search bookmarks and highlights.
+ *
+ * The API returns `{ results: HydratedResult[], meta }` where each result
+ * has a `type` discriminator. We transform this into the `{ bookmarks, highlights }`
+ * shape the newtab dashboard components expect.
  */
 async function handleSearchDashboard(
 	searchQuery: string,
 	limit?: number
 ): Promise<SearchResults | { error: string }> {
 	const api = createApiClient();
-	const result = await apiCall<SearchResults>("search dashboard", () =>
+
+	interface ApiSearchResult {
+		type: string;
+		id: string;
+		url: string;
+		title?: string | null;
+		description?: string | null;
+		text?: string;
+		note?: string | null;
+		createdAt: string;
+	}
+
+	const result = await apiCall<{
+		results: ApiSearchResult[];
+		meta: unknown;
+	}>("search dashboard", () =>
 		api.api.search.get({
 			query: { q: searchQuery, limit: limit ?? DEFAULT_LIMIT },
 		})
@@ -973,7 +992,27 @@ async function handleSearchDashboard(
 		return result;
 	}
 
-	return result;
+	const results = result.results ?? [];
+	return {
+		bookmarks: results
+			.filter((r) => r.type === "bookmark")
+			.map((r) => ({
+				id: r.id,
+				url: r.url,
+				title: r.title ?? null,
+				description: r.description ?? null,
+				createdAt: r.createdAt,
+			})),
+		highlights: results
+			.filter((r) => r.type === "highlight")
+			.map((r) => ({
+				id: r.id,
+				url: r.url,
+				text: r.text ?? "",
+				note: r.note ?? null,
+				createdAt: r.createdAt,
+			})),
+	};
 }
 
 // ============================================================================

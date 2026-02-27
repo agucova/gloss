@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { DashboardApiClient } from "../types";
 
 import { useSearch } from "../hooks/use-search";

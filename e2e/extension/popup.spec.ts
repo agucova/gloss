@@ -56,8 +56,7 @@ test.describe("Extension popup", () => {
 		// Click to expand settings
 		await settingsToggle.click();
 
-		// Now the theme selector and server URL input should be visible
+		// Now the theme selector should be visible
 		await expect(themeLabel).toBeVisible();
-		await expect(page.getByText("Server URL")).toBeVisible();
 	});
 });

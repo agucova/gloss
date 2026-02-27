@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { FeedBookmark, FeedHighlight } from "../types";
 
 import { formatRelativeTime } from "../utils/relative-time";

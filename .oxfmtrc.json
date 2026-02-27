@@ -36,6 +36,9 @@
 		"**/wrangler.jsonc",
 		"bts.jsonc",
 		"test-results/**",
-		"playwright-report/**"
+		"playwright-report/**",
+		".dev-chrome-profile/**",
+		".dev-firefox-profile/**",
+		"**/.output/**"
 	]
 }

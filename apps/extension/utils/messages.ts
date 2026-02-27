@@ -1,5 +1,7 @@
 import type { AnnotationSelector } from "@gloss/anchoring";
 
+import type { PageMetadata } from "./metadata";
+
 /**
  * Server-returned highlight shape (from API response).
  * Matches the shape returned by GET /api/highlights
@@ -100,18 +102,6 @@ export interface PageCommentSummary {
 		name: string | null;
 		image: string | null;
 	}>;
-}
-
-/**
- * Page metadata extracted from a webpage.
- */
-export interface PageMetadata {
-	title: string;
-	url: string;
-	favicon: string | null;
-	ogImage: string | null;
-	ogDescription: string | null;
-	siteName: string | null;
 }
 
 // ============================================================================

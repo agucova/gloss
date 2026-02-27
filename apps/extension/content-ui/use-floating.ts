@@ -1,9 +1,7 @@
 /**
- * Lit ReactiveController for Floating UI positioning.
- * Manages autoUpdate lifecycle tied to component connect/disconnect.
+ * Solid hook for Floating UI positioning.
+ * Manages autoUpdate lifecycle with onCleanup.
  */
-
-import type { ReactiveController, ReactiveControllerHost } from "lit";
 
 import {
 	autoUpdate,
@@ -14,23 +12,17 @@ import {
 	type Placement,
 	shift,
 } from "@floating-ui/dom";
+import { onCleanup } from "solid-js";
 
 export type AnnotationPlacement = "right" | "left" | "bottom" | "top";
 
-export interface FloatingControllerOptions {
-	/** Preferred placement relative to anchor */
+export interface FloatingOptions {
 	placement?: AnnotationPlacement;
-	/** Offset from the anchor element in pixels */
 	offsetDistance?: number;
-	/** Padding from viewport edges */
 	viewportPadding?: number;
-	/** Whether to flip to opposite side if no space */
 	enableFlip?: boolean;
-	/** Fallback placements when flipping */
 	fallbackPlacements?: AnnotationPlacement[];
 }
-
-const SCROLLABLE_OVERFLOW_RE = /(auto|scroll)/;
 
 function toFloatingPlacement(p: AnnotationPlacement): Placement {
 	const map: Record<AnnotationPlacement, Placement> = {
@@ -42,37 +34,21 @@ function toFloatingPlacement(p: AnnotationPlacement): Placement {
 	return map[p] ?? "right-start";
 }
 
-export class FloatingController implements ReactiveController {
-	private _cleanup: (() => void) | null = null;
-	private _anchor: HTMLElement | null = null;
-	private _floating: HTMLElement | null = null;
-	private _options: Required<FloatingControllerOptions>;
+export function useFloating(options: FloatingOptions = {}) {
+	const opts = {
+		placement: options.placement ?? ("right" as AnnotationPlacement),
+		offsetDistance: options.offsetDistance ?? 16,
+		viewportPadding: options.viewportPadding ?? 8,
+		enableFlip: options.enableFlip ?? true,
+		fallbackPlacements:
+			options.fallbackPlacements ??
+			(["left", "bottom", "top"] as AnnotationPlacement[]),
+	};
 
-	constructor(
-		private _host: ReactiveControllerHost & HTMLElement,
-		options: FloatingControllerOptions = {}
-	) {
-		this._options = {
-			placement: "right",
-			offsetDistance: 16,
-			viewportPadding: 8,
-			enableFlip: true,
-			fallbackPlacements: ["left", "bottom", "top"],
-			...options,
-		};
-		this._host.addController(this);
-	}
+	let cleanup: (() => void) | null = null;
 
-	/**
-	 * Start tracking position of the floating element relative to the anchor.
-	 * Call from firstUpdated() or updated() once both elements are in the DOM.
-	 */
-	attach(anchor: HTMLElement, floating: HTMLElement): void {
-		this.detach();
-		this._anchor = anchor;
-		this._floating = floating;
-
-		const opts = this._options;
+	function attach(anchor: HTMLElement, floating: HTMLElement): void {
+		detach();
 
 		const middleware = [
 			offset(opts.offsetDistance),
@@ -97,9 +73,8 @@ export class FloatingController implements ReactiveController {
 		floating.style.top = "0";
 
 		const updatePosition = async () => {
-			if (!(this._anchor && this._floating)) return;
 			try {
-				const result = await computePosition(this._anchor, this._floating, {
+				const result = await computePosition(anchor, floating, {
 					placement,
 					middleware,
 					strategy: "fixed",
@@ -107,17 +82,17 @@ export class FloatingController implements ReactiveController {
 
 				const isHidden = result.middlewareData.hide?.referenceHidden ?? false;
 
-				Object.assign(this._floating.style, {
+				Object.assign(floating.style, {
 					left: `${result.x}px`,
 					top: `${result.y}px`,
 					visibility: isHidden ? "hidden" : "visible",
 				});
 			} catch {
-				if (this._floating) this._floating.style.visibility = "hidden";
+				floating.style.visibility = "hidden";
 			}
 		};
 
-		this._cleanup = autoUpdate(anchor, floating, updatePosition, {
+		cleanup = autoUpdate(anchor, floating, updatePosition, {
 			ancestorScroll: true,
 			ancestorResize: true,
 			elementResize: true,
@@ -125,21 +100,14 @@ export class FloatingController implements ReactiveController {
 		});
 	}
 
-	/** Stop tracking position and clean up autoUpdate. */
-	detach(): void {
-		this._cleanup?.();
-		this._cleanup = null;
-		this._anchor = null;
-		this._floating = null;
+	function detach(): void {
+		cleanup?.();
+		cleanup = null;
 	}
 
-	hostConnected(): void {
-		// Re-attach handled by component's updated() if needed
-	}
+	onCleanup(detach);
 
-	hostDisconnected(): void {
-		this.detach();
-	}
+	return { attach, detach };
 }
 
 /** Check if the document uses RTL layout. */
@@ -157,11 +125,12 @@ export function getDefaultPlacement(): AnnotationPlacement {
 
 /** Check if an element is in a scrollable container. */
 export function hasScrollableAncestor(element: HTMLElement): boolean {
+	const re = /(auto|scroll)/;
 	let current: HTMLElement | null = element.parentElement;
 	while (current) {
 		const style = getComputedStyle(current);
 		const overflow = style.overflow + style.overflowY + style.overflowX;
-		if (SCROLLABLE_OVERFLOW_RE.test(overflow)) return true;
+		if (re.test(overflow)) return true;
 		current = current.parentElement;
 	}
 	return false;

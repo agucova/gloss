@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { MoreHorizontal } from "lucide-react";
 
 import type { DashboardApiClient } from "../types";

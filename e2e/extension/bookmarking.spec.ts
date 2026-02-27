@@ -1,3 +1,7 @@
+import { db } from "@gloss/db";
+import { bookmark } from "@gloss/db/schema";
+import { eq } from "drizzle-orm";
+
 import { expect, test } from "../fixtures/authenticated-extension";
 import { SEED_USERS } from "../fixtures/seed-ids";
 
@@ -26,17 +30,16 @@ async function openPopup(
 }
 
 /**
- * Wait for the bookmark section to finish loading.
+ * Wait for the bookmark section to finish loading by positively
+ * asserting that a bookmark button is rendered.
  */
 async function waitForBookmarkSection(
 	popupPage: import("@playwright/test").Page
 ) {
-	await popupPage.waitForFunction(
-		() => !document.body.textContent?.includes("Checking..."),
-		{ timeout: 10_000 }
-	);
-	// Extra wait for React renders to settle
-	await popupPage.waitForTimeout(500);
+	await popupPage
+		.getByRole("button", { name: /bookmark/i })
+		.first()
+		.waitFor({ state: "visible", timeout: 15_000 });
 }
 
 test.describe("Extension bookmarking", () => {
@@ -115,44 +118,49 @@ test.describe("Extension bookmarking", () => {
 	}) => {
 		await authenticatedAs(SEED_USERS.agucova.id);
 
-		await page.goto("https://example.com");
+		// Use a unique URL to avoid collisions with other bookmarking tests
+		// running in parallel (they all share the same DB and user).
+		const uniqueUrl = `https://example.com/persist-test-${Date.now()}`;
+		await page.route(uniqueUrl, (route) =>
+			route.fulfill({
+				contentType: "text/html",
+				body: "<html><head><title>Persist Test</title></head><body><h1>Persist Test</h1></body></html>",
+			})
+		);
+		await page.goto(uniqueUrl);
 		await page.waitForLoadState("domcontentloaded");
 
-		// First open: bookmark the page
-		let popupPage = await openPopup(context, extensionId);
+		const popupPage = await openPopup(context, extensionId);
 		await waitForBookmarkSection(popupPage);
 
-		// Ensure it's bookmarked
+		// Should be unbookmarked (unique URL, never bookmarked before)
 		const bookmarkButton = popupPage.getByRole("button", {
 			name: "Bookmark",
 		});
-		if (await bookmarkButton.isVisible().catch(() => false)) {
-			await bookmarkButton.click();
-			await expect(
-				popupPage.getByRole("button", { name: /bookmarked/i })
-			).toBeVisible({ timeout: 10_000 });
-		} else {
-			// Already bookmarked — verify
-			await expect(
-				popupPage.getByRole("button", { name: /bookmarked/i })
-			).toBeVisible({ timeout: 5_000 });
-		}
+		await expect(bookmarkButton).toBeVisible({ timeout: 5_000 });
 
-		// Wait for the bookmark to be fully persisted
-		await popupPage.waitForTimeout(2_000);
-		await popupPage.close();
+		// Click to bookmark
+		await bookmarkButton.click();
+		await expect(
+			popupPage.getByRole("button", { name: /bookmarked/i })
+		).toBeVisible({ timeout: 10_000 });
 
-		// Re-inject the session cookie before reopening the popup.
-		// Closing a popup tab can sometimes clear cookies in the extension
-		// context. Re-injecting ensures the second popup is authenticated.
-		const session = await authenticatedAs(SEED_USERS.agucova.id);
+		// Wait for the save to complete
+		await popupPage.waitForTimeout(1_000);
 
-		// Ensure example.com page is active
+		// Navigate the popup away and back to force a fresh data load
+		await popupPage.goto("about:blank");
+		await popupPage.waitForTimeout(500);
+
 		await page.bringToFront();
-		await page.waitForTimeout(500);
-
-		// Reopen the popup
-		popupPage = await openPopup(context, extensionId);
+		await popupPage.waitForTimeout(500);
+		await popupPage.goto(`chrome-extension://${extensionId}/popup.html`, {
+			waitUntil: "commit",
+		});
+		await popupPage.waitForFunction(
+			() => !document.body.textContent?.includes("Loading..."),
+			{ timeout: 15_000 }
+		);
 		await waitForBookmarkSection(popupPage);
 
 		// The "Bookmarked" button should still be visible (state persisted)
@@ -172,28 +180,34 @@ test.describe("Extension bookmarking", () => {
 	}) => {
 		await authenticatedAs(SEED_USERS.agucova.id);
 
-		await page.goto("https://example.com");
+		// Use a unique URL to avoid collisions with parallel tests
+		const uniqueUrl = `https://example.com/unbookmark-test-${Date.now()}`;
+		await page.route(uniqueUrl, (route) =>
+			route.fulfill({
+				contentType: "text/html",
+				body: "<html><head><title>Unbookmark Test</title></head><body><h1>Unbookmark Test</h1></body></html>",
+			})
+		);
+		await page.goto(uniqueUrl);
 		await page.waitForLoadState("domcontentloaded");
 
 		const popupPage = await openPopup(context, extensionId);
 		await waitForBookmarkSection(popupPage);
 
-		// Bookmark if not already
+		// Bookmark the page first
 		const bookmarkButton = popupPage.getByRole("button", {
 			name: "Bookmark",
 		});
-		if (await bookmarkButton.isVisible().catch(() => false)) {
-			await bookmarkButton.click();
-			await expect(
-				popupPage.getByRole("button", { name: /bookmarked/i })
-			).toBeVisible({ timeout: 10_000 });
-		}
+		await expect(bookmarkButton).toBeVisible({ timeout: 5_000 });
+		await bookmarkButton.click();
+		await expect(
+			popupPage.getByRole("button", { name: /bookmarked/i })
+		).toBeVisible({ timeout: 10_000 });
 
 		// Now click "Bookmarked" to unbookmark
 		const bookmarkedButton = popupPage.getByRole("button", {
 			name: /bookmarked/i,
 		});
-		await expect(bookmarkedButton).toBeVisible({ timeout: 5_000 });
 		await bookmarkedButton.click();
 
 		// The button should change back to "Bookmark" (unbookmarked state)

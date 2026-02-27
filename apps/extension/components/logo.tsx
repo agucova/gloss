@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 interface LogoProps {
 	className?: string;
 	/** Show full "Gloss" text or just the "|G" mark */

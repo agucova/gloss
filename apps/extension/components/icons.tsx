@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 interface IconProps {
 	className?: string;
 	size?: number;

@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import type { DashboardApiClient } from "@gloss/dashboard";
 
 import { Dashboard } from "@gloss/dashboard";

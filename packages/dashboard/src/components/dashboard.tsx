@@ -1,3 +1,4 @@
+/** @jsxImportSource react */
 import { useState } from "react";
 
 import type { DashboardApiClient } from "../types";
