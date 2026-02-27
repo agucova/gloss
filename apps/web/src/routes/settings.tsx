@@ -1,12 +1,12 @@
+import { api } from "@convex/_generated/api";
 import { useForm } from "@tanstack/react-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
-import { api } from "@/utils/api";
 
 export const Route = createFileRoute("/settings")({
 	component: SettingsPage,
@@ -23,72 +23,48 @@ type Visibility = "public" | "friends" | "private";
 type HighlightDisplayFilter = "anyone" | "friends" | "me";
 type CommentDisplayMode = "expanded" | "collapsed";
 
-interface Settings {
-	profileVisibility: Visibility;
-	highlightsVisibility: Visibility;
-	bookmarksVisibility: Visibility;
-	highlightDisplayFilter: HighlightDisplayFilter;
-	commentDisplayMode: CommentDisplayMode;
-}
-
 function SettingsPage() {
-	const queryClient = useQueryClient();
-
-	const {
-		data: settings,
-		isLoading,
-		error,
-	} = useQuery({
-		queryKey: ["user", "settings"],
-		queryFn: async () => {
-			const { data, error } = await api.api.users.me.settings.get();
-			if (error) {
-				throw new Error("Failed to load settings");
-			}
-			return data as Settings;
-		},
-	});
-
-	const updateSettings = useMutation({
-		mutationFn: async (data: Partial<Settings>) => {
-			const { error } = await api.api.users.me.settings.patch(data);
-			if (error) {
-				const errObj = error as { error?: string };
-				throw new Error(errObj.error ?? "Failed to update settings");
-			}
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["user", "settings"] });
-			toast.success("Settings saved");
-		},
-		onError: (err) => toast.error(err.message),
-	});
+	const settings = useQuery(api.users.getSettings);
+	const updateSettingsMutation = useMutation(api.users.updateSettings);
 
 	const form = useForm({
 		defaultValues: {
-			profileVisibility: settings?.profileVisibility ?? "public",
-			highlightsVisibility: settings?.highlightsVisibility ?? "friends",
-			bookmarksVisibility: settings?.bookmarksVisibility ?? "public",
-			highlightDisplayFilter: settings?.highlightDisplayFilter ?? "friends",
-			commentDisplayMode: settings?.commentDisplayMode ?? "collapsed",
+			profileVisibility: (settings?.profileVisibility ??
+				"public") as Visibility,
+			highlightsVisibility: (settings?.highlightsVisibility ??
+				"friends") as Visibility,
+			bookmarksVisibility: (settings?.bookmarksVisibility ??
+				"public") as Visibility,
+			highlightDisplayFilter: (settings?.highlightDisplayFilter ??
+				"friends") as HighlightDisplayFilter,
+			commentDisplayMode: (settings?.commentDisplayMode ??
+				"collapsed") as CommentDisplayMode,
 		},
 		onSubmit: async ({ value }) => {
-			await updateSettings.mutateAsync(value);
+			try {
+				await updateSettingsMutation(value);
+				toast.success("Settings saved");
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to update settings"
+				);
+			}
 		},
 	});
 
 	// Update form when settings load
 	if (settings && !form.state.isDirty) {
 		form.reset({
-			profileVisibility: settings.profileVisibility,
-			highlightsVisibility: settings.highlightsVisibility,
-			bookmarksVisibility: settings.bookmarksVisibility,
-			highlightDisplayFilter: settings.highlightDisplayFilter,
-			commentDisplayMode: settings.commentDisplayMode,
+			profileVisibility: settings.profileVisibility as Visibility,
+			highlightsVisibility: settings.highlightsVisibility as Visibility,
+			bookmarksVisibility: settings.bookmarksVisibility as Visibility,
+			highlightDisplayFilter:
+				settings.highlightDisplayFilter as HighlightDisplayFilter,
+			commentDisplayMode: settings.commentDisplayMode as CommentDisplayMode,
 		});
 	}
 
-	if (isLoading) {
+	if (settings === undefined) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
 				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -96,7 +72,7 @@ function SettingsPage() {
 		);
 	}
 
-	if (error) {
+	if (settings === null) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6">
 				<h1 className="mb-2 text-lg font-medium text-foreground">
@@ -105,21 +81,12 @@ function SettingsPage() {
 				<p className="mb-4 text-sm text-muted-foreground">
 					Something went wrong. Please try again.
 				</p>
-				<Button
-					onClick={() =>
-						queryClient.invalidateQueries({ queryKey: ["user", "settings"] })
-					}
-					variant="outline"
-				>
-					Retry
-				</Button>
 			</div>
 		);
 	}
 
 	return (
 		<div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-			{/* Header with back link */}
 			<div className="mb-8">
 				<Link
 					className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -138,7 +105,6 @@ function SettingsPage() {
 					form.handleSubmit();
 				}}
 			>
-				{/* Privacy Settings */}
 				<section>
 					<h2 className="mb-6 text-lg font-semibold text-foreground">
 						Privacy
@@ -195,7 +161,6 @@ function SettingsPage() {
 					</div>
 				</section>
 
-				{/* Display Preferences */}
 				<section>
 					<h2 className="mb-6 text-lg font-semibold text-foreground">
 						Display
@@ -251,7 +216,6 @@ function SettingsPage() {
 					</div>
 				</section>
 
-				{/* Save button */}
 				<div className="border-t border-border pt-6">
 					<form.Subscribe>
 						{(state) => (

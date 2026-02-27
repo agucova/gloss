@@ -1,36 +1,29 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { api } from "@convex/_generated/api";
+import { createFileRoute, Navigate, redirect } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
 
 import { authClient } from "@/lib/auth-client";
-import { api } from "@/utils/api";
 
 export const Route = createFileRoute("/profile")({
-	component: () => null,
+	component: ProfileRedirect,
 	beforeLoad: async () => {
 		const session = await authClient.getSession();
 		if (!session.data) {
-			throw redirect({
-				to: "/login",
-			});
+			throw redirect({ to: "/login" });
 		}
-
-		// Fetch user profile to check for username
-		const { data: profile, error } = await api.api.users.me.get();
-
-		if (error || !profile || "error" in profile) {
-			throw redirect({
-				to: "/login",
-			});
-		}
-
-		// Redirect based on whether user has a username
-		if (profile.username) {
-			throw redirect({
-				to: "/u/$username",
-				params: { username: profile.username },
-			});
-		}
-		throw redirect({
-			to: "/u/setup",
-		});
 	},
 });
+
+function ProfileRedirect() {
+	const me = useQuery(api.users.getMe);
+
+	if (me === undefined) return null; // Loading
+
+	if (!me) return <Navigate to="/login" />;
+
+	if (me.username) {
+		return <Navigate to={`/u/${me.username}`} />;
+	}
+
+	return <Navigate to="/u/setup" />;
+}

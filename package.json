@@ -57,9 +57,13 @@
 		"e2e:report": "bunx playwright show-report"
 	},
 	"dependencies": {
+		"@better-auth/passkey": "^1.4.19",
+		"@convex-dev/better-auth": "^0.10.12",
 		"@gloss/env": "workspace:*",
-		"better-auth": "^1.4.19",
+		"better-auth": "1.4.19",
+		"convex": "^1.32.0",
 		"dotenv": "^17.2.3",
+		"resend": "^6.9.2",
 		"zod": "^4.3.6"
 	},
 	"devDependencies": {

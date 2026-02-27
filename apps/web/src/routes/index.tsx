@@ -1,28 +1,34 @@
-import type { DashboardApiClient } from "@gloss/dashboard";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { Authenticated, Unauthenticated } from "convex/react";
 
-import { Dashboard } from "@gloss/dashboard";
-import { createFileRoute, redirect } from "@tanstack/react-router";
-
-import { authClient } from "@/lib/auth-client";
-import { api } from "@/utils/api";
+// TODO: Replace with Convex-native dashboard
+// The dashboard package needs to be rewritten to use Convex hooks directly.
+// For now, show a placeholder that confirms auth is working.
 
 export const Route = createFileRoute("/")({
 	component: RouteComponent,
-	beforeLoad: async () => {
-		const session = await authClient.getSession();
-		if (!session.data) {
-			redirect({
-				to: "/login",
-				throw: true,
-			});
-		}
-		return { session };
-	},
 });
 
 function RouteComponent() {
-	// Cast the Eden Treaty client to match dashboard's expected interface
-	const apiClient = api as unknown as DashboardApiClient;
+	return (
+		<>
+			<Authenticated>
+				<DashboardPlaceholder />
+			</Authenticated>
+			<Unauthenticated>
+				<Navigate to="/login" />
+			</Unauthenticated>
+		</>
+	);
+}
 
-	return <Dashboard apiClient={apiClient} />;
+function DashboardPlaceholder() {
+	return (
+		<div className="mx-auto max-w-4xl px-6 py-12">
+			<h1 className="text-lg font-medium text-foreground">Dashboard</h1>
+			<p className="mt-2 text-sm text-muted-foreground">
+				Dashboard is being migrated to Convex. Coming soon.
+			</p>
+		</div>
+	);
 }

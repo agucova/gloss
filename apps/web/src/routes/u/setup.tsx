@@ -1,6 +1,7 @@
+import { api } from "@convex/_generated/api";
 import { useForm } from "@tanstack/react-form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
@@ -11,9 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import { api } from "@/utils/api";
 
-// Validation pattern for usernames
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
 export const Route = createFileRoute("/u/setup")({
@@ -32,24 +31,17 @@ export const Route = createFileRoute("/u/setup")({
 
 function UsernameSetupPage() {
 	const navigate = useNavigate();
-	const queryClient = useQueryClient();
 	const [checkingUsername, setCheckingUsername] = useState("");
 	const [debouncedUsername, setDebouncedUsername] = useState("");
 
-	// Check if user already has a username
-	const { data: profile, isLoading: profileLoading } = useQuery({
-		queryKey: ["user", "me"],
-		queryFn: async () => {
-			const { data, error } = await api.api.users.me.get();
-			if (error) {
-				throw new Error("Failed to fetch profile");
-			}
-			if (!data || "error" in data) {
-				throw new Error("Failed to fetch profile");
-			}
-			return data;
-		},
-	});
+	const profile = useQuery(api.users.getMe);
+	const setUsernameMutation = useMutation(api.users.setUsername);
+
+	// Check username availability
+	const availability = useQuery(
+		api.users.checkUsername,
+		debouncedUsername.length >= 3 ? { username: debouncedUsername } : "skip"
+	);
 
 	// Redirect if user already has a username
 	useEffect(() => {
@@ -58,7 +50,7 @@ function UsernameSetupPage() {
 		}
 	}, [profile?.username, navigate]);
 
-	// Debounced username check
+	// Debounce username check
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			if (checkingUsername.length >= 3) {
@@ -68,55 +60,20 @@ function UsernameSetupPage() {
 		return () => clearTimeout(timer);
 	}, [checkingUsername]);
 
-	// Check username availability
-	const { data: availabilityData, isFetching: checkingAvailability } = useQuery(
-		{
-			queryKey: ["username-availability", debouncedUsername],
-			queryFn: async () => {
-				if (!debouncedUsername) {
-					return null;
-				}
-				const { data, error } = await api.api.users["check-username"]({
-					username: debouncedUsername,
-				}).get();
-				if (error) {
-					throw new Error("Failed to check username");
-				}
-				return data;
-			},
-			enabled: debouncedUsername.length >= 3,
-		}
-	);
-
-	// Set username mutation
-	const setUsernameMutation = useMutation({
-		mutationFn: async (username: string) => {
-			const { data, error } = await api.api.users.me.username.put({ username });
-			if (error) {
-				const errObj = error as { error?: string };
-				throw new Error(errObj.error ?? "Failed to set username");
-			}
-			if (!data || (typeof data === "object" && "error" in data)) {
-				throw new Error("Failed to set username");
-			}
-			return data as { username: string };
-		},
-		onSuccess: (data) => {
-			queryClient.invalidateQueries({ queryKey: ["user"] });
-			toast.success("Username set successfully!");
-			navigate({ to: `/u/${data.username}` });
-		},
-		onError: (error) => {
-			toast.error(error.message);
-		},
-	});
-
 	const form = useForm({
 		defaultValues: {
 			username: "",
 		},
 		onSubmit: async ({ value }) => {
-			await setUsernameMutation.mutateAsync(value.username.toLowerCase());
+			try {
+				await setUsernameMutation({ username: value.username.toLowerCase() });
+				toast.success("Username set successfully!");
+				navigate({ to: `/u/${value.username.toLowerCase()}` });
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to set username"
+				);
+			}
 		},
 		validators: {
 			onSubmit: z.object({
@@ -132,7 +89,7 @@ function UsernameSetupPage() {
 		},
 	});
 
-	if (profileLoading) {
+	if (profile === undefined) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
 				<Loader />
@@ -140,13 +97,14 @@ function UsernameSetupPage() {
 		);
 	}
 
-	const isAvailable = availabilityData?.available;
+	const isAvailable = availability?.available;
+	const checkingAvailability =
+		debouncedUsername.length >= 3 && availability === undefined;
 	const showAvailability =
 		debouncedUsername.length >= 3 && !checkingAvailability;
 
 	return (
 		<div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-16">
-			{/* Subtle warm glow */}
 			<div
 				aria-hidden="true"
 				className="pointer-events-none absolute top-1/3 h-72 w-72 rounded-full bg-amber-100/30 blur-3xl dark:bg-amber-500/5"
@@ -200,7 +158,6 @@ function UsernameSetupPage() {
 									)}
 								</div>
 
-								{/* Availability indicator */}
 								{showAvailability && (
 									<p
 										className={cn(
@@ -214,7 +171,6 @@ function UsernameSetupPage() {
 									</p>
 								)}
 
-								{/* Validation error */}
 								{field.state.meta.errors[0]?.message && (
 									<p className="text-xs text-destructive" role="alert">
 										{field.state.meta.errors[0].message}
@@ -229,16 +185,11 @@ function UsernameSetupPage() {
 							<Button
 								className="mt-2 h-10 w-full rounded-lg text-sm"
 								disabled={
-									!state.canSubmit ||
-									state.isSubmitting ||
-									!isAvailable ||
-									setUsernameMutation.isPending
+									!state.canSubmit || state.isSubmitting || !isAvailable
 								}
 								type="submit"
 							>
-								{state.isSubmitting || setUsernameMutation.isPending
-									? "Setting username..."
-									: "Claim username"}
+								{state.isSubmitting ? "Setting username..." : "Claim username"}
 							</Button>
 						)}
 					</form.Subscribe>

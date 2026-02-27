@@ -6,7 +6,8 @@
 		"rootDirs": ["."],
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/*"]
+			"@/*": ["./src/*"],
+			"@convex/*": ["../../convex/*"]
 		}
 	}
 }

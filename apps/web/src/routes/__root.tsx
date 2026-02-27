@@ -1,14 +1,9 @@
-import type { QueryClient } from "@tanstack/react-query";
-
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import {
 	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-
-import type { api } from "@/utils/api";
 
 import Header from "@/components/header";
 import { PasskeyPrompt } from "@/components/passkey-prompt";
@@ -17,12 +12,7 @@ import { Toaster } from "@/components/ui/sonner";
 
 import "../index.css";
 
-export interface RouterAppContext {
-	api: typeof api;
-	queryClient: QueryClient;
-}
-
-export const Route = createRootRouteWithContext<RouterAppContext>()({
+export const Route = createRootRouteWithContext()({
 	component: RootComponent,
 	head: () => ({
 		meta: [
@@ -69,7 +59,6 @@ function RootComponent() {
 				<PasskeyPrompt />
 			</ThemeProvider>
 			<TanStackRouterDevtools position="bottom-left" />
-			<ReactQueryDevtools buttonPosition="bottom-right" position="bottom" />
 		</>
 	);
 }
