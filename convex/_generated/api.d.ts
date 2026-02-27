@@ -21,6 +21,7 @@ import type * as lib_cascade from "../lib/cascade.js";
 import type * as lib_friends from "../lib/friends.js";
 import type * as lib_url from "../lib/url.js";
 import type * as search from "../search.js";
+import type * as seed from "../seed.js";
 import type * as users from "../users.js";
 
 import type {
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/friends": typeof lib_friends;
   "lib/url": typeof lib_url;
   search: typeof search;
+  seed: typeof seed;
   users: typeof users;
 }>;
 
