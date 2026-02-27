@@ -1,10 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Id } from "@convex/_generated/dataModel";
+
+import { api } from "@convex/_generated/api";
+import { useMutation } from "convex/react";
 import { Github, Globe, Twitter } from "lucide-react";
 import Markdown from "react-markdown";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { api } from "@/utils/api";
 
 const WWW_REGEX = /^www\./;
 const WHITESPACE_RE = /\s+/;
@@ -97,68 +99,54 @@ export function GeneratedAvatar({
 
 interface ProfileHeaderProps {
 	profile: {
-		id: string;
+		_id: Id<"users">;
 		name: string;
-		username: string | null;
-		image: string | null;
-		bio: string | null;
-		website: string | null;
-		twitterHandle: string | null;
-		githubHandle: string | null;
+		username?: string | null;
+		image?: string | null;
+		bio?: string | null;
+		website?: string | null;
+		twitterHandle?: string | null;
+		githubHandle?: string | null;
 		highlightCount: number;
 		bookmarkCount: number;
 		friendCount: number;
-		friendshipStatus?: "none" | "pending_sent" | "pending_received" | "friends";
+		isOwnProfile: boolean;
+		isFriend: boolean;
 	};
 	isOwnProfile: boolean;
 }
 
 export function ProfileHeader({ profile, isOwnProfile }: ProfileHeaderProps) {
-	const queryClient = useQueryClient();
+	const sendFriendRequestMutation = useMutation(api.friendships.sendRequest);
+	const unfriendMutation = useMutation(api.friendships.removeFriend);
 
-	// Friend request mutation
-	const sendFriendRequest = useMutation({
-		mutationFn: async () => {
-			const { error } = await api.api.friendships.request.post({
-				userId: profile.id,
-			});
-			if (error) {
-				const errObj = error as { error?: string };
-				throw new Error(errObj.error ?? "Failed to send request");
+	const sendFriendRequest = {
+		isPending: false,
+		mutate: async () => {
+			try {
+				await sendFriendRequestMutation({ addresseeId: profile._id });
+				toast.success("Friend request sent");
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to send request"
+				);
 			}
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["user", "by-username", profile.username],
-			});
-			toast.success("Friend request sent");
-		},
-		onError: (err) => toast.error(err.message),
-	});
+	};
 
-	// Unfriend mutation - use fetch directly to avoid Eden Treaty type issues
-	const unfriend = useMutation({
-		mutationFn: async () => {
-			const response = await fetch(
-				`${import.meta.env.VITE_SERVER_URL}/api/friendships/${profile.id}`,
-				{
-					method: "DELETE",
-					credentials: "include",
-				}
-			);
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.error ?? "Failed to remove friend");
+	const unfriend = {
+		isPending: false,
+		mutate: async () => {
+			try {
+				await unfriendMutation({ targetUserId: profile._id });
+				toast.success("Friend removed");
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to remove friend"
+				);
 			}
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["user", "by-username", profile.username],
-			});
-			toast.success("Friend removed");
-		},
-		onError: (err) => toast.error(err.message),
-	});
+	};
 
 	// Emit event to open edit modal
 	const openEditModal = () => {
@@ -198,7 +186,7 @@ export function ProfileHeader({ profile, isOwnProfile }: ProfileHeaderProps) {
 					</Button>
 				) : (
 					<FriendshipButton
-						friendshipStatus={profile.friendshipStatus}
+						isFriend={profile.isFriend}
 						isLoading={sendFriendRequest.isPending || unfriend.isPending}
 						onAddFriend={() => sendFriendRequest.mutate()}
 						onUnfriend={() => unfriend.mutate()}
@@ -294,47 +282,33 @@ function Stat({ value, label }: StatProps) {
 }
 
 interface FriendshipButtonProps {
-	friendshipStatus?: "none" | "pending_sent" | "pending_received" | "friends";
+	isFriend: boolean;
 	isLoading: boolean;
 	onAddFriend: () => void;
 	onUnfriend: () => void;
 }
 
 function FriendshipButton({
-	friendshipStatus,
+	isFriend,
 	isLoading,
 	onAddFriend,
 	onUnfriend,
 }: FriendshipButtonProps) {
-	switch (friendshipStatus) {
-		case "friends":
-			return (
-				<Button
-					className="w-full"
-					disabled={isLoading}
-					onClick={onUnfriend}
-					variant="outline"
-				>
-					{isLoading ? "Removing..." : "Friends"}
-				</Button>
-			);
-		case "pending_sent":
-			return (
-				<Button className="w-full" disabled variant="outline">
-					Pending
-				</Button>
-			);
-		case "pending_received":
-			return (
-				<Button className="w-full" disabled={isLoading} onClick={onAddFriend}>
-					{isLoading ? "Accepting..." : "Accept Request"}
-				</Button>
-			);
-		default:
-			return (
-				<Button className="w-full" disabled={isLoading} onClick={onAddFriend}>
-					{isLoading ? "Sending..." : "Add Friend"}
-				</Button>
-			);
+	if (isFriend) {
+		return (
+			<Button
+				className="w-full"
+				disabled={isLoading}
+				onClick={onUnfriend}
+				variant="outline"
+			>
+				{isLoading ? "Removing..." : "Friends"}
+			</Button>
+		);
 	}
+	return (
+		<Button className="w-full" disabled={isLoading} onClick={onAddFriend}>
+			{isLoading ? "Sending..." : "Add Friend"}
+		</Button>
+	);
 }

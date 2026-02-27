@@ -1,53 +1,22 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import type { Id } from "@convex/_generated/dataModel";
+
+import { api } from "@convex/_generated/api";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-	AlertTriangle,
-	Bookmark,
-	Highlighter,
-	Library,
-	Search,
-	Sparkles,
-} from "lucide-react";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { Bookmark, Highlighter, Library, Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { BookmarkCard, HighlightCard } from "@/components/cards";
 import Loader from "@/components/loader";
-import { api } from "@/utils/api";
 
 import type { ContentType } from "./content-type-filter";
 
 interface BookshelfResultsProps {
-	userId: string;
+	userId: Id<"users">;
 	searchQuery: string;
 	contentType: ContentType;
 	selectedTagId: string | null;
 }
-
-interface BookmarkItem {
-	type: "bookmark";
-	id: string;
-	url: string;
-	title: string | null;
-	description: string | null;
-	favicon: string | null;
-	createdAt: Date | string;
-	tags?: Array<{
-		id: string;
-		name: string;
-		color: string | null;
-		isSystem: boolean;
-	}>;
-}
-
-interface HighlightItem {
-	type: "highlight";
-	id: string;
-	text: string;
-	url: string;
-	createdAt: Date | string;
-}
-
-type MergedItem = BookmarkItem | HighlightItem;
 
 export function BookshelfResults({
 	userId,
@@ -55,10 +24,9 @@ export function BookshelfResults({
 	contentType,
 	selectedTagId,
 }: BookshelfResultsProps) {
-	// When searching, use hybrid search API for better results (supports tag filtering)
 	if (searchQuery) {
 		return (
-			<HybridSearchResults
+			<FTSSearchResults
 				contentType={contentType}
 				searchQuery={searchQuery}
 				selectedTagId={selectedTagId}
@@ -66,23 +34,11 @@ export function BookshelfResults({
 		);
 	}
 
-	// No search query, but tag filter - use browse endpoint with tag filtering
-	if (contentType === "bookmarks" && selectedTagId) {
-		return (
-			<BookmarksBrowseList
-				searchQuery=""
-				selectedTagId={selectedTagId}
-				userId={userId}
-			/>
-		);
-	}
-
-	// No search query - browse mode using traditional endpoints
 	if (contentType === "bookmarks") {
 		return (
 			<BookmarksBrowseList
 				searchQuery=""
-				selectedTagId={null}
+				selectedTagId={selectedTagId}
 				userId={userId}
 			/>
 		);
@@ -96,11 +52,9 @@ export function BookshelfResults({
 }
 
 /**
- * Hybrid search results using the /search API with semantic + FTS.
- * Used when user enters a search query.
- * Supports optional tag filtering.
+ * FTS search results using Convex search query.
  */
-function HybridSearchResults({
+function FTSSearchResults({
 	searchQuery,
 	contentType,
 	selectedTagId,
@@ -111,113 +65,62 @@ function HybridSearchResults({
 }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	// Determine which types to search
-	const searchTypesMap: Record<ContentType, string> = {
-		all: "bookmark,highlight",
-		bookmarks: "bookmark",
-		highlights: "highlight",
+	const typesMap: Record<ContentType, string[]> = {
+		all: ["bookmark", "highlight"],
+		bookmarks: ["bookmark"],
+		highlights: ["highlight"],
 	};
-	const searchTypes = searchTypesMap[contentType];
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		isLoading,
-		error,
-	} = useInfiniteQuery({
-		queryKey: ["library", "search", searchQuery, searchTypes, selectedTagId],
-		queryFn: async ({ pageParam = 0 }) => {
-			const { data, error } = await api.api.search.get({
-				query: {
+	const searchResults = useQuery(
+		api.search.search,
+		searchQuery.length > 0
+			? {
 					q: searchQuery,
-					types: searchTypes,
-					mode: "hybrid",
-					limit: 20,
-					offset: pageParam,
-					...(selectedTagId ? { tagId: selectedTagId } : {}),
-				},
-			});
-			if (error) {
-				throw new Error("Failed to search");
-			}
-			return data;
-		},
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, _allPages, lastPageParam) => {
-			// Check if we got results and might have more
-			if (lastPage?.results && lastPage.results.length === 20) {
-				return lastPageParam + 20;
-			}
-			return undefined;
-		},
-		enabled: searchQuery.length > 0,
-	});
-
-	// Check search metadata for indicator display
-	const meta = data?.pages[0]?.meta;
-	const semanticSearchUsed = meta?.semanticSearchUsed ?? false;
-	const searchError = (meta as Record<string, unknown> | undefined)?.error as
-		| string
-		| undefined;
+					types: typesMap[contentType],
+					limit: 50,
+					...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
+				}
+			: "skip"
+	);
 
 	const results = useMemo(() => {
-		const allResults = data?.pages.flatMap((page) => page?.results ?? []) ?? [];
-		// Filter to only bookmarks and highlights (exclude comments)
-		return allResults
+		if (!searchResults?.results) return [];
+		return searchResults.results
 			.filter(
-				(result) => result.type === "bookmark" || result.type === "highlight"
+				(r) => r.entityType === "bookmark" || r.entityType === "highlight"
 			)
-			.map((result) => {
-				if (result.type === "bookmark") {
-					// Type assertion for bookmark with tags
-					const bookmarkResult = result as {
-						type: "bookmark";
-						id: string;
-						url: string;
-						title: string | null;
-						description: string | null;
-						favicon: string | null;
-						createdAt: Date;
-						tags?: Array<{
-							id: string;
-							name: string;
-							color: string | null;
-							isSystem: boolean;
-						}>;
-					};
+			.map((r) => {
+				if (r.entityType === "bookmark" && r.bookmark) {
+					const b = r.bookmark as Record<string, unknown>;
 					return {
 						type: "bookmark" as const,
-						id: bookmarkResult.id,
-						url: bookmarkResult.url,
-						title: bookmarkResult.title,
-						description: bookmarkResult.description,
-						favicon: bookmarkResult.favicon,
-						createdAt: bookmarkResult.createdAt,
-						tags: bookmarkResult.tags,
+						_id: r.entityId,
+						url: r.url ?? "",
+						title: (b.title as string) ?? null,
+						description: (b.description as string) ?? null,
+						favicon: (b.favicon as string) ?? null,
+						_creationTime: r.createdAt,
+						tags:
+							(b.tags as Array<{
+								_id: string;
+								name: string;
+								color: string | null;
+								isSystem: boolean;
+							}>) ?? [],
 					};
 				}
-				// Type narrowing: result.type === "highlight"
-				const highlightResult = result as {
-					type: "highlight";
-					id: string;
-					url: string;
-					text: string;
-					createdAt: Date;
-				};
 				return {
 					type: "highlight" as const,
-					id: highlightResult.id,
-					url: highlightResult.url,
-					text: highlightResult.text,
-					createdAt: highlightResult.createdAt,
+					_id: r.entityId,
+					url: r.url ?? "",
+					text: r.content,
+					_creationTime: r.createdAt,
 				};
 			});
-	}, [data]);
+	}, [searchResults]);
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? results.length + 1 : results.length,
+		count: results.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 105,
 		overscan: 5,
@@ -226,40 +129,11 @@ function HybridSearchResults({
 
 	const virtualItems = virtualizer.getVirtualItems();
 
-	useEffect(() => {
-		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
-
-		if (
-			lastItem.index >= results.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
-		) {
-			fetchNextPage();
-		}
-	}, [
-		virtualItems,
-		results.length,
-		hasNextPage,
-		isFetchingNextPage,
-		fetchNextPage,
-	]);
-
-	if (isLoading) {
+	if (searchResults === undefined) {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to search
-			</p>
 		);
 	}
 
@@ -276,25 +150,11 @@ function HybridSearchResults({
 
 	return (
 		<div className="flex flex-col">
-			{/* Search mode indicator */}
 			<div className="mb-3 flex items-center gap-3 text-xs">
-				{semanticSearchUsed ? (
-					<div className="flex items-center gap-1.5 text-muted-foreground">
-						<Sparkles className="h-3 w-3" />
-						<span>Semantic search enabled</span>
-					</div>
-				) : (
-					<div className="flex items-center gap-1.5 text-muted-foreground/60">
-						<Search className="h-3 w-3" />
-						<span>Text search only</span>
-					</div>
-				)}
-				{searchError && (
-					<div className="flex items-center gap-1.5 text-amber-500/80 dark:text-amber-400/70">
-						<AlertTriangle className="h-3 w-3" />
-						<span>Search limited: {searchError}</span>
-					</div>
-				)}
+				<div className="flex items-center gap-1.5 text-muted-foreground/60">
+					<Search className="h-3 w-3" />
+					<span>Text search</span>
+				</div>
 			</div>
 
 			<div className="h-[calc(100vh-19rem)] overflow-auto" ref={parentRef}>
@@ -303,7 +163,6 @@ function HybridSearchResults({
 					style={{ height: `${virtualizer.getTotalSize()}px` }}
 				>
 					{virtualItems.map((virtualRow) => {
-						const isLoaderRow = virtualRow.index >= results.length;
 						const item = results[virtualRow.index];
 
 						return (
@@ -316,13 +175,7 @@ function HybridSearchResults({
 									transform: `translateY(${virtualRow.start}px)`,
 								}}
 							>
-								{isLoaderRow ? (
-									hasNextPage && (
-										<div className="flex justify-center py-4">
-											<Loader />
-										</div>
-									)
-								) : item ? (
+								{item ? (
 									<div className="pb-2">
 										{item.type === "bookmark" ? (
 											<BookmarkCard bookmark={item} />
@@ -341,76 +194,55 @@ function HybridSearchResults({
 }
 
 /**
- * Browse mode for merged bookmarks + highlights (no search query).
- * Uses traditional endpoints, sorted by createdAt.
+ * Browse merged bookmarks + highlights sorted by creation time.
  */
-function MergedBrowseList({ userId }: { userId: string }) {
+function MergedBrowseList({ userId }: { userId: Id<"users"> }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	const bookmarksQuery = useInfiniteQuery({
-		queryKey: ["library", "browse", "bookmarks", userId],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).bookmarks.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch bookmarks");
-			}
-			return data;
-		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
+	const bookmarksQuery = usePaginatedQuery(
+		api.users.getUserBookmarks,
+		{ userId, paginationOpts: { numItems: 20 } },
+		{ initialNumItems: 20 }
+	);
 
-	const highlightsQuery = useInfiniteQuery({
-		queryKey: ["library", "browse", "highlights", userId],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).highlights.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch highlights");
-			}
-			return data;
-		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
-
-	const bookmarks =
-		bookmarksQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? [];
-	const highlights =
-		highlightsQuery.data?.pages.flatMap((page) => page?.items ?? []) ?? [];
+	const highlightsQuery = usePaginatedQuery(
+		api.users.getUserHighlights,
+		{ userId, paginationOpts: { numItems: 20 } },
+		{ initialNumItems: 20 }
+	);
 
 	const mergedItems = useMemo(() => {
-		const bookmarkItems: MergedItem[] = bookmarks.map((b) => ({
+		const bookmarkItems = (bookmarksQuery.results ?? []).map((b) => ({
 			type: "bookmark" as const,
-			...b,
+			_id: b._id,
+			url: b.url,
+			title: b.title ?? null,
+			description: b.description ?? null,
+			favicon: b.favicon ?? null,
+			_creationTime: b._creationTime,
 		}));
-		const highlightItems: MergedItem[] = highlights.map((h) => ({
+		const highlightItems = (highlightsQuery.results ?? []).map((h) => ({
 			type: "highlight" as const,
-			...h,
+			_id: h._id,
+			url: h.url,
+			text: h.text,
+			_creationTime: h._creationTime,
 		}));
 
-		return [...bookmarkItems, ...highlightItems].sort((a, b) => {
-			const dateA = new Date(a.createdAt).getTime();
-			const dateB = new Date(b.createdAt).getTime();
-			return dateB - dateA;
-		});
-	}, [bookmarks, highlights]);
+		return [...bookmarkItems, ...highlightItems].sort(
+			(a, b) => b._creationTime - a._creationTime
+		);
+	}, [bookmarksQuery.results, highlightsQuery.results]);
 
-	const hasNextPage = bookmarksQuery.hasNextPage || highlightsQuery.hasNextPage;
-	const isFetchingNextPage =
-		bookmarksQuery.isFetchingNextPage || highlightsQuery.isFetchingNextPage;
+	const canLoadMore =
+		bookmarksQuery.status === "CanLoadMore" ||
+		highlightsQuery.status === "CanLoadMore";
+	const isLoadingMore =
+		bookmarksQuery.status === "LoadingMore" ||
+		highlightsQuery.status === "LoadingMore";
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? mergedItems.length + 1 : mergedItems.length,
+		count: canLoadMore ? mergedItems.length + 1 : mergedItems.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 105,
 		overscan: 5,
@@ -421,47 +253,38 @@ function MergedBrowseList({ userId }: { userId: string }) {
 
 	useEffect(() => {
 		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
+		if (!lastItem) return;
 
 		if (
 			lastItem.index >= mergedItems.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
+			canLoadMore &&
+			!isLoadingMore
 		) {
-			if (bookmarksQuery.hasNextPage) {
-				bookmarksQuery.fetchNextPage();
+			if (bookmarksQuery.status === "CanLoadMore") {
+				bookmarksQuery.loadMore(20);
 			}
-			if (highlightsQuery.hasNextPage) {
-				highlightsQuery.fetchNextPage();
+			if (highlightsQuery.status === "CanLoadMore") {
+				highlightsQuery.loadMore(20);
 			}
 		}
 	}, [
 		virtualItems,
 		mergedItems.length,
-		hasNextPage,
-		isFetchingNextPage,
+		canLoadMore,
+		isLoadingMore,
 		bookmarksQuery,
 		highlightsQuery,
 	]);
 
-	const isLoading = bookmarksQuery.isLoading || highlightsQuery.isLoading;
-	const error = bookmarksQuery.error || highlightsQuery.error;
+	const isLoading =
+		bookmarksQuery.status === "LoadingFirstPage" ||
+		highlightsQuery.status === "LoadingFirstPage";
 
 	if (isLoading) {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to load items
-			</p>
 		);
 	}
 
@@ -498,7 +321,7 @@ function MergedBrowseList({ userId }: { userId: string }) {
 							}}
 						>
 							{isLoaderRow ? (
-								hasNextPage && (
+								canLoadMore && (
 									<div className="flex justify-center py-4">
 										<Loader />
 									</div>
@@ -521,58 +344,35 @@ function MergedBrowseList({ userId }: { userId: string }) {
 }
 
 /**
- * Browse/search bookmarks using traditional endpoint.
- * Used when tag filter is active (search API doesn't support tag filtering).
+ * Browse bookmarks with optional tag filtering and search.
  */
 function BookmarksBrowseList({
 	userId,
 	searchQuery,
 	selectedTagId,
 }: {
-	userId: string;
+	userId: Id<"users">;
 	searchQuery: string;
 	selectedTagId: string | null;
 }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		isLoading,
-		error,
-	} = useInfiniteQuery({
-		queryKey: [
-			"library",
-			"browse",
-			"bookmarks",
-			userId,
-			searchQuery,
-			selectedTagId,
-		],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).bookmarks.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-					...(searchQuery ? { q: searchQuery } : {}),
-					...(selectedTagId ? { tagId: selectedTagId } : {}),
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch bookmarks");
-			}
-			return data;
+	const bookmarksQuery = usePaginatedQuery(
+		api.bookmarks.list,
+		{
+			paginationOpts: { numItems: 20 },
+			...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
+			...(searchQuery ? { search: searchQuery } : {}),
 		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
+		{ initialNumItems: 20 }
+	);
 
-	const bookmarks = data?.pages.flatMap((page) => page?.items ?? []) ?? [];
+	const bookmarks = bookmarksQuery.results ?? [];
+	const canLoadMore = bookmarksQuery.status === "CanLoadMore";
+	const isLoadingMore = bookmarksQuery.status === "LoadingMore";
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? bookmarks.length + 1 : bookmarks.length,
+		count: canLoadMore ? bookmarks.length + 1 : bookmarks.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 110,
 		overscan: 5,
@@ -583,38 +383,28 @@ function BookmarksBrowseList({
 
 	useEffect(() => {
 		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
+		if (!lastItem) return;
 
 		if (
 			lastItem.index >= bookmarks.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
+			canLoadMore &&
+			!isLoadingMore
 		) {
-			fetchNextPage();
+			bookmarksQuery.loadMore(20);
 		}
 	}, [
 		virtualItems,
 		bookmarks.length,
-		hasNextPage,
-		isFetchingNextPage,
-		fetchNextPage,
+		canLoadMore,
+		isLoadingMore,
+		bookmarksQuery,
 	]);
 
-	if (isLoading) {
+	if (bookmarksQuery.status === "LoadingFirstPage") {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to load bookmarks
-			</p>
 		);
 	}
 
@@ -671,7 +461,7 @@ function BookmarksBrowseList({
 							}}
 						>
 							{isLoaderRow ? (
-								hasNextPage && (
+								canLoadMore && (
 									<div className="flex justify-center py-4">
 										<Loader />
 									</div>
@@ -690,48 +480,33 @@ function BookmarksBrowseList({
 }
 
 /**
- * Browse highlights using traditional endpoint.
- * Used when no search query.
+ * Browse highlights with optional search.
  */
 function HighlightsBrowseList({
 	userId,
 	searchQuery,
 }: {
-	userId: string;
+	userId: Id<"users">;
 	searchQuery: string;
 }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		isLoading,
-		error,
-	} = useInfiniteQuery({
-		queryKey: ["library", "browse", "highlights", userId, searchQuery],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).highlights.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-					...(searchQuery ? { q: searchQuery } : {}),
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch highlights");
-			}
-			return data;
+	const highlightsQuery = usePaginatedQuery(
+		api.users.getUserHighlights,
+		{
+			userId,
+			paginationOpts: { numItems: 20 },
+			...(searchQuery ? { search: searchQuery } : {}),
 		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
+		{ initialNumItems: 20 }
+	);
 
-	const highlights = data?.pages.flatMap((page) => page?.items ?? []) ?? [];
+	const highlights = highlightsQuery.results ?? [];
+	const canLoadMore = highlightsQuery.status === "CanLoadMore";
+	const isLoadingMore = highlightsQuery.status === "LoadingMore";
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? highlights.length + 1 : highlights.length,
+		count: canLoadMore ? highlights.length + 1 : highlights.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 100,
 		overscan: 5,
@@ -742,38 +517,28 @@ function HighlightsBrowseList({
 
 	useEffect(() => {
 		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
+		if (!lastItem) return;
 
 		if (
 			lastItem.index >= highlights.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
+			canLoadMore &&
+			!isLoadingMore
 		) {
-			fetchNextPage();
+			highlightsQuery.loadMore(20);
 		}
 	}, [
 		virtualItems,
 		highlights.length,
-		hasNextPage,
-		isFetchingNextPage,
-		fetchNextPage,
+		canLoadMore,
+		isLoadingMore,
+		highlightsQuery,
 	]);
 
-	if (isLoading) {
+	if (highlightsQuery.status === "LoadingFirstPage") {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to load highlights
-			</p>
 		);
 	}
 
@@ -820,7 +585,7 @@ function HighlightsBrowseList({
 							}}
 						>
 							{isLoaderRow ? (
-								hasNextPage && (
+								canLoadMore && (
 									<div className="flex justify-center py-4">
 										<Loader />
 									</div>

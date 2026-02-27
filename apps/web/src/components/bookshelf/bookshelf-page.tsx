@@ -1,11 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { api } from "@convex/_generated/api";
+import { useQuery } from "convex/react";
 import { Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import Loader from "@/components/loader";
 import { TagFilterPills } from "@/components/profile/tag-filter-pills";
 import { Input } from "@/components/ui/input";
-import { api } from "@/utils/api";
 
 import { BookshelfResults } from "./bookshelf-results";
 import { type ContentType, ContentTypeFilter } from "./content-type-filter";
@@ -16,65 +16,32 @@ export function BookshelfPage() {
 	const [contentType, setContentType] = useState<ContentType>("all");
 	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
-	// 300ms debounce
 	useEffect(() => {
 		const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
 		return () => clearTimeout(timer);
 	}, [searchInput]);
 
-	// Clear tag filter when switching away from bookmarks
 	useEffect(() => {
 		if (contentType !== "bookmarks" && contentType !== "all") {
 			setSelectedTagId(null);
 		}
 	}, [contentType]);
 
-	// Fetch current user info
-	const { data: user, isLoading: userLoading } = useQuery({
-		queryKey: ["users", "me"],
-		queryFn: async () => {
-			const { data, error } = await api.api.users.me.get();
-			if (error || !data || "error" in data) {
-				throw new Error("Failed to fetch user");
-			}
-			return data;
-		},
-	});
+	const user = useQuery(api.users.getMe);
+	const tags = useQuery(api.bookmarks.listTags, user ? {} : "skip");
 
-	// Fetch user's tags for filtering
-	const { data: tagsData, isLoading: tagsLoading } = useQuery({
-		queryKey: ["library", "tags", user?.id],
-		queryFn: async () => {
-			if (!user?.id) {
-				return { tags: [] };
-			}
-			const { data, error } = await api.api
-				.users({ userId: user.id })
-				.tags.get();
-			if (error) {
-				throw new Error("Failed to fetch tags");
-			}
-			return data;
-		},
-		enabled:
-			!!user?.id && (contentType === "bookmarks" || contentType === "all"),
-	});
-
-	// Handle keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			// Escape to clear search
 			if (e.key === "Escape" && searchInput) {
 				setSearchInput("");
 				setDebouncedSearch("");
 			}
 		};
-
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [searchInput]);
 
-	if (userLoading) {
+	if (user === undefined) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
 				<Loader />
@@ -94,7 +61,6 @@ export function BookshelfPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-4xl px-6 py-10">
-			{/* Search bar */}
 			<div className="relative mb-6">
 				<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
@@ -117,28 +83,25 @@ export function BookshelfPage() {
 				)}
 			</div>
 
-			{/* Content type filter */}
 			<ContentTypeFilter onChange={setContentType} value={contentType} />
 
-			{/* Tag filter pills (only for bookmarks or all) */}
 			{(contentType === "bookmarks" || contentType === "all") && (
 				<div className="mt-4">
 					<TagFilterPills
-						isLoading={tagsLoading}
+						isLoading={tags === undefined}
 						onSelectTag={setSelectedTagId}
 						selectedTagId={selectedTagId}
-						tags={tagsData?.tags ?? []}
+						tags={tags ?? []}
 					/>
 				</div>
 			)}
 
-			{/* Results */}
 			<div className="mt-4">
 				<BookshelfResults
 					contentType={contentType}
 					searchQuery={debouncedSearch}
 					selectedTagId={selectedTagId}
-					userId={user.id}
+					userId={user._id}
 				/>
 			</div>
 		</div>

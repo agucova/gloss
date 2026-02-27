@@ -1,12 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import type { Id } from "@convex/_generated/dataModel";
+
+import { api } from "@convex/_generated/api";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
 
 import Loader from "@/components/loader";
 import { GeneratedAvatar } from "@/components/profile/profile-header";
-import { api } from "@/utils/api";
 
 interface ProfileFriendsActivityProps {
-	userId: string;
+	userId: Id<"users">;
 	userName: string;
 	isOwnProfile: boolean;
 }
@@ -16,23 +18,10 @@ export function ProfileFriendsActivity({
 	userName,
 	isOwnProfile,
 }: ProfileFriendsActivityProps) {
-	// Fetch user's friends
-	const { data: friends, isLoading } = useQuery({
-		queryKey: ["user", userId, "friends"],
-		queryFn: async () => {
-			const { data, error } = await api.api.users({ userId }).friends.get();
-			if (error) {
-				throw new Error("Failed to fetch friends");
-			}
-			if (!data || "error" in data) {
-				throw new Error("Failed to fetch friends");
-			}
-			return data;
-		},
-	});
+	const friends = useQuery(api.users.getUserFriends, { userId });
 
 	const renderFriendsList = () => {
-		if (isLoading) {
+		if (friends === undefined) {
 			return (
 				<div className="flex justify-center py-8">
 					<Loader />
@@ -44,7 +33,7 @@ export function ProfileFriendsActivity({
 			return (
 				<div className="space-y-2">
 					{friends.slice(0, 10).map((friend) => (
-						<FriendItem friend={friend} key={friend.id} />
+						<FriendItem friend={friend} key={friend._id} />
 					))}
 
 					{friends.length > 10 && (
@@ -77,10 +66,10 @@ export function ProfileFriendsActivity({
 
 interface FriendItemProps {
 	friend: {
-		id: string;
+		_id: Id<"users">;
 		name: string;
-		username: string | null;
-		image: string | null;
+		username?: string | null;
+		image?: string | null;
 	};
 }
 

@@ -1,5 +1,8 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import type { Id } from "@convex/_generated/dataModel";
+
+import { api } from "@convex/_generated/api";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { Bookmark, Highlighter, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,14 +11,14 @@ import Loader from "@/components/loader";
 import { TagFilterPills } from "@/components/profile/tag-filter-pills";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { api } from "@/utils/api";
 
 interface ProfileTabsProps {
 	profile: {
-		id: string;
+		_id: Id<"users">;
 		name: string;
-		bookmarksVisibility?: "public" | "friends" | "private" | null;
-		friendshipStatus?: "none" | "pending_sent" | "pending_received" | "friends";
+		bookmarksVisibility?: string | null;
+		isFriend: boolean;
+		isOwnProfile: boolean;
 	};
 	isOwnProfile: boolean;
 }
@@ -28,13 +31,11 @@ export function ProfileTabs({ profile, isOwnProfile }: ProfileTabsProps) {
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
-	// 300ms debounce
 	useEffect(() => {
 		const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
 		return () => clearTimeout(timer);
 	}, [searchInput]);
 
-	// Clear search and tag filter on tab change
 	const handleTabChange = (tab: Tab) => {
 		setActiveTab(tab);
 		setSearchInput("");
@@ -42,31 +43,20 @@ export function ProfileTabs({ profile, isOwnProfile }: ProfileTabsProps) {
 		setSelectedTagId(null);
 	};
 
-	// Check if bookmarks should be visible
 	const canViewBookmarks =
 		isOwnProfile ||
 		profile.bookmarksVisibility === "public" ||
-		(profile.bookmarksVisibility === "friends" &&
-			profile.friendshipStatus === "friends");
+		(profile.bookmarksVisibility === "friends" && profile.isFriend);
 
-	// Fetch user's tags for filtering
-	const { data: tagsData, isLoading: tagsLoading } = useQuery({
-		queryKey: ["user", profile.id, "tags"],
-		queryFn: async () => {
-			const { data, error } = await api.api
-				.users({ userId: profile.id })
-				.tags.get();
-			if (error) {
-				throw new Error("Failed to fetch tags");
-			}
-			return data;
-		},
-		enabled: canViewBookmarks && activeTab === "bookmarks",
-	});
+	const tags = useQuery(
+		api.users.getUserTags,
+		canViewBookmarks && activeTab === "bookmarks"
+			? { userId: profile._id }
+			: "skip"
+	);
 
 	return (
 		<div className="flex min-h-[calc(100vh-12rem)] flex-col">
-			{/* Tab headers */}
 			<div className="flex gap-1 border-b border-border">
 				<TabButton
 					active={activeTab === "highlights"}
@@ -84,7 +74,6 @@ export function ProfileTabs({ profile, isOwnProfile }: ProfileTabsProps) {
 				)}
 			</div>
 
-			{/* Search input */}
 			<div className="relative py-4">
 				<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
@@ -111,26 +100,24 @@ export function ProfileTabs({ profile, isOwnProfile }: ProfileTabsProps) {
 				)}
 			</div>
 
-			{/* Tag filter pills (only for bookmarks) */}
 			{activeTab === "bookmarks" && canViewBookmarks && (
 				<TagFilterPills
-					isLoading={tagsLoading}
+					isLoading={tags === undefined}
 					onSelectTag={setSelectedTagId}
 					selectedTagId={selectedTagId}
-					tags={tagsData?.tags ?? []}
+					tags={tags ?? []}
 				/>
 			)}
 
-			{/* Tab content */}
 			<div className="flex-1">
 				{activeTab === "highlights" && (
-					<HighlightsList searchQuery={debouncedSearch} userId={profile.id} />
+					<HighlightsList searchQuery={debouncedSearch} userId={profile._id} />
 				)}
 				{activeTab === "bookmarks" && canViewBookmarks && (
 					<BookmarksList
 						searchQuery={debouncedSearch}
 						selectedTagId={selectedTagId}
-						userId={profile.id}
+						userId={profile._id}
 					/>
 				)}
 			</div>
@@ -167,41 +154,27 @@ function HighlightsList({
 	userId,
 	searchQuery,
 }: {
-	userId: string;
+	userId: Id<"users">;
 	searchQuery: string;
 }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		isLoading,
-		error,
-	} = useInfiniteQuery({
-		queryKey: ["user", userId, "highlights", searchQuery],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).highlights.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-					...(searchQuery ? { q: searchQuery } : {}),
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch highlights");
-			}
-			return data;
+	const highlightsQuery = usePaginatedQuery(
+		api.users.getUserHighlights,
+		{
+			userId,
+			paginationOpts: { numItems: 20 },
+			...(searchQuery ? { search: searchQuery } : {}),
 		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
+		{ initialNumItems: 20 }
+	);
 
-	const highlights = data?.pages.flatMap((page) => page?.items ?? []) ?? [];
+	const highlights = highlightsQuery.results ?? [];
+	const canLoadMore = highlightsQuery.status === "CanLoadMore";
+	const isLoadingMore = highlightsQuery.status === "LoadingMore";
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? highlights.length + 1 : highlights.length,
+		count: canLoadMore ? highlights.length + 1 : highlights.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 100,
 		overscan: 5,
@@ -210,41 +183,30 @@ function HighlightsList({
 
 	const virtualItems = virtualizer.getVirtualItems();
 
-	// Fetch next page when last item is visible
 	useEffect(() => {
 		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
+		if (!lastItem) return;
 
 		if (
 			lastItem.index >= highlights.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
+			canLoadMore &&
+			!isLoadingMore
 		) {
-			fetchNextPage();
+			highlightsQuery.loadMore(20);
 		}
 	}, [
 		virtualItems,
 		highlights.length,
-		hasNextPage,
-		isFetchingNextPage,
-		fetchNextPage,
+		canLoadMore,
+		isLoadingMore,
+		highlightsQuery,
 	]);
 
-	if (isLoading) {
+	if (highlightsQuery.status === "LoadingFirstPage") {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to load highlights
-			</p>
 		);
 	}
 
@@ -288,7 +250,7 @@ function HighlightsList({
 							}}
 						>
 							{isLoaderRow ? (
-								hasNextPage && (
+								canLoadMore && (
 									<div className="flex justify-center py-4">
 										<Loader />
 									</div>
@@ -311,43 +273,29 @@ function BookmarksList({
 	searchQuery,
 	selectedTagId,
 }: {
-	userId: string;
+	userId: Id<"users">;
 	searchQuery: string;
 	selectedTagId: string | null;
 }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		isLoading,
-		error,
-	} = useInfiniteQuery({
-		queryKey: ["user", userId, "bookmarks", searchQuery, selectedTagId],
-		queryFn: async ({ pageParam }) => {
-			const { data, error } = await api.api.users({ userId }).bookmarks.get({
-				query: {
-					cursor: pageParam,
-					limit: 20,
-					...(searchQuery ? { q: searchQuery } : {}),
-					...(selectedTagId ? { tagId: selectedTagId } : {}),
-				},
-			});
-			if (error) {
-				throw new Error("Failed to fetch bookmarks");
-			}
-			return data;
+	const bookmarksQuery = usePaginatedQuery(
+		api.users.getUserBookmarks,
+		{
+			userId,
+			paginationOpts: { numItems: 20 },
+			...(searchQuery ? { search: searchQuery } : {}),
+			...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
 		},
-		initialPageParam: undefined as string | undefined,
-		getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
-	});
+		{ initialNumItems: 20 }
+	);
 
-	const bookmarks = data?.pages.flatMap((page) => page?.items ?? []) ?? [];
+	const bookmarks = bookmarksQuery.results ?? [];
+	const canLoadMore = bookmarksQuery.status === "CanLoadMore";
+	const isLoadingMore = bookmarksQuery.status === "LoadingMore";
 
 	const virtualizer = useVirtualizer({
-		count: hasNextPage ? bookmarks.length + 1 : bookmarks.length,
+		count: canLoadMore ? bookmarks.length + 1 : bookmarks.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 110,
 		overscan: 5,
@@ -356,41 +304,30 @@ function BookmarksList({
 
 	const virtualItems = virtualizer.getVirtualItems();
 
-	// Fetch next page when last item is visible
 	useEffect(() => {
 		const lastItem = virtualItems.at(-1);
-		if (!lastItem) {
-			return;
-		}
+		if (!lastItem) return;
 
 		if (
 			lastItem.index >= bookmarks.length - 1 &&
-			hasNextPage &&
-			!isFetchingNextPage
+			canLoadMore &&
+			!isLoadingMore
 		) {
-			fetchNextPage();
+			bookmarksQuery.loadMore(20);
 		}
 	}, [
 		virtualItems,
 		bookmarks.length,
-		hasNextPage,
-		isFetchingNextPage,
-		fetchNextPage,
+		canLoadMore,
+		isLoadingMore,
+		bookmarksQuery,
 	]);
 
-	if (isLoading) {
+	if (bookmarksQuery.status === "LoadingFirstPage") {
 		return (
 			<div className="flex justify-center py-12">
 				<Loader />
 			</div>
-		);
-	}
-
-	if (error) {
-		return (
-			<p className="py-12 text-center text-sm text-muted-foreground">
-				Failed to load bookmarks
-			</p>
 		);
 	}
 
@@ -444,7 +381,7 @@ function BookmarksList({
 							}}
 						>
 							{isLoaderRow ? (
-								hasNextPage && (
+								canLoadMore && (
 									<div className="flex justify-center py-4">
 										<Loader />
 									</div>

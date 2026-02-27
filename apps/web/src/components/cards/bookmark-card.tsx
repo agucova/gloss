@@ -3,7 +3,8 @@ import { Bookmark, Clock, Star } from "lucide-react";
 import { formatRelativeTime, getDomain } from "./utils";
 
 export interface BookmarkTag {
-	id: string;
+	_id?: string;
+	id?: string;
 	name: string;
 	color: string | null;
 	isSystem: boolean;
@@ -11,12 +12,14 @@ export interface BookmarkTag {
 
 export interface BookmarkCardProps {
 	bookmark: {
-		id: string;
+		_id?: string;
+		id?: string;
 		url: string;
-		title: string | null;
-		description: string | null;
-		favicon: string | null;
-		createdAt: Date | string;
+		title?: string | null;
+		description?: string | null;
+		favicon?: string | null;
+		createdAt?: Date | string;
+		_creationTime?: number;
 		tags?: BookmarkTag[];
 	};
 }
@@ -65,13 +68,15 @@ export function BookmarkCard({ bookmark }: BookmarkCardProps) {
 					<span className="min-w-0 truncate">{domain}</span>
 					<span className="shrink-0">·</span>
 					<span className="shrink-0">
-						{formatRelativeTime(bookmark.createdAt)}
+						{formatRelativeTime(
+							bookmark.createdAt ?? bookmark._creationTime ?? Date.now()
+						)}
 					</span>
 				</div>
 				{tags.length > 0 && (
 					<div className="mt-2 flex items-center gap-1.5 overflow-hidden">
 						{tags.slice(0, 3).map((tag) => (
-							<TagIndicator key={tag.id} tag={tag} />
+							<TagIndicator key={tag._id ?? tag.id ?? tag.name} tag={tag} />
 						))}
 						{tags.length > 3 && (
 							<span className="shrink-0 text-xs text-muted-foreground/50">

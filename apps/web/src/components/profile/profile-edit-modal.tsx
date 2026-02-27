@@ -1,5 +1,8 @@
+import type { Id } from "@convex/_generated/dataModel";
+
+import { api } from "@convex/_generated/api";
 import { useForm } from "@tanstack/react-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "convex/react";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -8,30 +11,27 @@ import z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api } from "@/utils/api";
 
-// Validation patterns
 const TWITTER_HANDLE_PATTERN = /^[a-zA-Z0-9_]{0,15}$/;
 const GITHUB_HANDLE_PATTERN = /^[a-zA-Z0-9-]{0,39}$/;
 
 interface ProfileEditModalProps {
 	profile: {
-		id: string;
+		_id: Id<"users">;
 		name: string;
-		username: string | null;
-		bio: string | null;
-		website: string | null;
-		twitterHandle: string | null;
-		githubHandle: string | null;
-		bookmarksVisibility?: "public" | "friends" | "private" | null;
+		username?: string | null;
+		bio?: string | null;
+		website?: string | null;
+		twitterHandle?: string | null;
+		githubHandle?: string | null;
+		bookmarksVisibility?: string | null;
 	};
 }
 
 export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 	const [isOpen, setIsOpen] = useState(false);
-	const queryClient = useQueryClient();
+	const updateProfileMutation = useMutation(api.users.updateProfile);
 
-	// Listen for open event
 	useEffect(() => {
 		const handleOpen = () => setIsOpen(true);
 		window.addEventListener("open-profile-edit-modal", handleOpen);
@@ -39,7 +39,6 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 			window.removeEventListener("open-profile-edit-modal", handleOpen);
 	}, []);
 
-	// Close on escape
 	useEffect(() => {
 		const handleEscape = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
@@ -52,30 +51,6 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 		}
 	}, [isOpen]);
 
-	// Update profile mutation
-	const updateProfile = useMutation({
-		mutationFn: async (data: {
-			name?: string;
-			bio?: string;
-			website?: string;
-			twitterHandle?: string;
-			githubHandle?: string;
-			bookmarksVisibility?: "public" | "friends" | "private";
-		}) => {
-			const { error } = await api.api.users.me.patch(data);
-			if (error) {
-				const errObj = error as { error?: string };
-				throw new Error(errObj.error ?? "Failed to update profile");
-			}
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["user"] });
-			toast.success("Profile updated");
-			setIsOpen(false);
-		},
-		onError: (err) => toast.error(err.message),
-	});
-
 	const form = useForm({
 		defaultValues: {
 			name: profile.name,
@@ -86,17 +61,21 @@ export function ProfileEditModal({ profile }: ProfileEditModalProps) {
 			bookmarksVisibility: profile.bookmarksVisibility ?? "public",
 		},
 		onSubmit: async ({ value }) => {
-			await updateProfile.mutateAsync({
-				name: value.name,
-				bio: value.bio || undefined,
-				website: value.website || undefined,
-				twitterHandle: value.twitterHandle || undefined,
-				githubHandle: value.githubHandle || undefined,
-				bookmarksVisibility: value.bookmarksVisibility as
-					| "public"
-					| "friends"
-					| "private",
-			});
+			try {
+				await updateProfileMutation({
+					name: value.name,
+					bio: value.bio || undefined,
+					website: value.website || undefined,
+					twitterHandle: value.twitterHandle || undefined,
+					githubHandle: value.githubHandle || undefined,
+				});
+				toast.success("Profile updated");
+				setIsOpen(false);
+			} catch (err) {
+				toast.error(
+					err instanceof Error ? err.message : "Failed to update profile"
+				);
+			}
 		},
 		validators: {
 			onSubmit: z.object({

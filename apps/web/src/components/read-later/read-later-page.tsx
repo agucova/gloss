@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { api } from "@convex/_generated/api";
+import { useQuery } from "convex/react";
 import { ArrowDownAZ, ArrowUpAZ, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -6,7 +7,6 @@ import Loader from "@/components/loader";
 import { TagFilterPills } from "@/components/profile/tag-filter-pills";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api } from "@/utils/api";
 
 import { ReadLaterList } from "./read-later-list";
 
@@ -16,13 +16,11 @@ export function ReadLaterPage() {
 	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 	const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-	// 300ms debounce
 	useEffect(() => {
 		const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
 		return () => clearTimeout(timer);
 	}, [searchInput]);
 
-	// Escape to clear search
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape" && searchInput) {
@@ -34,33 +32,10 @@ export function ReadLaterPage() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [searchInput]);
 
-	// Fetch current user
-	const { data: user, isLoading: userLoading } = useQuery({
-		queryKey: ["users", "me"],
-		queryFn: async () => {
-			const { data, error } = await api.api.users.me.get();
-			if (error || !data || "error" in data) {
-				throw new Error("Failed to fetch user");
-			}
-			return data;
-		},
-	});
+	const user = useQuery(api.users.getMe);
+	const tags = useQuery(api.bookmarks.listTags, user ? {} : "skip");
 
-	// Fetch user's tags
-	const { data: tagsData, isLoading: tagsLoading } = useQuery({
-		queryKey: ["read-later", "tags", user?.id],
-		queryFn: async () => {
-			if (!user?.id) return { tags: [] };
-			const { data, error } = await api.api
-				.users({ userId: user.id })
-				.tags.get();
-			if (error) throw new Error("Failed to fetch tags");
-			return data;
-		},
-		enabled: !!user?.id,
-	});
-
-	if (userLoading) {
+	if (user === undefined) {
 		return (
 			<div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
 				<Loader />
@@ -80,10 +55,8 @@ export function ReadLaterPage() {
 
 	return (
 		<div className="mx-auto w-full max-w-4xl px-6 py-10">
-			{/* Header */}
 			<h1 className="mb-6 text-lg font-medium text-foreground">Read Later</h1>
 
-			{/* Search bar */}
 			<div className="relative mb-4">
 				<Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 				<Input
@@ -106,14 +79,13 @@ export function ReadLaterPage() {
 				)}
 			</div>
 
-			{/* Tag pills + sort toggle */}
 			<div className="mb-4 flex items-center justify-between gap-4">
 				<div className="min-w-0 flex-1">
 					<TagFilterPills
-						isLoading={tagsLoading}
+						isLoading={tags === undefined}
 						onSelectTag={setSelectedTagId}
 						selectedTagId={selectedTagId}
-						tags={tagsData?.tags ?? []}
+						tags={tags ?? []}
 					/>
 				</div>
 				<Button
@@ -138,12 +110,11 @@ export function ReadLaterPage() {
 				</Button>
 			</div>
 
-			{/* Bookmark list */}
 			<ReadLaterList
 				searchQuery={debouncedSearch}
 				selectedTagId={selectedTagId}
 				sortOrder={sortOrder}
-				userId={user.id}
+				userId={user._id}
 			/>
 		</div>
 	);

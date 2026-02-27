@@ -2,10 +2,12 @@ import { formatRelativeTime, getDomain } from "./utils";
 
 export interface HighlightCardProps {
 	highlight: {
-		id: string;
+		_id?: string;
+		id?: string;
 		text: string;
 		url: string;
-		createdAt: Date | string;
+		createdAt?: Date | string;
+		_creationTime?: number;
 	};
 }
 
@@ -28,7 +30,11 @@ export function HighlightCard({ highlight }: HighlightCardProps) {
 					<div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground/60">
 						<span className="truncate">{domain}</span>
 						<span>·</span>
-						<span>{formatRelativeTime(highlight.createdAt)}</span>
+						<span>
+							{formatRelativeTime(
+								highlight.createdAt ?? highlight._creationTime ?? Date.now()
+							)}
+						</span>
 					</div>
 				</div>
 			</div>
