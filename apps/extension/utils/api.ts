@@ -1,23 +1,34 @@
-import type { App } from "server";
+import { ConvexHttpClient } from "convex/browser";
 
-import { treaty } from "@elysiajs/eden";
+import { api } from "../../../convex/_generated/api";
 
-const DEFAULT_SERVER_URL = "http://localhost:3000";
+// Convex deployment URL — loaded from extension storage or defaults to dev
+const DEFAULT_CONVEX_URL = "https://glorious-toad-644.convex.cloud";
 
-export { DEFAULT_SERVER_URL };
+let convexClient: ConvexHttpClient | null = null;
 
 /**
- * Create an Eden Treaty client for the Gloss API.
+ * Get or create the Convex HTTP client for the extension.
+ * Uses ConvexHttpClient for one-shot queries (no WebSocket needed in background).
  */
-export function createApiClient() {
-	return treaty<App>(DEFAULT_SERVER_URL, {
-		fetch: {
-			credentials: "include",
-		},
-	});
+export function getConvexClient(): ConvexHttpClient {
+	if (!convexClient) {
+		convexClient = new ConvexHttpClient(DEFAULT_CONVEX_URL);
+	}
+	return convexClient;
 }
 
 /**
- * Type alias for the API client.
+ * Set the auth token on the Convex client.
  */
-export type ApiClient = Awaited<ReturnType<typeof createApiClient>>;
+export function setAuthToken(token: string | null) {
+	const client = getConvexClient();
+	if (token) {
+		client.setAuth(token);
+	} else {
+		client.clearAuth();
+	}
+}
+
+export { api };
+export { DEFAULT_CONVEX_URL };

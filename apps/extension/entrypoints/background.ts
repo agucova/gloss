@@ -1,3 +1,4 @@
+import type { Id } from "../../../convex/_generated/dataModel";
 import type {
 	DashboardBookmark,
 	FeedBookmark,
@@ -9,27 +10,22 @@ import type {
 	ServerHighlight,
 } from "../utils/messages";
 
-import { DEFAULT_SERVER_URL, createApiClient } from "../utils/api";
+import { api, getConvexClient } from "../utils/api";
 
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
 		id: browser.runtime.id,
 	});
 
-	// Initialize theme-aware toolbar icon
 	initializeThemeIcon();
 
-	// Handle color scheme reports from the offscreen document
-	// Listen for messages from content scripts and offscreen document
 	browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-		// Handle color scheme from offscreen document
 		if (message.type === "COLOR_SCHEME") {
 			updateToolbarIcon(message.dark as boolean);
 			sendResponse({ success: true });
 			return false;
 		}
 
-		// Handle special utility messages that don't need responses
 		if (message.type === "OPEN_TAB" && message.url) {
 			browser.tabs.create({ url: message.url });
 			return false;
@@ -45,7 +41,6 @@ export default defineBackground(() => {
 				});
 			});
 
-		// Return true to indicate we'll send response asynchronously
 		return true;
 	});
 });
@@ -77,10 +72,8 @@ async function ensureOffscreenDocument(): Promise<boolean> {
 			reasons: ["DOM_SCRAPING" as chrome.offscreen.Reason],
 			justification: "Detect prefers-color-scheme for toolbar icon",
 		});
-		console.log("[Gloss] Offscreen document created for theme detection");
 		return true;
-	} catch (error) {
-		console.error("[Gloss] Failed to create offscreen document:", error);
+	} catch {
 		return false;
 	}
 }
@@ -88,7 +81,6 @@ async function ensureOffscreenDocument(): Promise<boolean> {
 async function initializeThemeIcon(): Promise<void> {
 	const success = await ensureOffscreenDocument();
 	if (success) {
-		// Give the offscreen document a moment to load, then request theme
 		setTimeout(() => {
 			chrome.runtime.sendMessage({ action: "detect-theme" }).catch(() => {});
 		}, 100);
@@ -96,8 +88,22 @@ async function initializeThemeIcon(): Promise<void> {
 }
 
 /**
- * Route messages to appropriate handlers.
+ * Wrap a Convex call with consistent error handling.
  */
+async function convexCall<T>(
+	operation: string,
+	fn: () => Promise<T>
+): Promise<T | { error: string }> {
+	try {
+		return await fn();
+	} catch (error) {
+		console.error(`[Gloss] Error (${operation}):`, error);
+		return {
+			error: error instanceof Error ? error.message : `Failed to ${operation}`,
+		};
+	}
+}
+
 async function handleMessage(
 	message: Message
 ): Promise<MessageResponse<Message["type"]>> {
@@ -114,7 +120,6 @@ async function handleMessage(
 			return await handleGetAuthStatus();
 		case "GET_RECENT_HIGHLIGHTS":
 			return await handleGetRecentHighlights(message.limit);
-		// Comment messages
 		case "LOAD_COMMENTS":
 			return await handleLoadComments(message.highlightId);
 		case "CREATE_COMMENT":
@@ -127,7 +132,6 @@ async function handleMessage(
 			return await handleSearchFriends(message.query);
 		case "LOAD_PAGE_COMMENT_SUMMARY":
 			return await handleLoadPageCommentSummary(message.highlightIds);
-		// Bookmark messages
 		case "GET_PAGE_METADATA":
 			return await handleGetPageMetadata(message.tabId);
 		case "GET_BOOKMARK_STATUS":
@@ -144,7 +148,6 @@ async function handleMessage(
 			return await handleToggleFavorite(message.id);
 		case "TOGGLE_READ_LATER":
 			return await handleToggleReadLater(message.id);
-		// Dashboard messages (for newtab)
 		case "GET_FEED_HIGHLIGHTS":
 			return await handleGetFeedHighlights(message.cursor, message.limit);
 		case "GET_FEED_BOOKMARKS":
@@ -153,7 +156,6 @@ async function handleMessage(
 			return await handleGetMyBookmarks(message.cursor, message.limit);
 		case "SEARCH_DASHBOARD":
 			return await handleSearchDashboard(message.query, message.limit);
-		// Settings messages
 		case "GET_USER_SETTINGS":
 			return await handleGetUserSettings();
 		case "SYNC_USER_SETTINGS":
@@ -163,442 +165,329 @@ async function handleMessage(
 	}
 }
 
-/**
- * Extract a human-readable error message from various error formats.
- */
-function extractErrorMessage(error: unknown, fallback: string): string {
-	if (!error) {
-		return fallback;
-	}
+// ─── Highlight handlers ─────────────────────────────
 
-	// If it's already a string, use it
-	if (typeof error === "string") {
-		return error;
-	}
-
-	// If it's an object, try various common properties
-	if (typeof error === "object") {
-		const obj = error as Record<string, unknown>;
-
-		// Eden error format: { value: { message: "..." } } or { value: "..." }
-		if (obj.value !== undefined) {
-			if (typeof obj.value === "string") {
-				return obj.value;
-			}
-			if (
-				typeof obj.value === "object" &&
-				obj.value !== null &&
-				"message" in obj.value
-			) {
-				return String((obj.value as { message: unknown }).message);
-			}
-		}
-
-		// Standard error format
-		if (typeof obj.message === "string") {
-			return obj.message;
-		}
-
-		// Elysia validation error format
-		if (typeof obj.summary === "string") {
-			return obj.summary;
-		}
-
-		// Try JSON stringify for debugging (but limit length)
-		try {
-			const json = JSON.stringify(error);
-			if (json !== "{}") {
-				return json.slice(0, 200);
-			}
-		} catch {
-			// Ignore stringify errors
-		}
-	}
-
-	return fallback;
-}
-
-/**
- * Wrap an API call with consistent error handling.
- */
-async function apiCall<T>(
-	operation: string,
-	fn: () => Promise<{ data: unknown; error: unknown }>
-): Promise<T | { error: string }> {
-	try {
-		const response = await fn();
-
-		if (response.error) {
-			console.error(`[Gloss] API error (${operation}):`, response.error);
-			return {
-				error: extractErrorMessage(response.error, `Failed to ${operation}`),
-			};
-		}
-
-		return response.data as T;
-	} catch (error) {
-		console.error(`[Gloss] Error (${operation}):`, error);
-		return {
-			error: extractErrorMessage(error, `Failed to ${operation}`),
-		};
-	}
-}
-
-/**
- * Load highlights for a specific URL.
- */
 async function handleLoadHighlights(
 	url: string
 ): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerHighlight[]>("load highlights", () =>
-		api.api.highlights.get({ query: { url } })
+	const client = getConvexClient();
+	const result = await convexCall("load highlights", () =>
+		client.query(api.highlights.getByUrl, { url })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log(`[Gloss] Loaded ${result.length} highlights for ${url}`);
-	return { highlights: result };
+	// Map Convex shape to extension's expected shape
+	const highlights: ServerHighlight[] = (result as unknown[]).map((h: any) => ({
+		id: h._id,
+		userId: h.userId,
+		url: h.url,
+		urlHash: h.urlHash,
+		selector: h.selector,
+		text: h.text,
+		visibility: h.visibility,
+		createdAt: new Date(h._creationTime).toISOString(),
+		user: h.user
+			? { id: h.user._id, name: h.user.name, image: h.user.image }
+			: undefined,
+	}));
+
+	console.log(`[Gloss] Loaded ${highlights.length} highlights for ${url}`);
+	return { highlights };
 }
 
-/**
- * Create a new highlight.
- */
 async function handleCreateHighlight(message: {
 	url: string;
 	selector: ServerHighlight["selector"];
 	text: string;
 	visibility?: "public" | "friends" | "private";
 }): Promise<{ highlight: ServerHighlight } | { error: string }> {
-	console.log("[Gloss] handleCreateHighlight called with:", message.url);
-	const api = createApiClient();
-
-	const result = await apiCall<ServerHighlight>("create highlight", () =>
-		api.api.highlights.post({
+	const client = getConvexClient();
+	const result = await convexCall("create highlight", () =>
+		client.mutation(api.highlights.create, {
 			url: message.url,
 			selector: message.selector,
 			text: message.text,
 			visibility: message.visibility,
 		})
 	);
-	console.log("[Gloss] handleCreateHighlight result:", result);
 
-	if ("error" in result) {
-		console.log("[Gloss] Returning error:", result);
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Created highlight:", result.id);
-	return { highlight: result };
+	// The mutation returns an ID — construct a minimal highlight object
+	const id = result as string;
+	const highlight: ServerHighlight = {
+		id,
+		userId: "",
+		url: message.url,
+		urlHash: "",
+		selector: message.selector,
+		text: message.text,
+		visibility: message.visibility ?? "friends",
+		createdAt: new Date().toISOString(),
+	};
+
+	console.log("[Gloss] Created highlight:", id);
+	return { highlight };
 }
 
-/**
- * Update an existing highlight.
- */
 async function handleUpdateHighlight(
 	id: string,
-	updates: {
-		visibility?: "public" | "friends" | "private";
-	}
+	updates: { visibility?: "public" | "friends" | "private" }
 ): Promise<{ highlight: ServerHighlight } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerHighlight>("update highlight", () =>
-		api.api.highlights({ id }).patch(updates)
+	const client = getConvexClient();
+	const result = await convexCall("update highlight", () =>
+		client.mutation(api.highlights.update, {
+			id: id as Id<"highlights">,
+			visibility: updates.visibility,
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Updated highlight:", id);
-	return { highlight: result };
+	return {
+		highlight: {
+			id,
+			visibility: updates.visibility ?? "friends",
+		} as ServerHighlight,
+	};
 }
 
-/**
- * Delete a highlight by ID.
- */
 async function handleDeleteHighlight(
 	id: string
 ): Promise<{ success: boolean } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<{ success: boolean }>("delete highlight", () =>
-		api.api.highlights({ id }).delete()
+	const client = getConvexClient();
+	const result = await convexCall("delete highlight", () =>
+		client.mutation(api.highlights.remove, { id: id as Id<"highlights"> })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
 	console.log("[Gloss] Deleted highlight:", id);
 	return { success: true };
 }
 
-/**
- * Check authentication status by querying the auth session endpoint.
- */
 async function handleGetAuthStatus(): Promise<{
 	authenticated: boolean;
 	user?: { id: string; name: string | null };
 }> {
 	try {
-		const response = await fetch(`${DEFAULT_SERVER_URL}/api/auth/get-session`, {
-			credentials: "include",
-		});
-
-		if (!response.ok) {
+		// Check if we have a stored auth token
+		const stored = await browser.storage.sync.get("glossAuthToken");
+		if (!stored.glossAuthToken) {
 			return { authenticated: false };
 		}
 
-		const session = await response.json();
+		// Try to query the current user to verify the token
+		const client = getConvexClient();
+		const user = await client.query(api.users.getMe);
 
-		if (session?.user) {
+		if (user) {
 			return {
 				authenticated: true,
-				user: {
-					id: session.user.id,
-					name: session.user.name ?? null,
-				},
+				user: { id: user._id, name: user.name },
 			};
 		}
 
 		return { authenticated: false };
-	} catch (error) {
-		console.error("[Gloss] Error checking auth status:", error);
+	} catch {
 		return { authenticated: false };
 	}
 }
 
-/**
- * Get recent highlights for the current user.
- */
 async function handleGetRecentHighlights(
 	limit = 5
 ): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerHighlight[]>("get recent highlights", () =>
-		api.api.highlights.mine.get({ query: { limit } })
+	const client = getConvexClient();
+	const result = await convexCall("get recent highlights", () =>
+		client.query(api.highlights.listMine, {
+			paginationOpts: { numItems: limit, cursor: null },
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log(`[Gloss] Retrieved ${result.length} recent highlights`);
-	return { highlights: result };
+	const page = (result as any).page ?? [];
+	const highlights: ServerHighlight[] = page.map((h: any) => ({
+		id: h._id,
+		userId: h.userId,
+		url: h.url,
+		urlHash: h.urlHash,
+		selector: h.selector,
+		text: h.text,
+		visibility: h.visibility,
+		createdAt: new Date(h._creationTime).toISOString(),
+	}));
+
+	return { highlights };
 }
 
-// ============================================================================
-// Comment handlers
-// ============================================================================
+// ─── Comment handlers ─────────────────────────────
 
-interface ServerCommentResponse {
-	id: string;
-	highlightId: string;
-	authorId: string;
-	parentId: string | null;
-	content: string;
-	createdAt: string;
-	updatedAt: string;
-	author: {
-		id: string;
-		name: string | null;
-		image: string | null;
-	};
-	mentions: Array<{
-		mentionedUser: {
-			id: string;
-			name: string | null;
-		};
-	}>;
-}
-
-/**
- * Load comments for a highlight.
- */
 async function handleLoadComments(
 	highlightId: string
-): Promise<{ comments: ServerCommentResponse[] } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerCommentResponse[]>("load comments", () =>
-		api.api.comments.highlight({ highlightId }).get()
+): Promise<{ comments: any[] } | { error: string }> {
+	const client = getConvexClient();
+	const result = await convexCall("load comments", () =>
+		client.query(api.comments.getForHighlight, {
+			highlightId: highlightId as Id<"highlights">,
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	return { comments: result };
+	const comments = (result as any[]).map((c: any) => ({
+		id: c._id,
+		highlightId: c.highlightId,
+		authorId: c.authorId,
+		parentId: c.parentId ?? null,
+		content: c.content,
+		createdAt: new Date(c._creationTime).toISOString(),
+		updatedAt: c.updatedAt
+			? new Date(c.updatedAt).toISOString()
+			: new Date(c._creationTime).toISOString(),
+		author: c.author
+			? { id: c.author._id, name: c.author.name, image: c.author.image }
+			: { id: c.authorId, name: null, image: null },
+		mentions: (c.mentions ?? []).map((m: any) => ({
+			mentionedUser: { id: m._id, name: m.name },
+		})),
+	}));
+
+	return { comments };
 }
 
-/**
- * Create a new comment.
- */
 async function handleCreateComment(message: {
 	highlightId: string;
 	content: string;
 	mentions: string[];
 	parentId?: string;
-}): Promise<{ comment: ServerCommentResponse } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerCommentResponse>("create comment", () =>
-		api.api.comments.post({
-			highlightId: message.highlightId,
+}): Promise<{ comment: any } | { error: string }> {
+	const client = getConvexClient();
+	const result = await convexCall("create comment", () =>
+		client.mutation(api.comments.create, {
+			highlightId: message.highlightId as Id<"highlights">,
 			content: message.content,
-			mentions: message.mentions,
-			parentId: message.parentId,
+			mentionedUserIds: message.mentions as Id<"users">[],
+			parentId: message.parentId as Id<"comments"> | undefined,
 		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Created comment:", result.id);
-	return { comment: result };
+	return {
+		comment: {
+			id: result as string,
+			highlightId: message.highlightId,
+			content: message.content,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString(),
+			author: { id: "", name: null, image: null },
+			mentions: [],
+		},
+	};
 }
 
-/**
- * Update an existing comment.
- */
 async function handleUpdateComment(message: {
 	id: string;
 	content: string;
 	mentions: string[];
-}): Promise<{ comment: ServerCommentResponse } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerCommentResponse>("update comment", () =>
-		api.api.comments({ id: message.id }).patch({
+}): Promise<{ comment: any } | { error: string }> {
+	const client = getConvexClient();
+	const result = await convexCall("update comment", () =>
+		client.mutation(api.comments.update, {
+			id: message.id as Id<"comments">,
 			content: message.content,
-			mentions: message.mentions,
+			mentionedUserIds: message.mentions as Id<"users">[],
 		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Updated comment:", message.id);
-	return { comment: result };
+	return {
+		comment: {
+			id: message.id,
+			content: message.content,
+			updatedAt: new Date().toISOString(),
+		},
+	};
 }
 
-/**
- * Delete a comment.
- */
 async function handleDeleteComment(
 	id: string
 ): Promise<{ success: boolean } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<{ success: boolean }>("delete comment", () =>
-		api.api.comments({ id }).delete()
+	const client = getConvexClient();
+	const result = await convexCall("delete comment", () =>
+		client.mutation(api.comments.remove, { id: id as Id<"comments"> })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
-
-	console.log("[Gloss] Deleted comment:", id);
+	if ("error" in result) return result;
 	return { success: true };
 }
 
-interface FriendResponse {
-	id: string;
-	name: string | null;
-	image: string | null;
-}
-
-/**
- * Search friends for @mention autocomplete.
- */
 async function handleSearchFriends(
 	query: string
-): Promise<{ friends: FriendResponse[] } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<FriendResponse[]>("search friends", () =>
-		api.api.friendships.search.get({ query: { q: query } })
+): Promise<{ friends: any[] } | { error: string }> {
+	const client = getConvexClient();
+	const result = await convexCall("search friends", () =>
+		client.query(api.friendships.searchFriends, { q: query })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	return { friends: result };
+	const friends = (result as any[]).map((f: any) => ({
+		id: f._id,
+		name: f.name,
+		image: f.image ?? null,
+	}));
+
+	return { friends };
 }
 
-interface PageCommentSummaryResponse {
-	highlightComments: Array<{
-		highlightId: string;
-		comments: ServerCommentResponse[];
-	}>;
-	totalComments: number;
-	commenters: Array<{
-		id: string;
-		name: string | null;
-		image: string | null;
-	}>;
-}
-
-/**
- * Load comment summary for all highlights on a page.
- * Batches requests to get comments for each highlight and aggregates results.
- */
-async function handleLoadPageCommentSummary(
-	highlightIds: string[]
-): Promise<PageCommentSummaryResponse | { error: string }> {
+async function handleLoadPageCommentSummary(highlightIds: string[]) {
 	if (highlightIds.length === 0) {
-		return {
-			highlightComments: [],
-			totalComments: 0,
-			commenters: [],
-		};
+		return { highlightComments: [], totalComments: 0, commenters: [] };
 	}
 
-	const api = createApiClient();
-	const highlightComments: Array<{
-		highlightId: string;
-		comments: ServerCommentResponse[];
-	}> = [];
-	const commenterMap = new Map<
-		string,
-		{ id: string; name: string | null; image: string | null }
-	>();
+	const client = getConvexClient();
+	const highlightComments: Array<{ highlightId: string; comments: any[] }> = [];
+	const commenterMap = new Map<string, any>();
 	let totalComments = 0;
 
-	// Load comments for all highlights in parallel
 	const results = await Promise.allSettled(
 		highlightIds.map(async (highlightId) => {
-			const result = await apiCall<ServerCommentResponse[]>(
-				"load comments",
-				() => api.api.comments.highlight({ highlightId }).get()
-			);
-			return { highlightId, result };
+			const comments = await client.query(api.comments.getForHighlight, {
+				highlightId: highlightId as Id<"highlights">,
+			});
+			return { highlightId, comments };
 		})
 	);
 
 	for (const settledResult of results) {
-		if (settledResult.status === "rejected") {
-			continue;
-		}
+		if (settledResult.status === "rejected") continue;
+		const { highlightId, comments } = settledResult.value;
+		if (comments.length > 0) {
+			const mapped = comments.map((c: any) => ({
+				id: c._id,
+				highlightId: c.highlightId,
+				authorId: c.authorId,
+				parentId: c.parentId ?? null,
+				content: c.content,
+				createdAt: new Date(c._creationTime).toISOString(),
+				updatedAt: c.updatedAt
+					? new Date(c.updatedAt).toISOString()
+					: new Date(c._creationTime).toISOString(),
+				author: c.author
+					? { id: c.author._id, name: c.author.name, image: c.author.image }
+					: { id: c.authorId, name: null, image: null },
+				mentions: [],
+			}));
+			highlightComments.push({ highlightId, comments: mapped });
+			totalComments += mapped.length;
 
-		const { highlightId, result } = settledResult.value;
-		if ("error" in result) {
-			continue;
-		}
-
-		// Only include highlights that have comments
-		if (result.length > 0) {
-			highlightComments.push({ highlightId, comments: result });
-			totalComments += result.length;
-
-			// Collect unique commenters
-			for (const comment of result) {
-				if (!commenterMap.has(comment.authorId)) {
-					commenterMap.set(comment.authorId, {
-						id: comment.authorId,
-						name: comment.author.name,
-						image: comment.author.image,
-					});
+			for (const c of mapped) {
+				if (!commenterMap.has(c.authorId)) {
+					commenterMap.set(c.authorId, c.author);
 				}
 			}
 		}
@@ -611,29 +500,7 @@ async function handleLoadPageCommentSummary(
 	};
 }
 
-// ============================================================================
-// Bookmark handlers
-// ============================================================================
-
-interface ServerBookmarkResponse {
-	id: string;
-	userId: string;
-	url: string;
-	urlHash: string;
-	title: string | null;
-	description: string | null;
-	favicon: string | null;
-	ogImage: string | null;
-	ogDescription: string | null;
-	siteName: string | null;
-	createdAt: string;
-	tags: Array<{
-		id: string;
-		name: string;
-		color: string | null;
-		isSystem: boolean;
-	}>;
-}
+// ─── Bookmark handlers ─────────────────────────────
 
 interface PageMetadataResponse {
 	title: string;
@@ -644,11 +511,6 @@ interface PageMetadataResponse {
 	siteName: string | null;
 }
 
-/**
- * Get page metadata from the active tab's content script.
- * Accepts an optional tabId to avoid race conditions when the popup
- * itself becomes the active tab.
- */
 async function handleGetPageMetadata(tabId?: number): Promise<{
 	metadata: PageMetadataResponse;
 }> {
@@ -670,15 +532,12 @@ async function handleGetPageMetadata(tabId?: number): Promise<{
 			};
 		}
 
-		// Send message to content script to extract metadata
 		const response = await browser.tabs.sendMessage(tab.id, {
 			type: "GET_PAGE_METADATA",
 		});
 
 		return { metadata: response.metadata };
-	} catch (error) {
-		console.error("[Gloss] Error getting page metadata:", error);
-		// Return basic info from the tab itself
+	} catch {
 		const tab = tabId
 			? await browser.tabs.get(tabId).catch(() => undefined)
 			: (await browser.tabs.query({ active: true, currentWindow: true }))[0];
@@ -695,38 +554,38 @@ async function handleGetPageMetadata(tabId?: number): Promise<{
 	}
 }
 
-/**
- * Check if a URL is bookmarked.
- */
-async function handleGetBookmarkStatus(
-	url: string
-): Promise<
-	| { bookmarked: true; bookmark: ServerBookmarkResponse }
-	| { bookmarked: false; bookmark: null }
-	| { error: string }
-> {
-	const api = createApiClient();
-	const result = await apiCall<{
-		bookmarked: boolean;
-		bookmark: ServerBookmarkResponse | null;
-	}>("check bookmark status", () =>
-		api.api.bookmarks.check.get({ query: { url } })
+async function handleGetBookmarkStatus(url: string) {
+	const client = getConvexClient();
+	const result = await convexCall("check bookmark status", () =>
+		client.query(api.bookmarks.checkUrl, { url })
 	);
 
-	if ("error" in result) {
-		return result;
+	if ("error" in result) return result;
+
+	if (result) {
+		const b = result as any;
+		return {
+			bookmarked: true as const,
+			bookmark: {
+				id: b._id,
+				userId: b.userId,
+				url: b.url,
+				urlHash: b.urlHash,
+				title: b.title ?? null,
+				description: b.description ?? null,
+				favicon: b.favicon ?? null,
+				ogImage: b.ogImage ?? null,
+				ogDescription: b.ogDescription ?? null,
+				siteName: b.siteName ?? null,
+				createdAt: new Date(b._creationTime).toISOString(),
+				tags: [],
+			},
+		};
 	}
 
-	if (result.bookmarked && result.bookmark) {
-		return { bookmarked: true, bookmark: result.bookmark };
-	}
-
-	return { bookmarked: false, bookmark: null };
+	return { bookmarked: false as const, bookmark: null };
 }
 
-/**
- * Save a new bookmark.
- */
 async function handleSaveBookmark(message: {
 	url: string;
 	title?: string;
@@ -735,10 +594,10 @@ async function handleSaveBookmark(message: {
 	ogDescription?: string;
 	siteName?: string;
 	tags?: string[];
-}): Promise<{ bookmark: ServerBookmarkResponse } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerBookmarkResponse>("save bookmark", () =>
-		api.api.bookmarks.post({
+}) {
+	const client = getConvexClient();
+	const result = await convexCall("save bookmark", () =>
+		client.mutation(api.bookmarks.create, {
 			url: message.url,
 			title: message.title,
 			favicon: message.favicon,
@@ -749,275 +608,229 @@ async function handleSaveBookmark(message: {
 		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Saved bookmark:", result.id);
-	return { bookmark: result };
+	return {
+		bookmark: {
+			id: result as string,
+			userId: "",
+			url: message.url,
+			urlHash: "",
+			title: message.title ?? null,
+			description: null,
+			favicon: message.favicon ?? null,
+			ogImage: message.ogImage ?? null,
+			ogDescription: message.ogDescription ?? null,
+			siteName: message.siteName ?? null,
+			createdAt: new Date().toISOString(),
+			tags: [],
+		},
+	};
 }
 
-/**
- * Update an existing bookmark.
- */
 async function handleUpdateBookmark(message: {
 	id: string;
 	title?: string;
 	description?: string;
 	tags?: string[];
-}): Promise<{ bookmark: ServerBookmarkResponse } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<ServerBookmarkResponse>("update bookmark", () =>
-		api.api.bookmarks({ id: message.id }).patch({
+}) {
+	const client = getConvexClient();
+	const result = await convexCall("update bookmark", () =>
+		client.mutation(api.bookmarks.update, {
+			id: message.id as Id<"bookmarks">,
 			title: message.title,
 			description: message.description,
 			tags: message.tags,
 		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Updated bookmark:", message.id);
-	return { bookmark: result };
+	return { bookmark: { id: message.id } as any };
 }
 
-/**
- * Delete a bookmark.
- */
 async function handleDeleteBookmark(
 	id: string
 ): Promise<{ success: boolean } | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<{ success: boolean }>("delete bookmark", () =>
-		api.api.bookmarks({ id }).delete()
+	const client = getConvexClient();
+	const result = await convexCall("delete bookmark", () =>
+		client.mutation(api.bookmarks.remove, { id: id as Id<"bookmarks"> })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
-
-	console.log("[Gloss] Deleted bookmark:", id);
+	if ("error" in result) return result;
 	return { success: true };
 }
 
-/**
- * Get user's tags for autocomplete.
- */
-async function handleGetUserTags(): Promise<
-	| {
-			tags: Array<{
-				id: string;
-				name: string;
-				color: string | null;
-				isSystem: boolean;
-			}>;
-	  }
-	| { error: string }
-> {
-	const api = createApiClient();
-	const result = await apiCall<{
-		tags: Array<{
-			id: string;
-			name: string;
-			color: string | null;
-			isSystem: boolean;
-		}>;
-	}>("get user tags", () => api.api.bookmarks.tags.get({ query: {} }));
-
-	if ("error" in result) {
-		return result;
-	}
-
-	return { tags: result.tags };
-}
-
-/**
- * Toggle favorite status on a bookmark.
- * Returns the new favorited state - UI should refresh bookmark to see updated tags.
- */
-async function handleToggleFavorite(
-	id: string
-): Promise<
-	{ favorited: boolean; bookmark: ServerBookmarkResponse } | { error: string }
-> {
-	const api = createApiClient();
-	const result = await apiCall<{ favorited: boolean }>("toggle favorite", () =>
-		api.api.bookmarks({ id }).favorite.post({})
+async function handleGetUserTags() {
+	const client = getConvexClient();
+	const result = await convexCall("get user tags", () =>
+		client.query(api.bookmarks.listTags, {})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Toggled favorite:", id, result.favorited);
-	return {
-		favorited: result.favorited,
-		bookmark: {} as ServerBookmarkResponse, // UI should refetch to get updated tags
-	};
+	const tags = (result as any[]).map((t: any) => ({
+		id: t._id,
+		name: t.name,
+		color: t.color ?? null,
+		isSystem: t.isSystem,
+	}));
+
+	return { tags };
 }
 
-/**
- * Toggle to-read status on a bookmark.
- * Returns the new toRead state - UI should refresh bookmark to see updated tags.
- */
-async function handleToggleReadLater(
-	id: string
-): Promise<
-	{ toRead: boolean; bookmark: ServerBookmarkResponse } | { error: string }
-> {
-	const api = createApiClient();
-	const result = await apiCall<{ toRead: boolean }>("toggle to-read", () =>
-		api.api.bookmarks({ id })["to-read"].post({})
+async function handleToggleFavorite(id: string) {
+	const client = getConvexClient();
+	const result = await convexCall("toggle favorite", () =>
+		client.mutation(api.bookmarks.toggleFavorite, { id: id as Id<"bookmarks"> })
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	console.log("[Gloss] Toggled to-read:", id, result.toRead);
-	return {
-		toRead: result.toRead,
-		bookmark: {} as ServerBookmarkResponse, // UI should refetch to get updated tags
-	};
+	const r = result as { added: boolean };
+	return { favorited: r.added, bookmark: {} as any };
 }
 
-// ============================================================================
-// Dashboard handlers (for newtab)
-// ============================================================================
+async function handleToggleReadLater(id: string) {
+	const client = getConvexClient();
+	const result = await convexCall("toggle to-read", () =>
+		client.mutation(api.bookmarks.toggleReadLater, {
+			id: id as Id<"bookmarks">,
+		})
+	);
+
+	if ("error" in result) return result;
+
+	const r = result as { added: boolean };
+	return { toRead: r.added, bookmark: {} as any };
+}
+
+// ─── Dashboard handlers ─────────────────────────────
 
 const DEFAULT_LIMIT = 20;
 
-/**
- * Get feed highlights (friends' highlights).
- */
 async function handleGetFeedHighlights(
-	cursor?: string,
+	_cursor?: string,
 	limit?: number
 ): Promise<PaginatedResponse<FeedHighlight> | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<PaginatedResponse<FeedHighlight>>(
-		"get feed highlights",
-		() => api.api.feed.get({ query: { cursor, limit: limit ?? DEFAULT_LIMIT } })
+	const client = getConvexClient();
+	const result = await convexCall("get feed highlights", () =>
+		client.query(api.feed.feedHighlights, {
+			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	return result;
+	const data = result as any;
+	const items: FeedHighlight[] = (data.page ?? []).map((h: any) => ({
+		id: h._id,
+		url: h.url,
+		text: h.text,
+		note: null,
+		color: "#fbbf24",
+		createdAt: new Date(h._creationTime).toISOString(),
+		user: h.user
+			? { id: h.user._id, name: h.user.name, image: h.user.image }
+			: { id: "", name: "", image: null },
+	}));
+
+	return { items, nextCursor: null };
 }
 
-/**
- * Get feed bookmarks (friends' bookmarks).
- */
 async function handleGetFeedBookmarks(
-	cursor?: string,
+	_cursor?: string,
 	limit?: number
 ): Promise<PaginatedResponse<FeedBookmark> | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<PaginatedResponse<FeedBookmark>>(
-		"get feed bookmarks",
-		() =>
-			api.api.feed.bookmarks.get({
-				query: { cursor, limit: limit ?? DEFAULT_LIMIT },
-			})
+	const client = getConvexClient();
+	const result = await convexCall("get feed bookmarks", () =>
+		client.query(api.feed.feedBookmarks, {
+			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	return result;
+	const data = result as any;
+	const items: FeedBookmark[] = (data.page ?? []).map((b: any) => ({
+		id: b._id,
+		url: b.url,
+		title: b.title ?? null,
+		description: b.description ?? null,
+		createdAt: new Date(b._creationTime).toISOString(),
+		user: b.user
+			? { id: b.user._id, name: b.user.name, image: b.user.image }
+			: { id: "", name: "", image: null },
+	}));
+
+	return { items, nextCursor: null };
 }
 
-/**
- * Get user's own bookmarks.
- */
 async function handleGetMyBookmarks(
-	cursor?: string,
+	_cursor?: string,
 	limit?: number
 ): Promise<PaginatedResponse<DashboardBookmark> | { error: string }> {
-	const api = createApiClient();
-	const result = await apiCall<PaginatedResponse<DashboardBookmark>>(
-		"get my bookmarks",
-		() =>
-			api.api.bookmarks.get({
-				query: { cursor, limit: limit ?? DEFAULT_LIMIT },
-			})
+	const client = getConvexClient();
+	const result = await convexCall("get my bookmarks", () =>
+		client.query(api.bookmarks.list, {
+			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT, cursor: null },
+		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	return result;
+	const data = result as any;
+	const items: DashboardBookmark[] = (data.page ?? []).map((b: any) => ({
+		id: b._id,
+		url: b.url,
+		title: b.title ?? null,
+		description: b.description ?? null,
+		createdAt: new Date(b._creationTime).toISOString(),
+	}));
+
+	return { items, nextCursor: null };
 }
 
-/**
- * Search bookmarks and highlights.
- *
- * The API returns `{ results: HydratedResult[], meta }` where each result
- * has a `type` discriminator. We transform this into the `{ bookmarks, highlights }`
- * shape the newtab dashboard components expect.
- */
 async function handleSearchDashboard(
 	searchQuery: string,
 	limit?: number
 ): Promise<SearchResults | { error: string }> {
-	const api = createApiClient();
-
-	interface ApiSearchResult {
-		type: string;
-		id: string;
-		url: string;
-		title?: string | null;
-		description?: string | null;
-		text?: string;
-		note?: string | null;
-		createdAt: string;
-	}
-
-	const result = await apiCall<{
-		results: ApiSearchResult[];
-		meta: unknown;
-	}>("search dashboard", () =>
-		api.api.search.get({
-			query: { q: searchQuery, limit: limit ?? DEFAULT_LIMIT },
+	const client = getConvexClient();
+	const result = await convexCall("search dashboard", () =>
+		client.query(api.search.search, {
+			q: searchQuery,
+			limit: limit ?? DEFAULT_LIMIT,
 		})
 	);
 
-	if ("error" in result) {
-		return result;
-	}
+	if ("error" in result) return result;
 
-	const results = result.results ?? [];
+	const data = result as any;
+	const results = data.results ?? [];
+
 	return {
 		bookmarks: results
-			.filter((r) => r.type === "bookmark")
-			.map((r) => ({
-				id: r.id,
-				url: r.url,
-				title: r.title ?? null,
-				description: r.description ?? null,
-				createdAt: r.createdAt,
+			.filter((r: any) => r.entityType === "bookmark")
+			.map((r: any) => ({
+				id: r.entityId,
+				url: r.url ?? "",
+				title: r.content,
+				description: null,
+				createdAt: new Date(r.createdAt).toISOString(),
 			})),
 		highlights: results
-			.filter((r) => r.type === "highlight")
-			.map((r) => ({
-				id: r.id,
-				url: r.url,
-				text: r.text ?? "",
-				note: r.note ?? null,
-				createdAt: r.createdAt,
+			.filter((r: any) => r.entityType === "highlight")
+			.map((r: any) => ({
+				id: r.entityId,
+				url: r.url ?? "",
+				text: r.content,
+				note: null,
+				createdAt: new Date(r.createdAt).toISOString(),
 			})),
 	};
 }
 
-// ============================================================================
-// Settings handlers
-// ============================================================================
+// ─── Settings handlers ─────────────────────────────
 
 const SETTINGS_STORAGE_KEY = "glossUserSettings";
 const SETTINGS_LAST_SYNC_KEY = "glossSettingsLastSync";
@@ -1039,9 +852,6 @@ const DEFAULT_SETTINGS: UserSettingsData = {
 	commentDisplayMode: "collapsed",
 };
 
-/**
- * Get user settings from storage, or sync from server if stale/missing.
- */
 async function handleGetUserSettings(): Promise<
 	{ settings: UserSettingsData } | { error: string }
 > {
@@ -1056,7 +866,6 @@ async function handleGetUserSettings(): Promise<
 			| UserSettingsData
 			| undefined;
 
-		// If we have cached settings and they're fresh, return them
 		if (
 			cachedSettings &&
 			lastSync &&
@@ -1065,53 +874,43 @@ async function handleGetUserSettings(): Promise<
 			return { settings: cachedSettings };
 		}
 
-		// Otherwise, sync from server
 		return await handleSyncUserSettings();
-	} catch (error) {
-		console.error("[Gloss] Error getting user settings:", error);
-		// Return defaults if we can't fetch settings
+	} catch {
 		return { settings: DEFAULT_SETTINGS };
 	}
 }
 
-/**
- * Sync user settings from server and store in browser.storage.sync.
- */
 async function handleSyncUserSettings(): Promise<
 	{ settings: UserSettingsData } | { error: string }
 > {
-	const api = createApiClient();
-	const result = await apiCall<UserSettingsData>("sync user settings", () =>
-		api.api.users.me.settings.get()
+	const client = getConvexClient();
+	const result = await convexCall("sync user settings", () =>
+		client.query(api.users.getSettings)
 	);
 
 	if ("error" in result) {
-		// If we can't fetch settings, try to return cached settings
 		try {
 			const stored = await browser.storage.sync.get(SETTINGS_STORAGE_KEY);
 			const cachedSettings = stored[SETTINGS_STORAGE_KEY] as
 				| UserSettingsData
 				| undefined;
-			if (cachedSettings) {
-				return { settings: cachedSettings };
-			}
+			if (cachedSettings) return { settings: cachedSettings };
 		} catch {
 			// Ignore storage errors
 		}
-		// Return defaults if all else fails
 		return { settings: DEFAULT_SETTINGS };
 	}
 
-	// Store settings in browser.storage.sync
+	const settings = (result as UserSettingsData) ?? DEFAULT_SETTINGS;
+
 	try {
 		await browser.storage.sync.set({
-			[SETTINGS_STORAGE_KEY]: result,
+			[SETTINGS_STORAGE_KEY]: settings,
 			[SETTINGS_LAST_SYNC_KEY]: Date.now(),
 		});
-		console.log("[Gloss] Synced user settings from server");
-	} catch (error) {
-		console.error("[Gloss] Error storing user settings:", error);
+	} catch {
+		// Ignore storage errors
 	}
 
-	return { settings: result };
+	return { settings };
 }
