@@ -12,7 +12,7 @@ export interface GlossConfig {
 }
 
 const DEFAULT_CONFIG: GlossConfig = {
-	apiUrl: "https://api.gloss.agus.sh",
+	apiUrl: "https://glorious-toad-644.convex.site",
 	defaultFormat: "table",
 };
 
