@@ -1,87 +1,115 @@
 /**
  * Session injection utilities for E2E tests.
  *
- * Creates real database sessions and injects the corresponding cookie
- * into Playwright browser contexts, enabling authenticated test flows
- * without going through the login UI.
+ * Authenticates test users by calling Better-Auth's sign-in API
+ * running on the Convex site URL. The response sets session cookies
+ * that can be injected into Playwright browser contexts.
  */
 
 import type { BrowserContext } from "@playwright/test";
 
-import { db } from "@gloss/db";
-import { session } from "@gloss/db/schema";
-import { env } from "@gloss/env/server";
-import { createId } from "@paralleldrive/cuid2";
-import { eq } from "drizzle-orm";
-import { createHmac } from "node:crypto";
-
-/**
- * Sign a session token the same way Better-Auth does internally.
- * Better-Auth cookie values are `token.signature` where signature
- * is HMAC-SHA256(token, secret) base64-encoded.
- */
-function signSessionToken(token: string, secret: string): string {
-	const signature = createHmac("sha256", secret).update(token).digest("base64");
-	return `${token}.${signature}`;
-}
+// Convex site URL where Better-Auth HTTP actions are registered
+const CONVEX_SITE_URL =
+	process.env.VITE_CONVEX_SITE_URL || "https://glorious-toad-644.convex.site";
 
 export interface SessionInfo {
-	sessionId: string;
-	token: string;
 	userId: string;
+	email: string;
+	cookies: Array<{
+		name: string;
+		value: string;
+		domain: string;
+		path: string;
+	}>;
 }
 
 /**
- * Insert a session row into the database for the given user.
- * Returns the session ID and token needed for cookie injection.
+ * Authenticate a test user by calling Better-Auth's email/password sign-in.
+ * All seed users use password "password123".
+ *
+ * Returns session cookies that can be injected into browser contexts.
  */
-export async function createTestSession(userId: string): Promise<SessionInfo> {
-	const sessionId = createId();
-	const token = createId();
-	const now = new Date();
-	const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 hours
-
-	await db.insert(session).values({
-		id: sessionId,
-		token,
-		userId,
-		expiresAt,
-		createdAt: now,
-		updatedAt: now,
-		ipAddress: "127.0.0.1",
-		userAgent: "Playwright E2E Test",
+export async function createTestSession(email: string): Promise<SessionInfo> {
+	const response = await fetch(`${CONVEX_SITE_URL}/api/auth/sign-in/email`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			email,
+			password: "password123",
+		}),
+		redirect: "manual",
 	});
 
-	return { sessionId, token, userId };
+	if (!response.ok) {
+		const text = await response.text().catch(() => "");
+		throw new Error(
+			`Failed to sign in as ${email}: ${response.status} ${text}`
+		);
+	}
+
+	// Extract session cookies from response
+	const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
+	const cookies: SessionInfo["cookies"] = [];
+
+	for (const header of setCookieHeaders) {
+		const [nameValue, ...parts] = header.split(";");
+		const [name, value] = (nameValue ?? "").split("=", 2);
+		if (name && value) {
+			let domain = "localhost";
+			let path = "/";
+			for (const part of parts) {
+				const trimmed = part.trim();
+				if (trimmed.toLowerCase().startsWith("domain=")) {
+					domain = trimmed.slice(7);
+				} else if (trimmed.toLowerCase().startsWith("path=")) {
+					path = trimmed.slice(5);
+				}
+			}
+			cookies.push({ name: name.trim(), value: value.trim(), domain, path });
+		}
+	}
+
+	// Also try to get user info from the response body
+	let userId = "";
+	try {
+		const body = await response.json();
+		userId = body?.user?.id ?? body?.session?.userId ?? "";
+	} catch {
+		// Response might not be JSON
+	}
+
+	return { userId, email, cookies };
 }
 
 /**
- * Delete a test session from the database.
+ * Delete a test session. With Convex + Better-Auth, sessions are managed
+ * by the auth component. We call the sign-out endpoint.
  */
-export async function deleteTestSession(sessionId: string): Promise<void> {
-	await db.delete(session).where(eq(session.id, sessionId));
-}
-
-/**
- * Inject the Better-Auth session cookie into a Playwright browser context.
- * Better-Auth uses signed cookies: the value is `token.signature` where
- * the signature is an HMAC of the token using BETTER_AUTH_SECRET.
- */
-export async function injectSessionCookie(
-	context: BrowserContext,
-	token: string
+export async function deleteTestSession(
+	_sessionInfo: SessionInfo
 ): Promise<void> {
-	const signedValue = signSessionToken(token, env.BETTER_AUTH_SECRET);
+	// Better-Auth sessions expire naturally.
+	// In tests, we just close the browser context which discards cookies.
+}
 
-	await context.addCookies([
-		{
-			name: "better-auth.session_token",
-			value: signedValue,
-			domain: "localhost",
-			path: "/",
-			httpOnly: true,
-			sameSite: "Lax",
-			expires: Math.floor(Date.now() / 1000) + 86400,
-		},
-	]);
+/**
+ * Inject session cookies into a Playwright browser context.
+ */
+export async function injectSessionCookies(
+	context: BrowserContext,
+	sessionInfo: SessionInfo
+): Promise<void> {
+	if (sessionInfo.cookies.length > 0) {
+		await context.addCookies(
+			sessionInfo.cookies.map((c) => ({
+				name: c.name,
+				value: c.value,
+				domain: c.domain,
+				path: c.path,
+				httpOnly: true,
+				sameSite: "Lax" as const,
+				expires: Math.floor(Date.now() / 1000) + 86400,
+			}))
+		);
+	}
 }

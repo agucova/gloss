@@ -1,3 +1,0 @@
-[test]
-root = "src/__tests__"
-coverageReporter = ["text"]
