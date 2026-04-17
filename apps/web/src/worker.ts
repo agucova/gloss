@@ -1,13 +1,18 @@
-// Cloudflare Worker for serving static assets
-// The static assets are handled automatically via the [assets] binding in wrangler.toml
-// This worker can be extended to add custom headers, redirects, or other edge logic
+/// <reference types="@cloudflare/workers-types" />
+
+// Cloudflare Worker entrypoint. With `main` set alongside `[assets]`,
+// Cloudflare's default routing serves matching static files first and only
+// invokes this handler for unmatched paths. We forward those to the assets
+// binding so `not_found_handling = "single-page-application"` triggers the
+// index.html fallback for client-side routes.
+// Docs: https://developers.cloudflare.com/workers/static-assets/binding/
+
+interface Env {
+	ASSETS: Fetcher;
+}
 
 export default {
-	fetch(): Response {
-		// Static assets are served automatically by the assets binding
-		// This handler is only reached if no static file matches
-		// With not_found_handling = "single-page-application", this shouldn't be called
-		// But we return a fallback just in case
-		return new Response("Not Found", { status: 404 });
+	fetch(request, env) {
+		return env.ASSETS.fetch(request);
 	},
-};
+} satisfies ExportedHandler<Env>;
