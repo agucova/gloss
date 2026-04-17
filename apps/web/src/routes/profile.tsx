@@ -22,7 +22,7 @@ function ProfileRedirect() {
 	if (!me) return <Navigate to="/login" />;
 
 	if (me.username) {
-		return <Navigate to={`/u/${me.username}`} />;
+		return <Navigate params={{ username: me.username }} to="/u/$username" />;
 	}
 
 	return <Navigate to="/u/setup" />;

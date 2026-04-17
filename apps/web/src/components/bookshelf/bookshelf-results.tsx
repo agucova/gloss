@@ -35,13 +35,7 @@ export function BookshelfResults({
 	}
 
 	if (contentType === "bookmarks") {
-		return (
-			<BookmarksBrowseList
-				searchQuery=""
-				selectedTagId={selectedTagId}
-				userId={userId}
-			/>
-		);
+		return <BookmarksBrowseList searchQuery="" selectedTagId={selectedTagId} />;
 	}
 
 	if (contentType === "highlights") {
@@ -201,13 +195,13 @@ function MergedBrowseList({ userId }: { userId: Id<"users"> }) {
 
 	const bookmarksQuery = usePaginatedQuery(
 		api.users.getUserBookmarks,
-		{ userId, paginationOpts: { numItems: 20 } },
+		{ userId },
 		{ initialNumItems: 20 }
 	);
 
 	const highlightsQuery = usePaginatedQuery(
 		api.users.getUserHighlights,
-		{ userId, paginationOpts: { numItems: 20 } },
+		{ userId },
 		{ initialNumItems: 20 }
 	);
 
@@ -347,11 +341,9 @@ function MergedBrowseList({ userId }: { userId: Id<"users"> }) {
  * Browse bookmarks with optional tag filtering and search.
  */
 function BookmarksBrowseList({
-	userId,
 	searchQuery,
 	selectedTagId,
 }: {
-	userId: Id<"users">;
 	searchQuery: string;
 	selectedTagId: string | null;
 }) {
@@ -360,7 +352,6 @@ function BookmarksBrowseList({
 	const bookmarksQuery = usePaginatedQuery(
 		api.bookmarks.list,
 		{
-			paginationOpts: { numItems: 20 },
 			...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
 			...(searchQuery ? { search: searchQuery } : {}),
 		},
@@ -495,7 +486,6 @@ function HighlightsBrowseList({
 		api.users.getUserHighlights,
 		{
 			userId,
-			paginationOpts: { numItems: 20 },
 			...(searchQuery ? { search: searchQuery } : {}),
 		},
 		{ initialNumItems: 20 }

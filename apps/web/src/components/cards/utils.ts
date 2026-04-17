@@ -8,8 +8,8 @@ export function getDomain(url: string): string {
 	}
 }
 
-export function formatRelativeTime(dateInput: Date | string): string {
-	const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+export function formatRelativeTime(dateInput: Date | number | string): string {
+	const date = typeof dateInput === "object" ? dateInput : new Date(dateInput);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffSecs = Math.floor(diffMs / 1000);

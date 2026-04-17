@@ -1,14 +1,10 @@
+import type { Doc } from "@convex/_generated/dataModel";
+
 import { Clock, Star } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-interface Tag {
-	id: string;
-	name: string;
-	color: string | null;
-	isSystem: boolean;
-	bookmarkCount: number;
-}
+type Tag = Doc<"tags"> & { bookmarkCount: number };
 
 interface TagFilterPillsProps {
 	tags: Tag[];
@@ -64,10 +60,10 @@ export function TagFilterPills({
 				{/* Tag pills */}
 				{tags.map((tag) => (
 					<TagPill
-						isSelected={selectedTagId === tag.id}
-						key={tag.id}
+						isSelected={selectedTagId === tag._id}
+						key={tag._id}
 						onClick={() =>
-							onSelectTag(selectedTagId === tag.id ? null : tag.id)
+							onSelectTag(selectedTagId === tag._id ? null : tag._id)
 						}
 						tag={tag}
 					/>

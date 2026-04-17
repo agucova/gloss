@@ -163,7 +163,6 @@ function HighlightsList({
 		api.users.getUserHighlights,
 		{
 			userId,
-			paginationOpts: { numItems: 20 },
 			...(searchQuery ? { search: searchQuery } : {}),
 		},
 		{ initialNumItems: 20 }
@@ -283,7 +282,6 @@ function BookmarksList({
 		api.users.getUserBookmarks,
 		{
 			userId,
-			paginationOpts: { numItems: 20 },
 			...(searchQuery ? { search: searchQuery } : {}),
 			...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
 		},

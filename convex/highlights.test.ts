@@ -2,11 +2,14 @@ import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
 import { api } from "./_generated/api";
+import { hashUrl } from "./lib/url";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/!(*.test).*s");
 
 describe("highlights", () => {
 	it("should create a highlight", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 		const asUser = t.withIdentity({
 			name: "Test User",
 			email: "test@example.com",
@@ -53,7 +56,7 @@ describe("highlights", () => {
 	});
 
 	it("should delete a highlight and cascade to comments", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 		const asUser = t.withIdentity({
 			name: "Test User",
 			email: "test@example.com",
@@ -101,7 +104,7 @@ describe("highlights", () => {
 	});
 
 	it("should filter highlights by visibility", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 
 		// Create two users
 		const [userId1, userId2] = await t.run(async (ctx) => {
@@ -120,11 +123,12 @@ describe("highlights", () => {
 		});
 
 		// Create highlights: one public, one private
+		const url = "https://example.com/";
+		const urlHash = await hashUrl(url);
 		await t.run(async (ctx) => {
-			const urlHash = "abc123";
 			await ctx.db.insert("highlights", {
 				userId: userId2,
-				url: "https://example.com",
+				url,
 				urlHash,
 				selector: {},
 				text: "public highlight",
@@ -133,7 +137,7 @@ describe("highlights", () => {
 			});
 			await ctx.db.insert("highlights", {
 				userId: userId2,
-				url: "https://example.com",
+				url,
 				urlHash,
 				selector: {},
 				text: "private highlight",
@@ -148,7 +152,7 @@ describe("highlights", () => {
 			email: "user1@example.com",
 		});
 		const results = await asUser1.query(api.highlights.getByUrl, {
-			url: "https://example.com",
+			url,
 		});
 
 		const texts = results.map((h: { text: string }) => h.text);

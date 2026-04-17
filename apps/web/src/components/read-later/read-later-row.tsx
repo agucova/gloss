@@ -1,23 +1,14 @@
+import type { Doc } from "@convex/_generated/dataModel";
+
 import { Bookmark, ExternalLink, Star, Trash2 } from "lucide-react";
 
 import { formatRelativeTime, getDomain } from "@/components/cards/utils";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export interface ReadLaterBookmark {
-	id: string;
-	url: string;
-	title: string | null;
-	description: string | null;
-	favicon: string | null;
-	createdAt: Date | string;
-	tags?: Array<{
-		id: string;
-		name: string;
-		color: string | null;
-		isSystem: boolean;
-	}>;
-}
+export type ReadLaterBookmark = Doc<"bookmarks"> & {
+	tags?: Array<Doc<"tags">>;
+};
 
 interface ReadLaterRowProps {
 	bookmark: ReadLaterBookmark;
@@ -73,12 +64,12 @@ export function ReadLaterRow({
 						&middot;
 					</span>
 					<span className="shrink-0 text-xs text-muted-foreground/60">
-						{formatRelativeTime(bookmark.createdAt)}
+						{formatRelativeTime(bookmark._creationTime)}
 					</span>
 					{nonSystemTags.map((tag) => (
 						<span
 							className="h-1.5 w-1.5 shrink-0 rounded-full"
-							key={tag.id}
+							key={tag._id}
 							style={{
 								backgroundColor: tag.color ?? "currentColor",
 							}}
@@ -103,7 +94,7 @@ export function ReadLaterRow({
 						!isFavorited &&
 							"opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
 					)}
-					onClick={() => onToggleFavorite(bookmark.id)}
+					onClick={() => onToggleFavorite(bookmark._id)}
 					size="icon-xs"
 					variant="ghost"
 				>
@@ -128,7 +119,7 @@ export function ReadLaterRow({
 				<Button
 					aria-label="Remove bookmark"
 					className="h-7 w-7 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive"
-					onClick={() => onDelete(bookmark.id)}
+					onClick={() => onDelete(bookmark._id)}
 					size="icon-xs"
 					variant="ghost"
 				>

@@ -1,41 +1,49 @@
 # Backlog
 
-## P2 — Missing Features / Polish
+## P1 — Blockers for trying the app
 
-### CLI package untested
+### Convex backend has no env vars set
 
-`packages/cli/` is fully implemented (commands, MCP server, OAuth flow) but has never been run. Needs end-to-end testing: build with tsup, verify bin entries work, test each command against the API, test MCP server startup. Likely will surface dependency or build issues.
+`bunx convex env list` against the dev deployment (`glorious-toad-644`) returns empty. Hitting `/.well-known/openid-configuration` returns `BetterAuthError: You are using the default secret.` Nothing will authenticate until these are set:
 
-### Library route naming consistency
+```bash
+bunx convex env set BETTER_AUTH_SECRET "$(openssl rand -base64 32)"
+bunx convex env set SITE_URL http://localhost:3001
+```
 
-Old `/bookshelf` route was deleted and replaced with `/library`. Verify all internal links, navigation, and redirects reference `/library` and not the old path.
+Plus OAuth/Resend creds if needed (see README). Same vars need to be set on prod.
 
-### Bookshelf search should degrade gracefully without semantic search
+### Database is empty
 
-When the OpenAI API key isn't configured or pgvector is unavailable, the bookshelf search UI (`apps/web/src/components/bookshelf/bookshelf-results.tsx`) should indicate that only text search is available rather than silently falling back.
+All Convex tables exist but contain zero rows. Run `bun run convex:seed` before trying the UI.
 
-### Backfill script for search index
+## P2 — Known gaps
 
-`packages/db/src/backfill-search-index.ts` exists but isn't wired into any `package.json` script. Add a `db:backfill` script and document when to run it (after setting `OPENAI_API_KEY` and populating data).
+### CLI package untested end-to-end
 
-## P3 — Code Quality
+`packages/cli/` is fully implemented (commands, MCP server, OAuth/PKCE flow against `convex/http.ts`) but has never been run. Needs: `bun run --cwd packages/cli build`, verify both bin entries (`gloss`, `gloss-mcp`), walk the `gloss auth login` → browser-callback → API-key → `gloss search` path against a seeded deployment, test MCP startup under a real client. Likely will surface bundling or dependency issues first.
 
-### Floating UI cleanup ordering inconsistency
+### `apps/web/src/components/bookshelf/` directory name is stale
 
-`annotation-controller.ts:113-129` runs `cleanupPositioning()` before `anchorManager.clear()`, but `margin-annotations.ts` removes DOM elements without clearing anchors first. Should standardize cleanup order across both code paths.
+The `/bookshelf` route was renamed to `/library` but the component folder that backs it is still called `bookshelf/` (`bookshelf-results.tsx`, `bookshelf-page.tsx`, `index.ts`). Route navigation is already correct; this is purely cosmetic naming drift.
 
-### Comment indicator disconnected from highlights
+### `VITE_SERVER_URL` is dead weight
 
-`comment-indicator.ts:42-43` uses fixed position `top: 16px; right: 16px`, independent of highlight positions. Shows a comment count even when no annotations can actually anchor. Consider hiding when all annotations are orphaned.
+`apps/web/src/lib/env.ts` throws if `VITE_SERVER_URL` isn't set, but nothing in the codebase actually reads it anymore (post-Convex). Either delete `env.ts` or drop the validation so builds don't require a no-op var.
 
-### No IntersectionObserver for margin annotations
+## P3 — Code quality (needs re-verification)
 
-Hover pill uses `IntersectionObserver` to hide when its highlight leaves the viewport, but margin annotations don't. Margin annotations stay visible even when their highlight scrolls off-screen. The Floating UI `hide()` middleware partially handles this, but only if `computePosition()` succeeds.
+The content-script UI was rewritten from Lit to Solid.js in `4ccbbe4`. `annotation-controller.ts` no longer exists, `margin-annotations` went from ~800 lines to ~140, and positioning is now handled by a custom `useFloating` hook (`apps/extension/content-ui/use-floating.ts`). The original concerns below were filed against the Lit code — before re-adding them, re-verify against the Solid implementation:
 
-### Expanded annotation uses manual fixed positioning
+- **Margin annotations hiding when the highlight leaves the viewport.** `IntersectionObserver` hookup needs checking in `annotation-item.tsx` (current margin annotations component) against the Lit version's behavior.
+- **Expanded annotation / comment-panel positioning on scroll.** `comment-panel.tsx` uses `useFloating`, but verify it repositions (or dismisses) on scroll rather than staying fixed.
+- **Comment indicator presence when no highlights anchor.** `comment-indicator.tsx` (351 lines, rewritten) — the old concern was a fixed `top:16px;right:16px` badge that showed even when all annotations were orphaned. Confirm the Solid version conditions on `manager()` having active anchors.
+- **Cleanup ordering between positioning + anchor manager.** Solid's `onCleanup` replaces the old manual teardown paths; verify both mount/unmount paths converge through the same cleanup.
 
-`margin-annotations.ts:787-794` positions the expanded annotation with inline `position: fixed` styles instead of Floating UI. No repositioning on scroll — the expanded view stays put while the user scrolls away from the highlight.
+## Moot (closed by the Convex migration)
 
-### Missing null checks in margin-annotations
+Kept here for audit only — do not reopen without rethinking.
 
-Lines ~641, 651 in `margin-annotations.ts` assume `firstComment` exists without validation. Could throw on highlights that have no comments.
+- ~~Bookshelf search graceful-degrade when OpenAI/pgvector is unavailable~~ — pgvector and the OpenAI embedding pipeline are gone. Search now uses Convex `searchIndex` (`convex/schema.ts` → `searchContent` field on highlights/bookmarks/comments).
+- ~~Backfill script for search-index embeddings~~ — `packages/db` no longer exists; `searchContent` is populated inline at write time.
+- ~~`/bookshelf` → `/library` route rename~~ — done (`apps/web/src/routes/library.tsx`).

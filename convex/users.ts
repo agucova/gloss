@@ -342,11 +342,11 @@ export const getUserFriends = query({
 });
 
 // Helper for visibility filtering
-function filterHighlightsByVisibility(
-	highlights: Array<{ visibility: string }>,
+function filterHighlightsByVisibility<T extends { visibility: string }>(
+	highlights: T[],
 	isOwn: boolean,
 	isFriend: boolean
-) {
+): T[] {
 	if (isOwn) return highlights;
 	return highlights.filter((h) => {
 		if (h.visibility === "public") return true;

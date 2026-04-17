@@ -2,7 +2,7 @@ import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth/minimal";
-import { magicLink } from "better-auth/plugins";
+import { admin, magicLink } from "better-auth/plugins";
 
 import type { DataModel } from "./_generated/dataModel";
 
@@ -38,6 +38,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 		crossDomain({ siteUrl }),
 		convex({ authConfig }),
 		passkeyPlugin(),
+		admin(),
 	];
 
 	// Add magic link if Resend is configured

@@ -22,6 +22,7 @@ import type * as lib_friends from "../lib/friends.js";
 import type * as lib_url from "../lib/url.js";
 import type * as search from "../search.js";
 import type * as seed from "../seed.js";
+import type * as testing from "../testing.js";
 import type * as users from "../users.js";
 
 import type {
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   "lib/url": typeof lib_url;
   search: typeof search;
   seed: typeof seed;
+  testing: typeof testing;
   users: typeof users;
 }>;
 

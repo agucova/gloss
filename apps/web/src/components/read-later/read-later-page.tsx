@@ -114,7 +114,6 @@ export function ReadLaterPage() {
 				searchQuery={debouncedSearch}
 				selectedTagId={selectedTagId}
 				sortOrder={sortOrder}
-				userId={user._id}
 			/>
 		</div>
 	);

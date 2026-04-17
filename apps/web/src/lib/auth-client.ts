@@ -3,7 +3,7 @@ import {
 	convexClient,
 	crossDomainClient,
 } from "@convex-dev/better-auth/client/plugins";
-import { magicLinkClient } from "better-auth/client/plugins";
+import { adminClient, magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
@@ -13,5 +13,6 @@ export const authClient = createAuthClient({
 		magicLinkClient(),
 		convexClient(),
 		crossDomainClient(),
+		adminClient(),
 	],
 });

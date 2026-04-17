@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const modules = import.meta.glob("./**/!(*.test).*s");
+
 describe("friendships", () => {
 	it("should send and accept a friend request", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 
 		// Create two users
 		const [userId1, userId2] = await t.run(async (ctx) => {
@@ -56,7 +58,7 @@ describe("friendships", () => {
 	});
 
 	it("should auto-accept mutual friend requests", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 
 		const [userId1, userId2] = await t.run(async (ctx) => {
 			const u1 = await ctx.db.insert("users", {
@@ -99,7 +101,7 @@ describe("friendships", () => {
 	});
 
 	it("should prevent self-friending", async () => {
-		const t = convexTest(schema);
+		const t = convexTest(schema, modules);
 
 		const userId = await t.run(async (ctx) => {
 			return await ctx.db.insert("users", {

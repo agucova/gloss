@@ -9,19 +9,15 @@ import { toast } from "sonner";
 
 import Loader from "@/components/loader";
 
-import type { ReadLaterBookmark } from "./read-later-row";
-
 import { ReadLaterRow } from "./read-later-row";
 
 interface ReadLaterListProps {
-	userId: Id<"users">;
 	searchQuery: string;
 	selectedTagId: string | null;
 	sortOrder: "asc" | "desc";
 }
 
 export function ReadLaterList({
-	userId,
 	searchQuery,
 	selectedTagId,
 	sortOrder,
@@ -37,7 +33,6 @@ export function ReadLaterList({
 	const bookmarksQuery = usePaginatedQuery(
 		api.bookmarks.list,
 		{
-			paginationOpts: { numItems: 20 },
 			...(searchQuery ? { search: searchQuery } : {}),
 			...(selectedTagId ? { tagId: selectedTagId as Id<"tags"> } : {}),
 		},
@@ -214,7 +209,7 @@ export function ReadLaterList({
 								)
 							) : bookmark ? (
 								<ReadLaterRow
-									bookmark={bookmark as ReadLaterBookmark}
+									bookmark={bookmark}
 									onDelete={handleDelete}
 									onToggleFavorite={handleToggleFavorite}
 								/>
