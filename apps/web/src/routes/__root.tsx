@@ -24,20 +24,6 @@ export const Route = createRootRouteWithContext()({
 				content: "Highlight text on any webpage and share with friends",
 			},
 		],
-		links: [
-			{
-				rel: "icon",
-				type: "image/svg+xml",
-				href: "/icon.svg",
-				media: "(prefers-color-scheme: light)",
-			},
-			{
-				rel: "icon",
-				type: "image/svg+xml",
-				href: "/icon-dark.svg",
-				media: "(prefers-color-scheme: dark)",
-			},
-		],
 	}),
 });
 

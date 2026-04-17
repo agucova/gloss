@@ -42,6 +42,7 @@ import {
 	isErrorResponse,
 	sendMessage,
 } from "../utils/messages";
+import { initThemeFor } from "../utils/theme";
 
 // Storage key for user toggle state (persists manual toggle across pages)
 const ANNOTATIONS_TOGGLED_KEY = "glossAnnotationsToggled";
@@ -182,6 +183,11 @@ export default defineContentScript({
 		shadow.appendChild(container);
 
 		document.body.appendChild(host);
+
+		// Sync theme class onto the container so CSS targeting
+		// `#gloss-container.dark` kicks in. Driven by the shared
+		// preference (popup / Convex sync) with a system-theme fallback.
+		const disposeTheme = await initThemeFor(container);
 
 		// Define callbacks
 		const callbacks: GlossAppCallbacks = {
@@ -390,6 +396,7 @@ export default defineContentScript({
 			console.log("[Gloss] Content script invalidated, cleaning up");
 			clearInterval(navigationCheck);
 			document.removeEventListener("mouseup", handleMouseUp);
+			disposeTheme();
 			dispose();
 			host.remove();
 			setManager(null);

@@ -184,6 +184,7 @@ export interface UserSettings {
 	bookmarksVisibility: "public" | "friends" | "private";
 	highlightDisplayFilter: "anyone" | "friends" | "me";
 	commentDisplayMode: "expanded" | "collapsed";
+	themePreference: "light" | "dark" | "system";
 }
 
 /**
@@ -257,106 +258,56 @@ export type Message =
 	| { type: "SEARCH_DASHBOARD"; query: string; limit?: number }
 	// Settings messages
 	| { type: "GET_USER_SETTINGS" }
-	| { type: "SYNC_USER_SETTINGS" };
+	| { type: "SYNC_USER_SETTINGS" }
+	| {
+			type: "UPDATE_THEME_PREFERENCE";
+			themePreference: "light" | "dark" | "system";
+	  };
 
 /**
  * Response types mapped to each message type.
  */
-export type MessageResponse<T extends Message["type"]> =
-	T extends "LOAD_HIGHLIGHTS"
-		? { highlights: ServerHighlight[] } | { error: string }
-		: T extends "CREATE_HIGHLIGHT"
-			? { highlight: ServerHighlight } | { error: string }
-			: T extends "UPDATE_HIGHLIGHT"
-				? { highlight: ServerHighlight } | { error: string }
-				: T extends "DELETE_HIGHLIGHT"
-					? { success: boolean } | { error: string }
-					: T extends "GET_AUTH_STATUS"
-						? {
-								authenticated: boolean;
-								user?: { id: string; name: string | null };
-							}
-						: T extends "GET_RECENT_HIGHLIGHTS"
-							? { highlights: ServerHighlight[] } | { error: string }
-							: T extends "LOAD_COMMENTS"
-								? { comments: ServerComment[] } | { error: string }
-								: T extends "CREATE_COMMENT"
-									? { comment: ServerComment } | { error: string }
-									: T extends "UPDATE_COMMENT"
-										? { comment: ServerComment } | { error: string }
-										: T extends "DELETE_COMMENT"
-											? { success: boolean } | { error: string }
-											: T extends "SEARCH_FRIENDS"
-												? { friends: Friend[] } | { error: string }
-												: T extends "LOAD_PAGE_COMMENT_SUMMARY"
-													? PageCommentSummary | { error: string }
-													: T extends "GET_PAGE_METADATA"
-														? { metadata: PageMetadata }
-														: T extends "GET_BOOKMARK_STATUS"
-															?
-																	| {
-																			bookmarked: true;
-																			bookmark: ServerBookmark;
-																	  }
-																	| { bookmarked: false; bookmark: null }
-																	| { error: string }
-															: T extends "SAVE_BOOKMARK"
-																?
-																		| { bookmark: ServerBookmark }
-																		| { error: string }
-																: T extends "UPDATE_BOOKMARK"
-																	?
-																			| { bookmark: ServerBookmark }
-																			| { error: string }
-																	: T extends "DELETE_BOOKMARK"
-																		? { success: boolean } | { error: string }
-																		: T extends "GET_USER_TAGS"
-																			?
-																					| { tags: ServerTag[] }
-																					| { error: string }
-																			: T extends "TOGGLE_FAVORITE"
-																				?
-																						| {
-																								favorited: boolean;
-																								bookmark: ServerBookmark;
-																						  }
-																						| { error: string }
-																				: T extends "TOGGLE_READ_LATER"
-																					?
-																							| {
-																									toRead: boolean;
-																									bookmark: ServerBookmark;
-																							  }
-																							| { error: string }
-																					: T extends "GET_FEED_HIGHLIGHTS"
-																						?
-																								| PaginatedResponse<FeedHighlight>
-																								| { error: string }
-																						: T extends "GET_FEED_BOOKMARKS"
-																							?
-																									| PaginatedResponse<FeedBookmark>
-																									| { error: string }
-																							: T extends "GET_MY_BOOKMARKS"
-																								?
-																										| PaginatedResponse<DashboardBookmark>
-																										| { error: string }
-																								: T extends "SEARCH_DASHBOARD"
-																									?
-																											| SearchResults
-																											| { error: string }
-																									: T extends "GET_USER_SETTINGS"
-																										?
-																												| {
-																														settings: UserSettings;
-																												  }
-																												| { error: string }
-																										: T extends "SYNC_USER_SETTINGS"
-																											?
-																													| {
-																															settings: UserSettings;
-																													  }
-																													| { error: string }
-																											: never;
+type MessageResponseMap = {
+	LOAD_HIGHLIGHTS: { highlights: ServerHighlight[] } | { error: string };
+	CREATE_HIGHLIGHT: { highlight: ServerHighlight } | { error: string };
+	UPDATE_HIGHLIGHT: { highlight: ServerHighlight } | { error: string };
+	DELETE_HIGHLIGHT: { success: boolean } | { error: string };
+	GET_AUTH_STATUS: {
+		authenticated: boolean;
+		user?: { id: string; name: string | null };
+	};
+	GET_RECENT_HIGHLIGHTS: { highlights: ServerHighlight[] } | { error: string };
+	LOAD_COMMENTS: { comments: ServerComment[] } | { error: string };
+	CREATE_COMMENT: { comment: ServerComment } | { error: string };
+	UPDATE_COMMENT: { comment: ServerComment } | { error: string };
+	DELETE_COMMENT: { success: boolean } | { error: string };
+	SEARCH_FRIENDS: { friends: Friend[] } | { error: string };
+	LOAD_PAGE_COMMENT_SUMMARY: PageCommentSummary | { error: string };
+	GET_PAGE_METADATA: { metadata: PageMetadata };
+	GET_BOOKMARK_STATUS:
+		| { bookmarked: true; bookmark: ServerBookmark }
+		| { bookmarked: false; bookmark: null }
+		| { error: string };
+	SAVE_BOOKMARK: { bookmark: ServerBookmark } | { error: string };
+	UPDATE_BOOKMARK: { bookmark: ServerBookmark } | { error: string };
+	DELETE_BOOKMARK: { success: boolean } | { error: string };
+	GET_USER_TAGS: { tags: ServerTag[] } | { error: string };
+	TOGGLE_FAVORITE:
+		| { favorited: boolean; bookmark: ServerBookmark }
+		| { error: string };
+	TOGGLE_READ_LATER:
+		| { toRead: boolean; bookmark: ServerBookmark }
+		| { error: string };
+	GET_FEED_HIGHLIGHTS: PaginatedResponse<FeedHighlight> | { error: string };
+	GET_FEED_BOOKMARKS: PaginatedResponse<FeedBookmark> | { error: string };
+	GET_MY_BOOKMARKS: PaginatedResponse<DashboardBookmark> | { error: string };
+	SEARCH_DASHBOARD: SearchResults | { error: string };
+	GET_USER_SETTINGS: { settings: UserSettings } | { error: string };
+	SYNC_USER_SETTINGS: { settings: UserSettings } | { error: string };
+	UPDATE_THEME_PREFERENCE: { success: boolean } | { error: string };
+};
+
+export type MessageResponse<T extends Message["type"]> = MessageResponseMap[T];
 
 /**
  * Type-safe message sending helper.

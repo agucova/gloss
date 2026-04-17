@@ -1,4 +1,6 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-<text fill="white" xml:space="preserve" style="white-space: pre" font-family="Satoshi" font-size="400" font-weight="bold" letter-spacing="-0.02em"><tspan x="140" y="400">G</tspan></text>
 <path d="M80 56L80 456" stroke="white" stroke-width="40"/>
+<g transform="translate(140 400) scale(0.4 -0.4)">
+<path fill="white" d="M401 623C489 623 563 583 586 497H721C700 646 571 743 404 743C184 743 39 585 39 363C39 138 182 -11 387 -11C486 -11 569 28 609 84L617 0H725V411H385V298H606V295C606 178 529 108 402 108C267 108 173 197 173 360C173 518 256 623 401 623Z"/>
+</g>
 </svg>

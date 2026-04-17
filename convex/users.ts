@@ -87,6 +87,7 @@ export const getSettings = query({
 			bookmarksVisibility: user.bookmarksVisibility ?? "public",
 			highlightDisplayFilter: user.highlightDisplayFilter ?? "friends",
 			commentDisplayMode: user.commentDisplayMode ?? "collapsed",
+			themePreference: user.themePreference ?? "system",
 		};
 	},
 });
@@ -108,6 +109,9 @@ export const updateSettings = mutation({
 		commentDisplayMode: v.optional(
 			v.union(v.literal("expanded"), v.literal("collapsed"))
 		),
+		themePreference: v.optional(
+			v.union(v.literal("light"), v.literal("dark"), v.literal("system"))
+		),
 	},
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
@@ -123,6 +127,8 @@ export const updateSettings = mutation({
 			updates.highlightDisplayFilter = args.highlightDisplayFilter;
 		if (args.commentDisplayMode !== undefined)
 			updates.commentDisplayMode = args.commentDisplayMode;
+		if (args.themePreference !== undefined)
+			updates.themePreference = args.themePreference;
 
 		await ctx.db.patch(userId, updates);
 		return { success: true };

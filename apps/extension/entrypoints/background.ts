@@ -158,6 +158,8 @@ async function handleMessage(
 			return await handleSearchDashboard(message.query, message.limit);
 		case "GET_USER_SETTINGS":
 			return await handleGetUserSettings();
+		case "UPDATE_THEME_PREFERENCE":
+			return await handleUpdateThemePreference(message.themePreference);
 		case "SYNC_USER_SETTINGS":
 			return await handleSyncUserSettings();
 		default:
@@ -842,6 +844,7 @@ interface UserSettingsData {
 	bookmarksVisibility: "public" | "friends" | "private";
 	highlightDisplayFilter: "anyone" | "friends" | "me";
 	commentDisplayMode: "expanded" | "collapsed";
+	themePreference: "light" | "dark" | "system";
 }
 
 const DEFAULT_SETTINGS: UserSettingsData = {
@@ -850,7 +853,10 @@ const DEFAULT_SETTINGS: UserSettingsData = {
 	bookmarksVisibility: "public",
 	highlightDisplayFilter: "friends",
 	commentDisplayMode: "collapsed",
+	themePreference: "system",
 };
+
+const THEME_STORAGE_KEY = "theme";
 
 async function handleGetUserSettings(): Promise<
 	{ settings: UserSettingsData } | { error: string }
@@ -907,10 +913,38 @@ async function handleSyncUserSettings(): Promise<
 		await browser.storage.sync.set({
 			[SETTINGS_STORAGE_KEY]: settings,
 			[SETTINGS_LAST_SYNC_KEY]: Date.now(),
+			[THEME_STORAGE_KEY]: settings.themePreference,
 		});
 	} catch {
 		// Ignore storage errors
 	}
 
 	return { settings };
+}
+
+async function handleUpdateThemePreference(
+	themePreference: "light" | "dark" | "system"
+): Promise<{ success: boolean } | { error: string }> {
+	// Write local cache immediately so popup/content reflect the change even if offline.
+	try {
+		const stored = await browser.storage.sync.get(SETTINGS_STORAGE_KEY);
+		const cached = stored[SETTINGS_STORAGE_KEY] as UserSettingsData | undefined;
+		await browser.storage.sync.set({
+			[THEME_STORAGE_KEY]: themePreference,
+			[SETTINGS_STORAGE_KEY]: {
+				...(cached ?? DEFAULT_SETTINGS),
+				themePreference,
+			},
+		});
+	} catch {
+		// Ignore storage errors
+	}
+
+	const client = getConvexClient();
+	const result = await convexCall("update theme preference", () =>
+		client.mutation(api.users.updateSettings, { themePreference })
+	);
+
+	if ("error" in result) return result;
+	return { success: true };
 }

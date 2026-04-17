@@ -21,6 +21,11 @@ export const commentDisplayMode = v.union(
 	v.literal("expanded"),
 	v.literal("collapsed")
 );
+export const themePreference = v.union(
+	v.literal("light"),
+	v.literal("dark"),
+	v.literal("system")
+);
 export const apiKeyScope = v.union(v.literal("read"), v.literal("write"));
 
 export default defineSchema({
@@ -57,6 +62,9 @@ export default defineSchema({
 		),
 		commentDisplayMode: v.optional(
 			v.union(v.literal("expanded"), v.literal("collapsed"))
+		),
+		themePreference: v.optional(
+			v.union(v.literal("light"), v.literal("dark"), v.literal("system"))
 		),
 		// Admin fields
 		role: v.optional(v.string()),
