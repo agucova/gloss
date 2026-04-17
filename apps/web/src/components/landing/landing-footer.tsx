@@ -8,13 +8,16 @@ export function LandingFooter() {
 			<div className="flex items-center gap-3.5">
 				<Logo variant="mark" className="h-5 w-5 text-landing-ink" />
 				<span className="text-sm font-medium text-landing-ink">Gloss</span>
-				<span className="text-[13px] text-landing-ink-subtle">
-					an independent project for readers.
-				</span>
 			</div>
-			<nav className="flex items-center gap-8 text-[13px] text-landing-ink-muted">
+			<nav className="flex flex-wrap items-center gap-x-6 gap-y-3 text-[13px] text-landing-ink-muted sm:gap-x-8">
 				<Link to="/login" className="hover:text-landing-ink">
 					Log in
+				</Link>
+				<Link to="/privacy" className="hover:text-landing-ink">
+					Privacy
+				</Link>
+				<Link to="/terms" className="hover:text-landing-ink">
+					Terms
 				</Link>
 				<a
 					href="https://github.com/agucova/gloss"

@@ -21,6 +21,7 @@ import type * as highlights from "../highlights.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_cascade from "../lib/cascade.js";
+import type * as lib_curiusFeed from "../lib/curiusFeed.js";
 import type * as lib_friends from "../lib/friends.js";
 import type * as lib_ratelimit from "../lib/ratelimit.js";
 import type * as lib_url from "../lib/url.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/cascade": typeof lib_cascade;
+  "lib/curiusFeed": typeof lib_curiusFeed;
   "lib/friends": typeof lib_friends;
   "lib/ratelimit": typeof lib_ratelimit;
   "lib/url": typeof lib_url;

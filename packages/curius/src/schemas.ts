@@ -160,16 +160,111 @@ export const addLinkResponseSchema = z.object({
 export const addHighlightResponseSchema = curiusHighlightSchema;
 
 /**
- * Response from POST /api/login. Shape is not fully reverse-engineered — the
- * JWT is the only field we actually use, and we keep the rest loose so the
- * schema doesn't fail on unexpected extras. Tighten after a live probe.
+ * `/api/activity` is Curius's **notifications inbox** — events directed at
+ * the authenticated user (new follower, reply to a comment, etc.), not a
+ * general friend activity feed. Observed types: `newfollower`, `reply`, and
+ * a rare untyped reply event.
+ *
+ * We keep this wired up for completeness (a future notifications surface
+ * might use it), but the dashboard bridge reads `/api/library` instead for
+ * actual friend activity.
  */
-export const loginResponseSchema = z
+export const activityItemSchema = z
 	.object({
-		token: z.string(),
-		user: curiusUserSchema.optional(),
+		// The only field the client currently reads from activity items is
+		// `type`, which can be "newfollower", "reply", or null for some
+		// library-echo events the server emits without a wrapper type.
+		type: z.string().nullable().optional(),
+		modifiedDate: z.string().optional(),
+		fullUser: curiusUserSchema
+			.extend({
+				lastOnline: z.string().optional(),
+			})
+			.passthrough()
+			.optional(),
+	})
+	// The rest of the fields vary wildly by event — library-shaped payloads
+	// have `link: string`, `users: []`, `highlights: [[]]` at the top level;
+	// reply events nest a `link` object plus a `reply` sub-object. Stay
+	// structural-type-free on these so Curius can add new event types
+	// without breaking the client.
+	.passthrough();
+
+export const activityResponseSchema = z.object({
+	activity: z.array(activityItemSchema),
+});
+
+/**
+ * `/api/library?page=N` — the actual friend activity feed. Returns a flat,
+ * paginated list of links that people the authenticated user follows have
+ * saved, each with their highlights embedded (empty array when the friend
+ * just saved the link without highlighting).
+ *
+ * This is what Curius's home page shows. One library entry = one page that
+ * a friend has saved; multiple friends can appear in `users`. For the
+ * dashboard "recent highlights" section we flatten each entry's highlights
+ * into separate feed items; for "recent bookmarks" we render one item per
+ * entry.
+ */
+export const libraryHighlightSchema = z
+	.object({
+		id: z.union([z.string(), z.number()]).transform(String),
+		userId: z.union([z.string(), z.number()]).transform(String),
+		linkId: z.union([z.string(), z.number()]).transform(String).optional(),
+		highlight: z.string(),
+		rawHighlight: z.string().optional(),
+		highlightText: z.string().optional(),
+		leftContext: z.string().optional(),
+		rightContext: z.string().optional(),
+		position: z.unknown().nullable().optional(),
+		createdDate: z.string().optional(),
+		user: curiusUserSchema.passthrough().optional(),
+		comment: z.unknown().nullable().optional(),
+		mentions: z.array(z.unknown()).optional(),
 	})
 	.passthrough();
+
+export const libraryEntrySchema = z
+	.object({
+		id: z.union([z.string(), z.number()]).transform(String),
+		link: z.string(),
+		title: z.string().nullable().optional(),
+		snippet: z.string().nullable().optional(),
+		metadata: z.unknown().nullable().optional(),
+		favorite: z.boolean().nullable().optional(),
+		createdDate: z.string().nullable().optional(),
+		modifiedDate: z.string().nullable().optional(),
+		lastCrawled: z.string().nullable().optional(),
+		userIds: z.array(z.number()).optional(),
+		users: z.array(curiusUserSchema.passthrough()).default([]),
+		highlights: z.array(libraryHighlightSchema).default([]),
+		comments: z.array(z.unknown()).optional(),
+		readCount: z.number().optional(),
+	})
+	.passthrough();
+
+export const libraryResponseSchema = z.object({
+	library: z.array(libraryEntrySchema),
+});
+
+/**
+ * `/api/users/all` returns `{users: [...]}` — a directory of minimal user
+ * records. Naming is slightly unfortunate (the endpoint is `users/all` yet
+ * the wrapper is still singular `users`).
+ */
+export const allUsersResponseSchema = z.object({
+	users: z.array(
+		z
+			.object({
+				id: z.union([z.string(), z.number()]).transform(String),
+				firstName: z.string(),
+				lastName: z.string(),
+				userLink: z.string(),
+				lastOnline: z.string().optional(),
+			})
+			.passthrough()
+	),
+});
 
 /**
  * Response from GET /api/users/:id/links (user's own links).

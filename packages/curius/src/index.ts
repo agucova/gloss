@@ -11,8 +11,10 @@ export {
 
 // Schemas (for validation in other packages)
 export {
+	activityResponseSchema,
 	addHighlightInputSchema,
 	addLinkInputSchema,
+	allUsersResponseSchema,
 	connectCuriusInputSchema,
 	curiusHighlightSchema,
 	curiusLinkSchema,
@@ -21,6 +23,9 @@ export {
 	getLinkByUrlInputSchema,
 	getNetworkHighlightsInputSchema,
 	highlightPositionSchema,
+	libraryEntrySchema,
+	libraryHighlightSchema,
+	libraryResponseSchema,
 	networkHighlightSchema,
 	networkInfoSchema,
 	networkLinkSchema,

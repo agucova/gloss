@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
+import { hasCompletedWelcome } from "@/lib/onboarding";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
@@ -43,11 +44,14 @@ function UsernameSetupPage() {
 		debouncedUsername.length >= 3 ? { username: debouncedUsername } : "skip"
 	);
 
-	// Redirect if user already has a username
+	// Redirect if user already has a username. Returning users with a username
+	// skip straight to their profile; first-timers route through /welcome to
+	// offer the Curius import.
 	useEffect(() => {
-		if (profile?.username) {
-			navigate({ to: `/u/${profile.username}` });
-		}
+		if (!profile?.username) return;
+		navigate({
+			to: hasCompletedWelcome() ? `/u/${profile.username}` : "/welcome",
+		});
 	}, [profile?.username, navigate]);
 
 	// Debounce username check
@@ -68,7 +72,7 @@ function UsernameSetupPage() {
 			try {
 				await setUsernameMutation({ username: value.username.toLowerCase() });
 				toast.success("Username set successfully!");
-				navigate({ to: `/u/${value.username.toLowerCase()}` });
+				navigate({ to: "/welcome" });
 			} catch (err) {
 				toast.error(
 					err instanceof Error ? err.message : "Failed to set username"

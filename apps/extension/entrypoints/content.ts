@@ -2,6 +2,7 @@ import { type Highlight, HighlightManager } from "@gloss/anchoring";
 import { render } from "solid-js/web";
 
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { BridgeHighlight } from "../utils/curius-bridge";
 
 // Import content CSS as inline string for shadow DOM injection
 import contentCss from "../content-ui/content.css?inline";
@@ -38,6 +39,7 @@ import {
 } from "../content-ui/store";
 import { generateId } from "../content-ui/utils";
 import { OWN_HIGHLIGHT_COLOR, userHighlightColor } from "../utils/colors";
+import { FeedDedup } from "../utils/feed-dedup";
 import {
 	type Comment,
 	type Highlight as ServerHighlight,
@@ -100,6 +102,39 @@ export default defineContentScript({
 	matches: ["<all_urls>"],
 	runAt: "document_idle",
 	async main(ctx) {
+		// Register the curius.app token reader BEFORE the domain-disabled early
+		// return. If a user disabled Gloss on curius.app specifically, we still
+		// want the Connect flow to be able to lift the JWT. The read is
+		// explicitly user-initiated from the popup/web onboarding.
+		browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+			if (message?.type !== "CURIUS_READ_TOKEN") return;
+			if (!/(^|\.)curius\.app$/i.test(location.hostname)) {
+				sendResponse({ token: null });
+				return false;
+			}
+			sendResponse({ token: readCuriusJwt() });
+			return false;
+		});
+
+		// Opportunistic heartbeat: when a user who has already connected
+		// Curius visits curius.app, push the current JWT up so our stored
+		// copy stays fresh. Curius has no refresh endpoint (confirmed via
+		// bundle inspection), so the only way we ever get a newer token is
+		// when the user signs in again on curius.app — this catches that.
+		if (/(^|\.)curius\.app$/i.test(location.hostname)) {
+			void (async () => {
+				try {
+					const stored = await browser.storage.local.get("curius.connectedAt");
+					if (typeof stored["curius.connectedAt"] !== "number") return;
+					const token = readCuriusJwt();
+					if (!token) return;
+					await sendMessage({ type: "CURIUS_TOKEN_HEARTBEAT", token });
+				} catch (error) {
+					console.warn("[Gloss] Heartbeat send failed:", error);
+				}
+			})();
+		}
+
 		if (await isDomainDisabled()) {
 			console.log("[Gloss] Disabled for this domain, skipping initialization");
 			return;
@@ -364,6 +399,9 @@ export default defineContentScript({
 			}
 			return undefined;
 		});
+		// Bridge layer: independent request, layered in as it arrives. Never
+		// blocks or breaks the native flow.
+		void loadCuriusBridge(manager);
 
 		// =====================================================================
 		// Navigation detection
@@ -375,6 +413,7 @@ export default defineContentScript({
 				lastUrl = location.href;
 				console.log("[Gloss] URL changed, reloading highlights");
 				manager.clear();
+				resetDedupState();
 				appApi?.hidePopover();
 				appApi?.hidePanel();
 				setCommentSummary(null);
@@ -387,8 +426,75 @@ export default defineContentScript({
 					}
 					return undefined;
 				});
+				void loadCuriusBridge(manager);
 			}
 		}, 500);
+
+		// =====================================================================
+		// Web ↔ extension bridge (for the settings page to control Curius)
+		// =====================================================================
+		//
+		// The web app can't invoke Curius directly (CORS), and we don't use
+		// `externally_connectable` because that would require knowing the
+		// extension ID at build time. Instead, the web page posts messages
+		// on `window`; this content script (which shares the page's window)
+		// relays them to the background and posts responses back.
+		//
+		// Origin is tightly restricted to VITE_WEB_URL so no other site can
+		// use this relay to disconnect a user's Curius account or trigger
+		// imports.
+		const webOrigin =
+			(import.meta.env.VITE_WEB_URL as string | undefined) ??
+			"http://localhost:3001";
+		const handleWebMessage = (event: MessageEvent) => {
+			if (event.source !== window) return;
+			if (event.origin !== webOrigin) return;
+			const data = event.data;
+			if (
+				!data ||
+				typeof data !== "object" ||
+				(data as { source?: unknown }).source !== "gloss-web"
+			) {
+				return;
+			}
+			const payload = data as {
+				source: "gloss-web";
+				type: "RUN_IMPORT" | "TOKEN_REVOKED" | "PING" | "START_CONNECT";
+				requestId?: string;
+			};
+
+			const reply = (result: unknown) => {
+				window.postMessage(
+					{
+						source: "gloss-ext",
+						requestId: payload.requestId,
+						type: payload.type,
+						result,
+					},
+					webOrigin
+				);
+			};
+
+			if (payload.type === "PING") {
+				reply({ ok: true });
+				return;
+			}
+			if (payload.type === "RUN_IMPORT") {
+				void sendMessage({ type: "CURIUS_RUN_IMPORT" }).then(reply);
+				return;
+			}
+			if (payload.type === "START_CONNECT") {
+				void sendMessage({ type: "CURIUS_START_CONNECT" }).then(reply);
+				return;
+			}
+			if (payload.type === "TOKEN_REVOKED") {
+				// Web-initiated disconnect already dropped the Convex row; we
+				// mirror by clearing the extension's cached JWT + caches.
+				void sendMessage({ type: "CURIUS_DISCONNECT" }).then(reply);
+				return;
+			}
+		};
+		window.addEventListener("message", handleWebMessage);
 
 		// =====================================================================
 		// Cleanup
@@ -398,6 +504,7 @@ export default defineContentScript({
 			console.log("[Gloss] Content script invalidated, cleaning up");
 			clearInterval(navigationCheck);
 			document.removeEventListener("mouseup", handleMouseUp);
+			window.removeEventListener("message", handleWebMessage);
 			disposeTheme();
 			dispose();
 			host.remove();
@@ -494,6 +601,47 @@ export default defineContentScript({
 // =============================================================================
 // Standalone helper functions
 // =============================================================================
+
+/**
+ * Read the Curius session JWT from the current page's localStorage.
+ *
+ * Curius stores the frontend-accessible JWT under the literal key `"jwt"`
+ * (the httpOnly `token` cookie is inaccessible to scripts). We also keep a
+ * JWT-shape fallback in case Curius rebrands the key — any value shaped like
+ * `header.payload.signature` with a JSON header that has `alg`/`typ` counts.
+ */
+function readCuriusJwt(): string | null {
+	try {
+		const primary = window.localStorage.getItem("jwt");
+		if (primary && looksLikeJwt(primary)) return primary;
+		for (let i = 0; i < window.localStorage.length; i++) {
+			const key = window.localStorage.key(i);
+			if (!key) continue;
+			const value = window.localStorage.getItem(key);
+			if (value && looksLikeJwt(value)) return value;
+		}
+	} catch (error) {
+		console.warn("[Gloss] Failed to read Curius JWT:", error);
+	}
+	return null;
+}
+
+function looksLikeJwt(value: string): boolean {
+	const parts = value.split(".");
+	if (parts.length !== 3) return false;
+	try {
+		const header = JSON.parse(
+			atob(parts[0].replace(/-/g, "+").replace(/_/g, "/"))
+		);
+		return (
+			typeof header === "object" &&
+			header !== null &&
+			typeof header.alg === "string"
+		);
+	} catch {
+		return false;
+	}
+}
 
 async function refreshCommentSummary(
 	highlightIds: Id<"highlights">[]
@@ -651,6 +799,41 @@ function toHighlight(serverHighlight: ServerHighlight): Highlight {
 			text: serverHighlight.text,
 			visibility: serverHighlight.visibility,
 			createdAt: serverHighlight._creationTime,
+			externalId: serverHighlight.externalId,
+			importSource: serverHighlight.importSource,
+		},
+	};
+}
+
+/**
+ * Bridge/native dedup state, scoped to one page view. Reset on SPA nav.
+ * See `FeedDedup` for the detailed contract — this module just owns the
+ * singleton instance.
+ */
+const feedDedup = new FeedDedup();
+
+function resetDedupState(): void {
+	feedDedup.reset();
+}
+
+function bridgeHighlightId(externalId: string): string {
+	return `curius:${externalId}`;
+}
+
+function toBridgedHighlight(bh: BridgeHighlight): Highlight {
+	const displayName = `${bh.user.firstName} ${bh.user.lastName}`.trim();
+	return {
+		id: bridgeHighlightId(bh.externalId),
+		selector: bh.selector as Highlight["selector"],
+		color: userHighlightColor(bh.user.firstName),
+		metadata: {
+			userId: bh.user.glossUserId ?? null,
+			userName: displayName,
+			curiusUserId: bh.user.curiusUserId,
+			curiusUserLink: bh.user.curiusUserLink,
+			text: bh.text,
+			externalId: bh.externalId,
+			source: "curius",
 		},
 	};
 }
@@ -670,6 +853,12 @@ async function loadHighlights(
 
 		const { highlights } = response;
 		console.log(`[Gloss] Loading ${highlights.length} highlights for ${url}`);
+
+		// Native-wins: before adding a native highlight, remove any bridge
+		// copy on screen for the same externalId.
+		for (const sh of highlights) {
+			feedDedup.onNativeHighlight(sh.externalId, manager);
+		}
 
 		const converted = highlights.map(toHighlight);
 		const results = manager.load(converted);
@@ -694,5 +883,40 @@ async function loadHighlights(
 	} catch (error) {
 		console.error("[Gloss] Error loading highlights:", error);
 		return [];
+	}
+}
+
+async function loadCuriusBridge(manager: HighlightManager): Promise<void> {
+	const url = location.href;
+
+	try {
+		const response = await sendMessage({ type: "LOAD_CURIUS_BRIDGE", url });
+
+		if (isErrorResponse(response)) {
+			console.warn("[Gloss] Curius bridge error:", response.error);
+			return;
+		}
+
+		const { highlights } = response;
+		if (highlights.length === 0) return;
+
+		// Native-wins: skip any bridge highlight whose externalId is already
+		// covered by a native row. If native arrives later for this same
+		// externalId, loadHighlights tears down the bridge copy.
+		const toAdd: Highlight[] = [];
+		for (const bh of highlights) {
+			const bridgeId = bridgeHighlightId(bh.externalId);
+			if (!feedDedup.shouldRenderBridge(bh.externalId, bridgeId)) continue;
+			toAdd.push(toBridgedHighlight(bh));
+		}
+
+		if (toAdd.length === 0) return;
+
+		console.log(
+			`[Gloss] Layering ${toAdd.length} Curius bridge highlights for ${url}`
+		);
+		manager.load(toAdd);
+	} catch (error) {
+		console.error("[Gloss] Error loading Curius bridge:", error);
 	}
 }

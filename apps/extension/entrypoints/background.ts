@@ -1,3 +1,5 @@
+import type { AnnotationSelector } from "@gloss/anchoring";
+
 import type { Id } from "../../../convex/_generated/dataModel";
 import type {
 	Comment,
@@ -9,6 +11,17 @@ import type {
 
 import { api, getConvexClient } from "../utils/api";
 import { authClient } from "../utils/auth-client";
+import {
+	clearToken as clearCuriusToken,
+	getStoredToken,
+	handleLoadCuriusBridge,
+	invalidateSocialCaches,
+	markCuriusConnected,
+} from "../utils/curius-bridge";
+import {
+	connectCuriusWithToken,
+	runCuriusImport,
+} from "../utils/curius-import";
 
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
@@ -150,6 +163,8 @@ async function handleMessage(
 	switch (message.type) {
 		case "LOAD_HIGHLIGHTS":
 			return await handleLoadHighlights(message.url);
+		case "LOAD_CURIUS_BRIDGE":
+			return await handleLoadCuriusBridge(message.url);
 		case "CREATE_HIGHLIGHT":
 			return await handleCreateHighlight(message);
 		case "UPDATE_HIGHLIGHT":
@@ -196,8 +211,257 @@ async function handleMessage(
 			return await handleUpdateThemePreference(message.themePreference);
 		case "SYNC_USER_SETTINGS":
 			return await handleSyncUserSettings();
+		case "CURIUS_GET_STATUS":
+			return await handleCuriusGetStatus();
+		case "CURIUS_START_CONNECT":
+			return await handleCuriusStartConnect();
+		case "CURIUS_DISCONNECT":
+			return await handleCuriusDisconnect();
+		case "CURIUS_RUN_IMPORT":
+			return await handleCuriusRunImport();
+		case "CURIUS_READ_TOKEN":
+			// Content-script-bound; the background never answers this. Kept in
+			// the switch purely so the exhaustive-check compiles.
+			return { token: null };
+		case "CURIUS_TOKEN_HEARTBEAT":
+			return await handleCuriusTokenHeartbeat(message.token);
 		default:
 			return { error: "Unknown message type" };
+	}
+}
+
+// ─── Curius handlers ────────────────────────────────
+
+async function handleCuriusGetStatus() {
+	const client = getConvexClient();
+	return await convexCall("curius status", () =>
+		client.query(api.curius.getConnectionStatus, {})
+	);
+}
+
+/**
+ * Orchestrate the credential-less Curius connect flow.
+ *
+ * The extension's content script owns DOM-level access to curius.app's
+ * localStorage (the extension already matches `<all_urls>`). From the
+ * background we:
+ *   1. ask any live curius.app tabs for the token,
+ *   2. if none has one, open a helper tab and wait for the user to sign in,
+ *   3. on every navigation completion, re-ask the tab, and
+ *   4. on first successful read, verify + persist via setCredentials and
+ *      kick off the import.
+ *
+ * The user gesture in the popup/web UI is the sole trigger — no flags,
+ * no polling. The connect listener is scoped to the in-flight attempt;
+ * a second click replaces the first.
+ */
+let activeConnect: {
+	helperTabId: number | null;
+	listener: (tabId: number, info: chrome.tabs.TabChangeInfo) => void;
+	timer: ReturnType<typeof setTimeout>;
+} | null = null;
+
+const CONNECT_TIMEOUT_MS = 5 * 60 * 1000;
+
+async function readTokenFromTab(tabId: number): Promise<string | null> {
+	try {
+		const response = (await browser.tabs.sendMessage(tabId, {
+			type: "CURIUS_READ_TOKEN",
+		})) as { token?: string | null } | undefined;
+		const token = response?.token;
+		return typeof token === "string" && token.length > 0 ? token : null;
+	} catch {
+		// No receiver (content script not ready / disabled on this domain).
+		return null;
+	}
+}
+
+async function finishConnectWithToken(
+	token: string,
+	helperTabId: number | null
+): Promise<boolean> {
+	try {
+		const creds = await connectCuriusWithToken(token);
+		const client = getConvexClient();
+		await client.mutation(api.curius.setCredentials, {
+			token: creds.token,
+			tokenExpiresAt: creds.tokenExpiresAt,
+			curiusUserId: creds.curiusUserId,
+			curiusUsername: creds.curiusUsername,
+			firstName: creds.firstName,
+			lastName: creds.lastName,
+		});
+		await markCuriusConnected();
+		await invalidateSocialCaches();
+		void runCuriusImport({ convexClient: client, token }).catch((err) => {
+			console.warn("[Gloss] Curius import ended in error:", err);
+		});
+		if (helperTabId !== null) {
+			try {
+				await browser.tabs.remove(helperTabId);
+			} catch {
+				// Tab already closed or navigated away — no-op.
+			}
+		}
+		return true;
+	} catch (error) {
+		console.error("[Gloss] Curius connect completion failed:", error);
+		return false;
+	}
+}
+
+function clearActiveConnect(): void {
+	if (!activeConnect) return;
+	clearTimeout(activeConnect.timer);
+	try {
+		browser.tabs.onUpdated.removeListener(activeConnect.listener);
+	} catch {
+		// ignore
+	}
+	activeConnect = null;
+}
+
+async function handleCuriusStartConnect(): Promise<
+	| { started: true; mode: "already-connected" | "reading" | "opened-tab" }
+	| { error: string }
+> {
+	try {
+		// Replace any in-flight attempt with this one.
+		clearActiveConnect();
+
+		const existingTabs = await browser.tabs.query({
+			url: ["*://curius.app/*", "*://*.curius.app/*"],
+		});
+
+		for (const tab of existingTabs) {
+			if (typeof tab.id !== "number") continue;
+			const token = await readTokenFromTab(tab.id);
+			if (token) {
+				const ok = await finishConnectWithToken(token, null);
+				if (ok) return { started: true, mode: "already-connected" };
+			}
+		}
+
+		// No existing tab yielded a token — open a helper tab and watch it.
+		let helperTabId: number | null = null;
+		if (existingTabs.length === 0) {
+			const created = await browser.tabs.create({
+				url: "https://curius.app",
+				active: true,
+			});
+			helperTabId = typeof created.id === "number" ? created.id : null;
+		}
+
+		const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
+			if (info.status !== "complete") return;
+			void (async () => {
+				const token = await readTokenFromTab(tabId);
+				if (!(token && activeConnect)) return;
+				const helperId = activeConnect.helperTabId;
+				clearActiveConnect();
+				await finishConnectWithToken(token, helperId);
+			})();
+		};
+
+		const timer = setTimeout(() => {
+			console.log("[Gloss] Curius connect flow timed out");
+			clearActiveConnect();
+		}, CONNECT_TIMEOUT_MS);
+
+		activeConnect = { helperTabId, listener, timer };
+		browser.tabs.onUpdated.addListener(listener);
+
+		return {
+			started: true,
+			mode: helperTabId !== null ? "opened-tab" : "reading",
+		};
+	} catch (error) {
+		clearActiveConnect();
+		console.error("[Gloss] Curius start connect failed:", error);
+		return {
+			error: error instanceof Error ? error.message : "Connect failed",
+		};
+	}
+}
+
+async function handleCuriusDisconnect() {
+	try {
+		const client = getConvexClient();
+		await client.mutation(api.curius.disconnect, {});
+		await clearCuriusToken();
+		await invalidateSocialCaches();
+		return { success: true };
+	} catch (error) {
+		console.error("[Gloss] Curius disconnect failed:", error);
+		return {
+			error: error instanceof Error ? error.message : "Disconnect failed",
+		};
+	}
+}
+
+/**
+ * Opportunistic token refresh pushed from the content script whenever it
+ * runs on curius.app AND the user has an active Curius connection. If the
+ * caller's token differs from our stored one, we verify it against
+ * `/api/user` and patch the Convex row. If the new token fails verification
+ * we keep the old one — an invalid heartbeat is silently ignored.
+ *
+ * Rate-limited implicitly by the content-script trigger (one attempt per
+ * curius.app page load) plus the no-op fast path for identical tokens.
+ */
+async function handleCuriusTokenHeartbeat(token: string) {
+	try {
+		if (!(typeof token === "string" && token.length > 0)) {
+			return { accepted: false };
+		}
+		const stored = await getStoredToken();
+		if (stored === token) {
+			return { accepted: false };
+		}
+		const creds = await connectCuriusWithToken(token);
+		const client = getConvexClient();
+		await client.mutation(api.curius.setCredentials, {
+			token: creds.token,
+			tokenExpiresAt: creds.tokenExpiresAt,
+			curiusUserId: creds.curiusUserId,
+			curiusUsername: creds.curiusUsername,
+			firstName: creds.firstName,
+			lastName: creds.lastName,
+		});
+		await markCuriusConnected();
+		await invalidateSocialCaches();
+		console.log("[Gloss] Curius token refreshed via heartbeat");
+		return { accepted: true };
+	} catch (error) {
+		// Don't surface errors — a stale/invalid heartbeat isn't user-facing.
+		console.warn("[Gloss] Curius heartbeat ignored:", error);
+		return { accepted: false };
+	}
+}
+
+/**
+ * Fire-and-forget import. Returns immediately with `started: true` so the
+ * popup UI can close without aborting the run. Progress is observable via
+ * the `getConnectionStatus` query.
+ */
+async function handleCuriusRunImport() {
+	try {
+		const stored = await browser.storage.sync.get("curius.token");
+		const token = stored["curius.token"];
+		if (typeof token !== "string" || token.length === 0) {
+			return { error: "Not connected to Curius" };
+		}
+
+		const client = getConvexClient();
+		void runCuriusImport({ convexClient: client, token }).catch((err) => {
+			console.warn("[Gloss] Curius import ended in error:", err);
+		});
+		return { started: true };
+	} catch (error) {
+		console.error("[Gloss] Curius import failed to start:", error);
+		return {
+			error: error instanceof Error ? error.message : "Import failed",
+		};
 	}
 }
 
@@ -214,7 +478,7 @@ async function handleLoadHighlights(url: string) {
 
 async function handleCreateHighlight(message: {
 	url: string;
-	selector: unknown;
+	selector: AnnotationSelector;
 	text: string;
 	visibility?: "public" | "friends" | "private";
 }) {

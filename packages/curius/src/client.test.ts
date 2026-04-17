@@ -566,80 +566,179 @@ describe("CuriusClient", () => {
 	});
 
 	// =========================================================================
-	// Static login (email + password)
+	// Feed endpoints: library, activity, users/all
 	// =========================================================================
 
-	describe("CuriusClient.login", () => {
-		test("POSTs credentials without an Authorization header", async () => {
+	describe("getLibrary", () => {
+		test("GETs /api/library?page=0 by default with Bearer header", async () => {
+			mockFetchResponse({ library: [] });
+			await client.getLibrary();
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"https://curius.app/api/library?page=0",
+				expect.objectContaining({
+					method: "GET",
+					headers: expect.objectContaining({
+						Authorization: "Bearer test-token-123",
+					}),
+				})
+			);
+		});
+
+		test("honours explicit page param", async () => {
+			mockFetchResponse({ library: [] });
+			await client.getLibrary({ page: 3 });
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"https://curius.app/api/library?page=3",
+				expect.anything()
+			);
+		});
+
+		test("parses a realistic HAR-shaped response without losing fields", async () => {
+			// Shape taken from the live HAR capture: the entry may have a `modifiedDate`
+			// but `createdDate` null, `metadata` as an object, and embedded highlights
+			// with userIds as numbers that the schema must coerce to strings.
 			mockFetchResponse({
-				token: "new-jwt",
-				user: {
-					id: "6361",
-					firstName: "Test",
-					lastName: "User",
-					userLink: "test-user",
-				},
+				library: [
+					{
+						id: 211611,
+						link: "https://jason.ml/heuristics",
+						title: "Do Thing, Do One Thing",
+						favorite: false,
+						snippet: "…",
+						metadata: { full_text: "…", author: "", page_type: "default" },
+						createdDate: null,
+						modifiedDate: "2026-04-18T16:01:27.368Z",
+						lastCrawled: null,
+						userIds: [1940],
+						readCount: 0,
+						users: [
+							{
+								id: 1940,
+								firstName: "Claire",
+								lastName: "Wang",
+								userLink: "claire-wang",
+								lastOnline: "2026-04-18T16:00:35.613Z",
+							},
+						],
+						comments: [],
+						highlights: [
+							{
+								id: 371940,
+								userId: 1940,
+								linkId: 211611,
+								highlight: "the passive ones",
+								verified: null,
+								createdDate: "2026-04-18T16:01:27.365Z",
+								position: null,
+								leftContext: "ons from my life:",
+								rightContext: " They encourage ",
+								rawHighlight: "the passive ones",
+								user: {
+									id: 1940,
+									firstName: "Claire",
+									lastName: "Wang",
+									userLink: "claire-wang",
+									lastOnline: "2026-04-18T16:00:35.613Z",
+								},
+								comment: null,
+								mentions: [],
+							},
+						],
+					},
+				],
 			});
 
-			const result = await CuriusClient.login("test@example.com", "hunter2");
-
-			expect(result.token).toBe("new-jwt");
-			expect(result.user?.id).toBe("6361");
-
-			const call = fetchSpy.mock.calls[0]!;
-			const [url, init] = call as [string, RequestInit];
-			expect(url).toBe("https://curius.app/api/login");
-			expect(init.method).toBe("POST");
-			expect(init.body).toBe(
-				JSON.stringify({ email: "test@example.com", password: "hunter2" })
-			);
-			// Critically: no Authorization header since the caller doesn't have
-			// a token yet. Sending "Bearer " with no value would confuse Curius.
-			const headers = init.headers as Record<string, string>;
-			expect(headers.Authorization).toBeUndefined();
-			expect(headers["Content-Type"]).toBe("application/json");
+			const result = await client.getLibrary({ page: 0 });
+			expect(result.library).toHaveLength(1);
+			const entry = result.library[0]!;
+			// Schema transforms numeric IDs to strings.
+			expect(entry.id).toBe("211611");
+			expect(entry.users[0]?.id).toBe("1940");
+			expect(entry.highlights[0]?.id).toBe("371940");
+			expect(entry.highlights[0]?.userId).toBe("1940");
+			// Preserves the text/context fields the importer and feed both need.
+			expect(entry.highlights[0]?.rawHighlight).toBe("the passive ones");
+			expect(entry.highlights[0]?.leftContext).toContain("from my life");
 		});
 
 		test("throws CuriusAuthError on 401", async () => {
 			mockFetchError(401);
+			await expect(client.getLibrary()).rejects.toThrow(CuriusAuthError);
+		});
+	});
 
-			await expect(
-				CuriusClient.login("test@example.com", "wrong")
-			).rejects.toThrow(CuriusAuthError);
+	describe("getActivity", () => {
+		test("parses heterogeneous notification items (newfollower, reply, null-type) without throwing", async () => {
+			// Live probe shows `type` may be null for some reply-like events.
+			mockFetchResponse({
+				activity: [
+					{
+						fullUser: {
+							id: 6400,
+							firstName: "Lawrence",
+							lastName: "Feng",
+							userLink: "lawrence-feng",
+						},
+						type: "newfollower",
+						modifiedDate: "2026-02-26T15:37:13.489Z",
+					},
+					{
+						fullUser: {
+							id: 3971,
+							firstName: "Lydia",
+							lastName: "Nottingham",
+							userLink: "lydia-nottingham",
+						},
+						type: "reply",
+						modifiedDate: "2025-12-09T20:45:46.614Z",
+					},
+					{
+						// Untyped item — Curius sometimes emits these.
+						id: 117466,
+						link: "https://sashachapin.substack.com/p/50-things-i-know",
+						modifiedDate: "2026-01-08T00:18:00.129Z",
+					},
+				],
+			});
+
+			const result = await client.getActivity();
+			expect(result.activity).toHaveLength(3);
+			expect(result.activity[0]?.type).toBe("newfollower");
+			expect(result.activity[1]?.type).toBe("reply");
+			// Either null or undefined is fine — the schema allows both.
+			expect(result.activity[2]?.type ?? null).toBeNull();
 		});
 
-		test("throws CuriusRateLimitError on 429 with retry-after", async () => {
-			mockFetchError(429, null, { "Retry-After": "30" });
-
-			try {
-				await CuriusClient.login("test@example.com", "x");
-				expect.unreachable("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(CuriusRateLimitError);
-				expect((error as CuriusRateLimitError).retryAfter).toBe(30);
-			}
+		test("throws CuriusAuthError on 401", async () => {
+			mockFetchError(401);
+			await expect(client.getActivity()).rejects.toThrow(CuriusAuthError);
 		});
+	});
 
-		test("throws CuriusValidationError on malformed response", async () => {
-			mockFetchResponse({ no_token_here: true });
+	describe("getAllUsers", () => {
+		test("unwraps the {users: [...]} envelope and coerces numeric ids", async () => {
+			mockFetchResponse({
+				users: [
+					{
+						id: 1578,
+						firstName: "Justin",
+						lastName: "Wang",
+						userLink: "justin-wang",
+						lastOnline: "2026-04-16T01:28:04.315Z",
+					},
+					{
+						id: 2910,
+						firstName: "Noah",
+						lastName: "Smith",
+						userLink: "noah-smith",
+					},
+				],
+			});
 
-			await expect(CuriusClient.login("test@example.com", "x")).rejects.toThrow(
-				CuriusValidationError
-			);
-		});
-
-		test("maps AbortError to a TIMEOUT CuriusError", async () => {
-			const abortError = new Error("The operation was aborted.");
-			abortError.name = "AbortError";
-			fetchSpy.mockRejectedValueOnce(abortError);
-
-			try {
-				await CuriusClient.login("test@example.com", "x");
-				expect.unreachable("Should have thrown");
-			} catch (error) {
-				expect(error).toBeInstanceOf(CuriusError);
-				expect((error as CuriusError).code).toBe("TIMEOUT");
-			}
+			const result = await client.getAllUsers();
+			expect(result).toHaveLength(2);
+			expect(result[0]?.id).toBe("1578");
+			expect(result[1]?.id).toBe("2910");
 		});
 	});
 

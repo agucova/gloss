@@ -16,13 +16,15 @@ import {
 	CuriusValidationError,
 } from "./errors";
 import {
+	activityResponseSchema,
 	addLinkResponseSchema,
+	allUsersResponseSchema,
 	getFollowingResponseSchema,
 	getLinkByUrlResponseSchema,
 	getNetworkLinksResponseSchema,
 	getUserLinksResponseSchema,
 	getUserResponseSchema,
-	loginResponseSchema,
+	libraryResponseSchema,
 } from "./schemas";
 
 const CURIUS_BASE_URL = "https://curius.app";
@@ -32,12 +34,14 @@ const DEFAULT_TIMEOUT = 10_000;
  * API endpoints for Curius
  */
 const ENDPOINTS = {
-	// Authentication
-	LOGIN: "/api/login",
-
 	// User
 	GET_USER: "/api/user",
 	GET_FOLLOWING: "/api/user/following/",
+	GET_ALL_USERS: "/api/users/all",
+
+	// Feed + notifications
+	GET_ACTIVITY: "/api/activity",
+	GET_LIBRARY: "/api/library",
 
 	// Links
 	ADD_LINK: "/api/links",
@@ -199,6 +203,55 @@ export class CuriusClient {
 			getFollowingResponseSchema
 		);
 		return response.following;
+	}
+
+	/**
+	 * `/api/activity` — notifications inbox (events directed at the user:
+	 * new followers, replies to your comments, etc.). **Not** a general
+	 * friend activity feed; use {@link getLibrary} for that.
+	 */
+	async getActivity(): Promise<z.infer<typeof activityResponseSchema>> {
+		return await this.request(
+			ENDPOINTS.GET_ACTIVITY,
+			{ method: "GET" },
+			activityResponseSchema
+		);
+	}
+
+	/**
+	 * `/api/library?page=N` — the actual home-feed: a paginated list of
+	 * links saved by people the authenticated user follows, each with their
+	 * highlights embedded. This is what the dashboard bridge reads to
+	 * surface friend activity for migrated Gloss users.
+	 *
+	 * `page` is zero-indexed; Curius's own UI starts at 0 and bumps as the
+	 * user scrolls. Page size appears to be server-controlled (~27 entries
+	 * in observed responses).
+	 */
+	async getLibrary(
+		options: { page?: number } = {}
+	): Promise<z.infer<typeof libraryResponseSchema>> {
+		const page = options.page ?? 0;
+		return await this.request(
+			`${ENDPOINTS.GET_LIBRARY}?page=${page}`,
+			{ method: "GET" },
+			libraryResponseSchema
+		);
+	}
+
+	/**
+	 * Directory of all Curius users. Primarily useful for bulk-warming
+	 * `curiusUserMappings`; not required for the feed path.
+	 */
+	async getAllUsers(): Promise<
+		z.infer<typeof allUsersResponseSchema>["users"]
+	> {
+		const response = await this.request(
+			ENDPOINTS.GET_ALL_USERS,
+			{ method: "GET" },
+			allUsersResponseSchema
+		);
+		return response.users;
 	}
 
 	// =========================================================================
@@ -393,80 +446,6 @@ export class CuriusClient {
 			}
 			throw error;
 		}
-	}
-
-	/**
-	 * Authenticate with email + password and return the resulting JWT.
-	 *
-	 * This is a static helper because login is the step that produces the
-	 * token — callers don't have one yet. The instance `request()` wraps every
-	 * call with an Authorization header; here we make a bare fetch so we don't
-	 * send a spurious empty Bearer.
-	 *
-	 * Response shape is loosely validated; the surface we depend on is
-	 * `token`. Tighten the schema after a live probe confirms the rest.
-	 */
-	static async login(
-		email: string,
-		password: string,
-		options: { baseUrl?: string; timeout?: number } = {}
-	): Promise<{ token: string; user?: CuriusUser }> {
-		const baseUrl = options.baseUrl ?? CURIUS_BASE_URL;
-		const timeout = options.timeout ?? DEFAULT_TIMEOUT;
-		const url = `${baseUrl}${ENDPOINTS.LOGIN}`;
-
-		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-		let response: Response;
-		try {
-			response = await fetch(url, {
-				method: "POST",
-				signal: controller.signal,
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ email, password }),
-			});
-		} catch (error) {
-			clearTimeout(timeoutId);
-			if (error instanceof Error && error.name === "AbortError") {
-				throw new CuriusError("Request timeout", undefined, "TIMEOUT");
-			}
-			throw new CuriusError(
-				error instanceof Error ? error.message : "Unknown error"
-			);
-		}
-		clearTimeout(timeoutId);
-
-		if (!response.ok) {
-			if (response.status === 401) {
-				throw new CuriusAuthError("Invalid email or password");
-			}
-			if (response.status === 429) {
-				const retryAfter = response.headers.get("Retry-After");
-				throw new CuriusRateLimitError(
-					"Rate limit exceeded",
-					retryAfter ? Number.parseInt(retryAfter, 10) : undefined
-				);
-			}
-			let message = `HTTP ${response.status}`;
-			try {
-				const body = (await response.json()) as Record<string, unknown>;
-				if (typeof body.error === "string") message = body.error;
-				else if (typeof body.message === "string") message = body.message;
-			} catch {
-				// JSON body isn't required
-			}
-			throw new CuriusError(message, response.status);
-		}
-
-		const data = await response.json();
-		const result = loginResponseSchema.safeParse(data);
-		if (!result.success) {
-			throw new CuriusValidationError(
-				`Invalid login response: ${result.error.message}`
-			);
-		}
-		return result.data;
 	}
 }
 

@@ -12,6 +12,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { Bookmark, MyHighlight, Tag } from "../../utils/messages";
 import type { PageMetadata } from "../../utils/metadata";
 
+import { curiusHealth, formatExpiryCountdown } from "../../utils/curius-health";
 import { isErrorResponse, sendMessage } from "../../utils/messages";
 import {
 	applyTheme,
@@ -259,6 +260,11 @@ function App() {
 						}
 					>
 						{(page) => <BookmarkSection metadata={page()} />}
+					</Show>
+
+					{/* Curius connection + import */}
+					<Show when={authState()?.authenticated}>
+						<CuriusSection />
 					</Show>
 
 					{/* Recent Highlights */}
@@ -1084,6 +1090,263 @@ function formatRelativeTime(timestamp: string | number | Date): string {
 	if (diffDays < 30) return `${diffDays}d`;
 
 	return date.toLocaleDateString();
+}
+
+// =============================================================================
+// CuriusSection Component
+// =============================================================================
+
+type CuriusStatus = Awaited<
+	ReturnType<typeof sendMessage<{ type: "CURIUS_GET_STATUS" }>>
+>;
+
+function CuriusSection() {
+	const [status, setStatus] = createSignal<CuriusStatus | null>(null);
+	const [loading, setLoading] = createSignal(true);
+	const [submitting, setSubmitting] = createSignal(false);
+	const [connectPhase, setConnectPhase] = createSignal<
+		"idle" | "waiting-for-login" | "finishing"
+	>("idle");
+	const [connectError, setConnectError] = createSignal<string | null>(null);
+
+	async function refresh() {
+		const response = await sendMessage({ type: "CURIUS_GET_STATUS" });
+		if (!isErrorResponse(response)) {
+			setStatus(response);
+		}
+		setLoading(false);
+	}
+
+	onMount(() => {
+		void refresh();
+	});
+
+	// Poll while an import is running or a connect is in flight so the UI
+	// flips to "Connected / Importing…" automatically.
+	createEffect(() => {
+		const s = status();
+		const importing =
+			s && "connected" in s && s.connected && s.lastImportStatus === "running";
+		const connecting = connectPhase() !== "idle";
+		if (importing || connecting) {
+			const id = window.setInterval(() => {
+				void refresh();
+			}, 2000);
+			return () => window.clearInterval(id);
+		}
+		return undefined;
+	});
+
+	// Once the backend flips to `connected`, the connect flow is done.
+	createEffect(() => {
+		const s = status();
+		if (s && "connected" in s && s.connected && connectPhase() !== "idle") {
+			setConnectPhase("idle");
+		}
+	});
+
+	async function onConnect() {
+		if (submitting()) return;
+		setSubmitting(true);
+		setConnectError(null);
+		try {
+			const response = await sendMessage({ type: "CURIUS_START_CONNECT" });
+			if (isErrorResponse(response)) {
+				setConnectError(response.error);
+				setConnectPhase("idle");
+				return;
+			}
+			if (response.mode === "already-connected") {
+				setConnectPhase("finishing");
+			} else {
+				setConnectPhase("waiting-for-login");
+			}
+			await refresh();
+		} catch (err) {
+			setConnectError(err instanceof Error ? err.message : "Connect failed");
+			setConnectPhase("idle");
+		} finally {
+			setSubmitting(false);
+		}
+	}
+
+	async function onImport() {
+		await sendMessage({ type: "CURIUS_RUN_IMPORT" });
+		await refresh();
+	}
+
+	async function onDisconnect() {
+		if (submitting()) return;
+		setSubmitting(true);
+		try {
+			await sendMessage({ type: "CURIUS_DISCONNECT" });
+			await refresh();
+		} finally {
+			setSubmitting(false);
+		}
+	}
+
+	/**
+	 * Narrow `status()` to the connected branch. Returned as a memoised object
+	 * (not a boolean) so consumers can read `curiusUsername` etc. without
+	 * re-narrowing at every call site.
+	 */
+	const connectedStatus = createMemo(() => {
+		const s = status();
+		if (s && "connected" in s && s.connected) return s;
+		return null;
+	});
+
+	const health = createMemo(() => {
+		const s = connectedStatus();
+		if (!s) return "healthy" as const;
+		return curiusHealth({
+			tokenExpiresAt: s.tokenExpiresAt,
+			lastImportError: s.lastImportError,
+		});
+	});
+
+	const importStatusLabel = createMemo(() => {
+		const s = connectedStatus();
+		if (!s) return null;
+		const h = health();
+		if (h === "expired") {
+			return s.lastImportError === "token_expired"
+				? "Session expired, reconnect"
+				: "Curius session expired";
+		}
+		if (h === "expiring-soon") {
+			return formatExpiryCountdown(s.tokenExpiresAt);
+		}
+		switch (s.lastImportStatus) {
+			case "running":
+				return `Importing… ${s.linksProcessed ?? 0} links, ${s.highlightsImported ?? 0} highlights`;
+			case "completed":
+				return s.lastImportFinishedAt
+					? `Last import ${formatRelativeTime(s.lastImportFinishedAt)}`
+					: "Import complete";
+			case "failed":
+				return `Import failed: ${s.lastImportError ?? "unknown error"}`;
+			case "stalled":
+				return "Import stalled, try again";
+			default:
+				return "Ready to import";
+		}
+	});
+
+	return (
+		<section class="border-b border-border py-3">
+			<h2 class="mb-2 text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase">
+				Curius
+			</h2>
+			<Show
+				when={!loading()}
+				fallback={<p class="text-xs text-muted-foreground">Loading…</p>}
+			>
+				<Show
+					when={connectedStatus()}
+					fallback={
+						<div class="flex flex-col gap-2">
+							<p class="mb-1 text-xs text-muted-foreground">
+								Bring over your Curius highlights and see friends who haven't
+								moved yet.
+							</p>
+							<Show
+								when={connectPhase() === "waiting-for-login"}
+								fallback={
+									<Show
+										when={connectPhase() === "finishing"}
+										fallback={
+											<button
+												class="rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+												disabled={submitting()}
+												onClick={onConnect}
+												type="button"
+											>
+												{submitting() ? "Connecting…" : "Connect Curius"}
+											</button>
+										}
+									>
+										<p class="text-[11px] text-muted-foreground">
+											Finishing up…
+										</p>
+									</Show>
+								}
+							>
+								<p class="text-[11px] text-muted-foreground">
+									Sign in to Curius in the tab we just opened and we'll pick
+									things up automatically.
+								</p>
+							</Show>
+							<Show when={connectError()}>
+								<p class="text-[11px] text-destructive">{connectError()}</p>
+							</Show>
+							<p class="text-[10px] text-muted-foreground/70">
+								We'll connect with your logged-in Curius session.
+							</p>
+						</div>
+					}
+				>
+					{(s) => (
+						<div class="flex flex-col gap-2">
+							<div class="flex items-center justify-between gap-2">
+								<div class="min-w-0">
+									<p class="truncate text-[13px] text-foreground">
+										{s().curiusUsername ?? "Connected"}
+									</p>
+									<p class="text-[11px] text-muted-foreground">
+										{importStatusLabel()}
+									</p>
+								</div>
+							</div>
+							<div class="flex items-center gap-2">
+								<Show
+									when={health() === "expired"}
+									fallback={
+										<button
+											class="flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-[12px] text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+											disabled={submitting()}
+											onClick={onImport}
+											type="button"
+										>
+											Re-sync
+										</button>
+									}
+								>
+									<button
+										class="flex-1 rounded-md bg-primary px-2 py-1.5 text-[12px] font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+										disabled={submitting()}
+										onClick={onConnect}
+										type="button"
+									>
+										{submitting() ? "Reconnecting…" : "Reconnect"}
+									</button>
+								</Show>
+								<Show when={health() === "expiring-soon"}>
+									<button
+										class="rounded-md bg-transparent p-0 text-[12px] text-primary underline underline-offset-2 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+										disabled={submitting()}
+										onClick={onConnect}
+										type="button"
+									>
+										Reconnect
+									</button>
+								</Show>
+								<button
+									class="rounded-md bg-transparent p-0 text-[12px] text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+									disabled={submitting()}
+									onClick={onDisconnect}
+									type="button"
+								>
+									Disconnect
+								</button>
+							</div>
+						</div>
+					)}
+				</Show>
+			</Show>
+		</section>
+	);
 }
 
 export default App;

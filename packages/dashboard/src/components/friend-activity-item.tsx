@@ -1,17 +1,17 @@
 /** @jsxImportSource react */
-import type { FeedBookmark, FeedHighlight } from "../types";
+import type { MergedFeedBookmark, MergedFeedHighlight } from "../types";
 
 import { formatRelativeTime } from "../utils/relative-time";
 import { UserDot } from "./user-dot";
 
 interface LinkActivityItemProps {
 	type: "link";
-	item: FeedBookmark;
+	item: MergedFeedBookmark;
 }
 
 interface HighlightActivityItemProps {
 	type: "highlight";
-	item: FeedHighlight;
+	item: MergedFeedHighlight;
 }
 
 type FriendActivityItemProps =
@@ -35,6 +35,26 @@ function truncate(text: string, maxLength: number): string {
 	return `${text.slice(0, maxLength)}...`;
 }
 
+function isCurius(item: { source?: "gloss" | "curius" }): boolean {
+	return item.source === "curius";
+}
+
+/**
+ * Small inline badge shown on items that came through the Curius bridge
+ * rather than native Gloss data. Kept quiet — tooltip and muted text, so it
+ * reads as context rather than a feature announcement.
+ */
+function CuriusBadge() {
+	return (
+		<span
+			className="inline-flex items-center rounded-sm px-1 py-0.5 text-[10px] font-medium tracking-wide text-amber-700/80 uppercase dark:text-amber-400/80"
+			title="This friend is still on Curius"
+		>
+			via Curius
+		</span>
+	);
+}
+
 /**
  * A single activity item showing friend's bookmark or highlight.
  */
@@ -45,7 +65,7 @@ export function FriendActivityItem(props: FriendActivityItemProps) {
 	return <HighlightItem item={props.item} />;
 }
 
-function LinkItem({ item }: { item: FeedBookmark }) {
+function LinkItem({ item }: { item: MergedFeedBookmark }) {
 	const domain = getDomain(item.url);
 	const userName = item.user?.name ?? "Unknown";
 
@@ -59,8 +79,11 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 			<UserDot className="mt-1 shrink-0" userId={item.user?._id ?? ""} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline justify-between gap-3">
-					<span className="text-sm font-medium text-foreground">
-						{userName}
+					<span className="flex min-w-0 items-baseline gap-1.5">
+						<span className="truncate text-sm font-medium text-foreground">
+							{userName}
+						</span>
+						{isCurius(item) && <CuriusBadge />}
 					</span>
 					<span className="shrink-0 text-xs text-muted-foreground/60">
 						{formatRelativeTime(item._creationTime)}
@@ -74,7 +97,7 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 	);
 }
 
-function HighlightItem({ item }: { item: FeedHighlight }) {
+function HighlightItem({ item }: { item: MergedFeedHighlight }) {
 	const domain = getDomain(item.url);
 	const userName = item.user?.name ?? "Unknown";
 
@@ -92,6 +115,7 @@ function HighlightItem({ item }: { item: FeedHighlight }) {
 					<span className="truncate">{truncate(domain, 24)}</span>
 				</div>
 				<div className="flex items-center gap-2">
+					{isCurius(item) && <CuriusBadge />}
 					<span className="text-xs font-medium text-foreground/80">
 						{userName}
 					</span>

@@ -3,6 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 
 import type { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { BridgeHighlight } from "./curius-bridge";
 import type { PageMetadata } from "./metadata";
 
 export type Highlight = NonNullable<
@@ -53,6 +54,7 @@ export interface PageCommentSummary {
  */
 export type Message =
 	| { type: "LOAD_HIGHLIGHTS"; url: string }
+	| { type: "LOAD_CURIUS_BRIDGE"; url: string }
 	| {
 			type: "CREATE_HIGHLIGHT";
 			url: string;
@@ -116,12 +118,19 @@ export type Message =
 	| {
 			type: "UPDATE_THEME_PREFERENCE";
 			themePreference: "light" | "dark" | "system";
-	  };
+	  }
+	| { type: "CURIUS_GET_STATUS" }
+	| { type: "CURIUS_START_CONNECT" }
+	| { type: "CURIUS_DISCONNECT" }
+	| { type: "CURIUS_RUN_IMPORT" }
+	| { type: "CURIUS_READ_TOKEN" }
+	| { type: "CURIUS_TOKEN_HEARTBEAT"; token: string };
 
 type ErrorResponse = { error: string };
 
 type MessageResponseMap = {
 	LOAD_HIGHLIGHTS: { highlights: Highlight[] } | ErrorResponse;
+	LOAD_CURIUS_BRIDGE: { highlights: BridgeHighlight[] } | ErrorResponse;
 	CREATE_HIGHLIGHT: { highlight: HighlightDoc } | ErrorResponse;
 	UPDATE_HIGHLIGHT: { highlight: HighlightDoc } | ErrorResponse;
 	DELETE_HIGHLIGHT: { success: boolean } | ErrorResponse;
@@ -151,6 +160,19 @@ type MessageResponseMap = {
 	GET_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
 	SYNC_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
 	UPDATE_THEME_PREFERENCE: { success: boolean } | ErrorResponse;
+	CURIUS_GET_STATUS:
+		| FunctionReturnType<typeof api.curius.getConnectionStatus>
+		| ErrorResponse;
+	CURIUS_START_CONNECT:
+		| {
+				started: true;
+				mode: "already-connected" | "reading" | "opened-tab";
+		  }
+		| ErrorResponse;
+	CURIUS_DISCONNECT: { success: boolean } | ErrorResponse;
+	CURIUS_RUN_IMPORT: { started: boolean } | ErrorResponse;
+	CURIUS_READ_TOKEN: { token: string | null };
+	CURIUS_TOKEN_HEARTBEAT: { accepted: boolean } | ErrorResponse;
 };
 
 export type MessageResponse<T extends Message["type"]> = MessageResponseMap[T];

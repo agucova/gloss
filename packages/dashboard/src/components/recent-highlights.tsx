@@ -1,23 +1,43 @@
 /** @jsxImportSource react */
 import { useQuery } from "convex/react";
+import { useMemo } from "react";
+
+import type { MergedFeedHighlight } from "../types";
 
 import { api } from "../../../../convex/_generated/api";
+import { useCuriusFriendFeed } from "../hooks/use-curius-friend-feed";
+import { mergeFeeds } from "../utils/merge-feeds";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentHighlightsSkeleton } from "./skeleton-loaders";
+
+const DISPLAY_LIMIT = 5;
+/** Fetch a wider bridge batch than we'll display so the post-dedup slice is full. */
+const BRIDGE_FETCH_LIMIT = 20;
 
 interface RecentHighlightsProps {
 	className?: string;
 }
 
 /**
- * Section showing friends' recent highlights.
+ * Section showing friends' recent highlights. Merges reactive native data
+ * (via `api.feed.feedHighlights`) with Curius-bridged activity so that
+ * Gloss users whose friends haven't migrated still see their highlights.
+ * Native wins on any externalId collision — the imported-from-Curius native
+ * copy is higher-fidelity than the bridged one.
  */
 export function RecentHighlights({ className = "" }: RecentHighlightsProps) {
 	const data = useQuery(api.feed.feedHighlights, {
-		paginationOpts: { numItems: 5, cursor: null },
+		paginationOpts: { numItems: DISPLAY_LIMIT, cursor: null },
 	});
+	const bridge = useCuriusFriendFeed("highlights", BRIDGE_FETCH_LIMIT);
 
-	const items = data?.page ?? [];
+	const items = useMemo<MergedFeedHighlight[]>(() => {
+		return mergeFeeds<MergedFeedHighlight>(
+			data?.page as MergedFeedHighlight[] | undefined,
+			bridge.items as MergedFeedHighlight[],
+			DISPLAY_LIMIT
+		);
+	}, [data?.page, bridge.items]);
 
 	return (
 		<section className={className}>

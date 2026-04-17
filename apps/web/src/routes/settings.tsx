@@ -1,12 +1,24 @@
 import { api } from "@convex/_generated/api";
 import { useForm } from "@tanstack/react-form";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Link,
+	redirect,
+	useNavigate,
+} from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { curiusHealth, formatExpiryCountdown } from "@/lib/curius-health";
+import {
+	pingExtension,
+	sendToExtension,
+	type StartConnectResult,
+} from "@/lib/extension-bridge";
 
 export const Route = createFileRoute("/settings")({
 	component: SettingsPage,
@@ -97,6 +109,8 @@ function SettingsPage() {
 				</Link>
 				<h1 className="text-2xl font-semibold text-foreground">Settings</h1>
 			</div>
+
+			<CuriusSection />
 
 			<form
 				className="space-y-10"
@@ -284,5 +298,279 @@ function VisibilitySelect({ id, value, onChange }: VisibilitySelectProps) {
 			<option value="friends">Friends only</option>
 			<option value="private">Only me</option>
 		</select>
+	);
+}
+
+/**
+ * Top-level Curius section — not a generic "connected services" card. Curius
+ * is the origin users are migrating from, first-class to Gloss identity.
+ *
+ * State flow:
+ * - Not connected + extension detected → "Connect Curius" button that delegates
+ *   to the extension via the web bridge (same mechanism as `/welcome`).
+ * - Not connected + extension not detected → Install hint linking to /install.
+ * - Connected → username, last sync, re-sync + disconnect controls.
+ */
+function CuriusSection() {
+	const navigate = useNavigate();
+	const status = useQuery(api.curius.getConnectionStatus);
+	const disconnectMutation = useMutation(api.curius.disconnect);
+	const [extensionPresent, setExtensionPresent] = useState<boolean | null>(
+		null
+	);
+	const [syncing, setSyncing] = useState(false);
+	const [connectPhase, setConnectPhase] = useState<
+		"idle" | "contacting" | "waiting-for-login" | "finishing"
+	>("idle");
+	const pingedRef = useRef(false);
+
+	// Warm the service worker once on mount so the subsequent action press
+	// hits a hot SW. MV3 cold starts can otherwise dominate perceived
+	// latency of the connect button.
+	useEffect(() => {
+		if (pingedRef.current) return;
+		pingedRef.current = true;
+		void pingExtension(3000).then(setExtensionPresent);
+	}, []);
+
+	const connected = status && "connected" in status && status.connected;
+	const curiusUsername = connected ? status.curiusUsername : undefined;
+	const lastImportFinishedAt = connected
+		? status.lastImportFinishedAt
+		: undefined;
+	const lastImportStatus = connected ? status.lastImportStatus : undefined;
+	const health = connected
+		? curiusHealth({
+				tokenExpiresAt: status.tokenExpiresAt,
+				lastImportError: status.lastImportError,
+			})
+		: "healthy";
+	const expiryCopy = connected
+		? formatExpiryCountdown(status.tokenExpiresAt)
+		: null;
+
+	// When the backend flips to connected, settle the button state.
+	useEffect(() => {
+		if (connected && connectPhase !== "idle") setConnectPhase("idle");
+	}, [connected, connectPhase]);
+
+	async function onConnect() {
+		setConnectPhase("contacting");
+		const result = (await sendToExtension(
+			{ type: "START_CONNECT" },
+			5000
+		)) as StartConnectResult | null;
+		if (result === null) {
+			setConnectPhase("idle");
+			toast.error("Couldn't reach the extension. Make sure it's installed.");
+			return;
+		}
+		if ("error" in result) {
+			setConnectPhase("idle");
+			toast.error(result.error);
+			return;
+		}
+		setConnectPhase(
+			result.mode === "already-connected" ? "finishing" : "waiting-for-login"
+		);
+	}
+
+	async function onSync() {
+		setSyncing(true);
+		const result = await sendToExtension({ type: "RUN_IMPORT" }, 5000);
+		setSyncing(false);
+		if (result === null) {
+			toast.error("Couldn't reach the extension. Make sure it's installed.");
+		} else {
+			toast.success("Import started");
+		}
+	}
+
+	async function onDisconnect() {
+		try {
+			await disconnectMutation({});
+			// Best-effort: tell the extension to drop its cached JWT + caches.
+			// The extension's own caches eventually time out regardless.
+			void sendToExtension({ type: "TOKEN_REVOKED" }, 3000);
+			toast.success("Disconnected from Curius");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to disconnect");
+		}
+	}
+
+	return (
+		<section className="mb-10">
+			<h2 className="mb-2 text-lg font-semibold text-foreground">Curius</h2>
+			<p className="mb-6 text-sm text-muted-foreground">
+				Your Curius account. Connect it to bring over your highlights and see
+				friends who haven't moved yet.
+			</p>
+
+			{status === undefined && (
+				<div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border">
+					<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+				</div>
+			)}
+
+			{status !== undefined && !connected && (
+				<div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-start sm:justify-between">
+					<div className="min-w-0">
+						{extensionPresent === false ? (
+							<>
+								<p className="mb-1 text-sm font-medium text-foreground">
+									Install the Gloss extension
+								</p>
+								<p className="text-sm text-muted-foreground">
+									Connecting Curius runs through the browser extension.
+								</p>
+							</>
+						) : connectPhase === "waiting-for-login" ? (
+							<>
+								<p className="mb-1 text-sm font-medium text-foreground">
+									Sign in to Curius
+								</p>
+								<p className="text-sm text-muted-foreground">
+									We opened a tab for you. We'll pick up your session as soon as
+									you sign in.
+								</p>
+							</>
+						) : connectPhase === "finishing" ? (
+							<>
+								<p className="mb-1 text-sm font-medium text-foreground">
+									Finishing up
+								</p>
+								<p className="text-sm text-muted-foreground">
+									Pulling your highlights into Gloss.
+								</p>
+							</>
+						) : (
+							<>
+								<p className="mb-1 text-sm font-medium text-foreground">
+									Connect Curius
+								</p>
+								<p className="text-sm text-muted-foreground">
+									We'll connect with your logged-in Curius session.
+								</p>
+							</>
+						)}
+					</div>
+					<div className="flex shrink-0 gap-2">
+						{extensionPresent === false ? (
+							<Button
+								onClick={() => navigate({ to: "/install" })}
+								type="button"
+							>
+								Install extension
+							</Button>
+						) : (
+							<Button
+								disabled={connectPhase !== "idle" || extensionPresent === null}
+								onClick={onConnect}
+								type="button"
+							>
+								{connectPhase === "contacting" ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+										Contacting…
+									</>
+								) : connectPhase === "waiting-for-login" ? (
+									"Waiting for sign-in…"
+								) : connectPhase === "finishing" ? (
+									"Finishing…"
+								) : (
+									"Connect Curius"
+								)}
+							</Button>
+						)}
+					</div>
+				</div>
+			)}
+
+			{status !== undefined && connected && (
+				<div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+					<div className="min-w-0">
+						<p className="truncate text-sm font-medium text-foreground">
+							{curiusUsername ?? "Connected"}
+						</p>
+						<p className="text-xs text-muted-foreground">
+							{health === "expired"
+								? status.lastImportError === "token_expired"
+									? "Session expired, reconnect to keep syncing"
+									: "Curius session expired"
+								: health === "expiring-soon"
+									? (expiryCopy ?? "Reconnect soon")
+									: lastImportStatus === "running"
+										? "Import in progress…"
+										: lastImportStatus === "failed"
+											? `Import failed${
+													status.lastImportError
+														? `: ${status.lastImportError}`
+														: ""
+												}`
+											: lastImportStatus === "stalled"
+												? "Last import stalled, try again"
+												: lastImportFinishedAt
+													? `Last import ${new Date(
+															lastImportFinishedAt
+														).toLocaleDateString()}`
+													: "Ready to import"}
+						</p>
+					</div>
+					<div className="flex shrink-0 gap-2">
+						{health === "expired" ? (
+							<Button
+								disabled={connectPhase !== "idle"}
+								onClick={onConnect}
+								type="button"
+							>
+								{connectPhase === "contacting" ? (
+									<>
+										<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+										Contacting…
+									</>
+								) : connectPhase === "waiting-for-login" ? (
+									"Waiting for sign-in…"
+								) : connectPhase === "finishing" ? (
+									"Finishing…"
+								) : (
+									"Reconnect"
+								)}
+							</Button>
+						) : (
+							<>
+								{health === "expiring-soon" && (
+									<Button
+										disabled={connectPhase !== "idle"}
+										onClick={onConnect}
+										type="button"
+										variant="outline"
+									>
+										Reconnect
+									</Button>
+								)}
+								<Button
+									disabled={syncing || lastImportStatus === "running"}
+									onClick={onSync}
+									type="button"
+									variant="outline"
+								>
+									{syncing ? (
+										<>
+											<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+											Syncing
+										</>
+									) : (
+										"Re-sync"
+									)}
+								</Button>
+							</>
+						)}
+						<Button onClick={onDisconnect} type="button" variant="ghost">
+							Disconnect
+						</Button>
+					</div>
+				</div>
+			)}
+		</section>
 	);
 }

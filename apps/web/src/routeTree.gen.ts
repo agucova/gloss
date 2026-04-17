@@ -9,9 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WelcomeRouteImport } from './routes/welcome'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReadLaterRouteImport } from './routes/read-later'
 import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as InstallRouteImport } from './routes/install'
@@ -20,6 +23,16 @@ import { Route as USetupRouteImport } from './routes/u/setup'
 import { Route as UUsernameRouteImport } from './routes/u/$username'
 import { Route as CliAuthorizeRouteImport } from './routes/cli/authorize'
 
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -33,6 +46,11 @@ const ReadLaterRoute = ReadLaterRouteImport.update({
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -76,9 +94,12 @@ export interface FileRoutesByFullPath {
   '/install': typeof InstallRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -88,9 +109,12 @@ export interface FileRoutesByTo {
   '/install': typeof InstallRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -101,9 +125,12 @@ export interface FileRoutesById {
   '/install': typeof InstallRoute
   '/library': typeof LibraryRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/terms': typeof TermsRoute
+  '/welcome': typeof WelcomeRoute
   '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
@@ -115,9 +142,12 @@ export interface FileRouteTypes {
     | '/install'
     | '/library'
     | '/login'
+    | '/privacy'
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/terms'
+    | '/welcome'
     | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
@@ -127,9 +157,12 @@ export interface FileRouteTypes {
     | '/install'
     | '/library'
     | '/login'
+    | '/privacy'
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/terms'
+    | '/welcome'
     | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
@@ -139,9 +172,12 @@ export interface FileRouteTypes {
     | '/install'
     | '/library'
     | '/login'
+    | '/privacy'
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/terms'
+    | '/welcome'
     | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
@@ -152,9 +188,12 @@ export interface RootRouteChildren {
   InstallRoute: typeof InstallRoute
   LibraryRoute: typeof LibraryRoute
   LoginRoute: typeof LoginRoute
+  PrivacyRoute: typeof PrivacyRoute
   ProfileRoute: typeof ProfileRoute
   ReadLaterRoute: typeof ReadLaterRoute
   SettingsRoute: typeof SettingsRoute
+  TermsRoute: typeof TermsRoute
+  WelcomeRoute: typeof WelcomeRoute
   CliAuthorizeRoute: typeof CliAuthorizeRoute
   UUsernameRoute: typeof UUsernameRoute
   USetupRoute: typeof USetupRoute
@@ -162,6 +201,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -181,6 +234,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -240,9 +300,12 @@ const rootRouteChildren: RootRouteChildren = {
   InstallRoute: InstallRoute,
   LibraryRoute: LibraryRoute,
   LoginRoute: LoginRoute,
+  PrivacyRoute: PrivacyRoute,
   ProfileRoute: ProfileRoute,
   ReadLaterRoute: ReadLaterRoute,
   SettingsRoute: SettingsRoute,
+  TermsRoute: TermsRoute,
+  WelcomeRoute: WelcomeRoute,
   CliAuthorizeRoute: CliAuthorizeRoute,
   UUsernameRoute: UUsernameRoute,
   USetupRoute: USetupRoute,

@@ -374,4 +374,88 @@ describe.skipIf(!token)("Curius E2E (live API)", () => {
 			}
 		});
 	});
+
+	// =========================================================================
+	// 8. Feed endpoints — contract probes for the dashboard bridge
+	// =========================================================================
+
+	describe("feed endpoints (contract tests)", () => {
+		test("getLibrary({page: 0}) returns a parseable response with the expected fields", async () => {
+			const result = await client.getLibrary({ page: 0 });
+			expect(Array.isArray(result.library)).toBe(true);
+
+			// Every entry must have id (string) and a URL. highlights is always
+			// an array — empty when the friend just saved the link, non-empty
+			// otherwise.
+			for (const entry of result.library) {
+				expect(typeof entry.id).toBe("string");
+				expect(typeof entry.link).toBe("string");
+				expect(Array.isArray(entry.highlights)).toBe(true);
+				expect(Array.isArray(entry.users)).toBe(true);
+
+				for (const hl of entry.highlights) {
+					expect(typeof hl.id).toBe("string");
+					expect(typeof hl.userId).toBe("string");
+					// At least one of the text fields must be populated for the
+					// highlight to be renderable.
+					const text = hl.rawHighlight ?? hl.highlightText ?? hl.highlight;
+					expect(typeof text).toBe("string");
+				}
+			}
+		});
+
+		test("getLibrary pagination: high page number returns a well-formed response", async () => {
+			// Might be empty if the account doesn't have that much feed, but the
+			// shape contract must hold.
+			const result = await client.getLibrary({ page: 99 });
+			expect(Array.isArray(result.library)).toBe(true);
+		});
+
+		test("INVARIANT: every library author is someone the user follows", async () => {
+			const [library, following] = await Promise.all([
+				client.getLibrary({ page: 0 }),
+				client.getFollowing(),
+			]);
+			const followedIds = new Set(following.map((u) => u.id));
+
+			const authorIds = new Set<string>();
+			for (const entry of library.library) {
+				for (const u of entry.users) authorIds.add(u.id);
+			}
+
+			const outsiders = Array.from(authorIds).filter(
+				(id) => !followedIds.has(id)
+			);
+			expect(outsiders).toEqual([]);
+		});
+
+		test("getActivity returns a parseable response; `type` values are enumerable", async () => {
+			const result = await client.getActivity();
+			expect(Array.isArray(result.activity)).toBe(true);
+
+			// Build a report of types observed so schema-filter sets can be
+			// kept in sync with reality. Doesn't fail if unexpected types
+			// appear — the schema is intentionally permissive.
+			const counts = new Map<string, number>();
+			for (const item of result.activity) {
+				const t = item.type ?? "__null__";
+				counts.set(t, (counts.get(t) ?? 0) + 1);
+			}
+			console.log("[curius e2e] /api/activity types observed:", counts);
+
+			// At minimum, a live account that's been around should have at
+			// least one event of some kind.
+			expect(result.activity.length).toBeGreaterThan(0);
+		});
+
+		test("getAllUsers returns a populated directory of parseable users", async () => {
+			const users = await client.getAllUsers();
+			expect(users.length).toBeGreaterThan(100); // account has ~6000 peers
+			for (const u of users.slice(0, 20)) {
+				expect(typeof u.id).toBe("string");
+				expect(typeof u.firstName).toBe("string");
+				expect(typeof u.userLink).toBe("string");
+			}
+		});
+	});
 });

@@ -252,6 +252,10 @@ export default defineSchema({
 	curiusCredentials: defineTable({
 		userId: v.id("users"),
 		token: v.string(),
+		// ms since epoch; derived from the JWT's `exp` claim at connect time
+		// so the popup/settings can warn before the token dies. Optional for
+		// forward compatibility with rows written before the field existed.
+		tokenExpiresAt: v.optional(v.float64()),
 		curiusUserId: v.optional(v.string()),
 		curiusUsername: v.optional(v.string()),
 		lastVerifiedAt: v.optional(v.float64()),
@@ -276,6 +280,16 @@ export default defineSchema({
 	})
 		.index("by_curiusUserId", ["curiusUserId"])
 		.index("by_glossUserId", ["glossUserId"]),
+
+	// Per-user cache of the Curius activity feed, split by kind so the
+	// dashboard's highlights section and bookmarks section can be fed
+	// independently. TTL is enforced at read time via `fetchedAt`.
+	curiusActivityCache: defineTable({
+		userId: v.id("users"),
+		kind: v.union(v.literal("highlights"), v.literal("bookmarks")),
+		payload: v.any(),
+		fetchedAt: v.float64(),
+	}).index("by_userId_kind", ["userId", "kind"]),
 
 	// ──────────────────────────────────────────────
 	// CLI auth pending (for OAuth + PKCE flow)

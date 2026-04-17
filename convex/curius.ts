@@ -1,9 +1,24 @@
+import { CuriusAuthError, CuriusClient } from "@gloss/curius";
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 
-import { mutation, query } from "./_generated/server";
+import { api, internal } from "./_generated/api";
+import {
+	action,
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { requireAuth } from "./lib/auth";
+import {
+	type BridgeFeedItem,
+	type FeedMapping,
+	collectAuthorCuriusIds,
+	shapeFeedFromLibrary,
+} from "./lib/curiusFeed";
 import { hashUrl, normalizeUrl } from "./lib/url";
 
 /**
@@ -27,6 +42,7 @@ const STALLED_IMPORT_MS = 15 * 60 * 1000;
 export const setCredentials = mutation({
 	args: {
 		token: v.string(),
+		tokenExpiresAt: v.optional(v.number()),
 		curiusUserId: v.string(),
 		curiusUsername: v.string(),
 		firstName: v.string(),
@@ -44,15 +60,20 @@ export const setCredentials = mutation({
 		if (existing) {
 			await ctx.db.patch(existing._id, {
 				token: args.token,
+				tokenExpiresAt: args.tokenExpiresAt,
 				curiusUserId: args.curiusUserId,
 				curiusUsername: args.curiusUsername,
 				lastVerifiedAt: now,
 				updatedAt: now,
+				// Clear stale "token_expired" state so the UI recovers automatically
+				// on a fresh connect without needing an explicit reset path.
+				lastImportError: undefined,
 			});
 		} else {
 			await ctx.db.insert("curiusCredentials", {
 				userId,
 				token: args.token,
+				tokenExpiresAt: args.tokenExpiresAt,
 				curiusUserId: args.curiusUserId,
 				curiusUsername: args.curiusUsername,
 				lastVerifiedAt: now,
@@ -146,6 +167,7 @@ export const getConnectionStatus = query({
 		return {
 			connected: true as const,
 			curiusUsername: row.curiusUsername,
+			tokenExpiresAt: row.tokenExpiresAt,
 			lastVerifiedAt: row.lastVerifiedAt,
 			lastImportStatus: isStalled ? ("stalled" as const) : storedStatus,
 			lastImportStartedAt: row.lastImportStartedAt,
@@ -179,6 +201,43 @@ export const getCredentialsForExtension = query({
 			curiusUserId: row.curiusUserId,
 			curiusUsername: row.curiusUsername,
 		};
+	},
+});
+
+/**
+ * Batch-hydrate Curius user IDs into `curiusUserMappings` rows for the
+ * extension's bridge handler. The extension calls this with the set of
+ * authors it's about to render so it can attach `glossUserId` (for linking
+ * to migrated friends' Gloss profiles) and proper display names in a single
+ * round trip. Unknown Curius IDs are simply omitted from the response.
+ */
+export const getMappingsByCuriusIds = query({
+	args: { curiusUserIds: v.array(v.string()) },
+	handler: async (ctx, args) => {
+		await requireAuth(ctx);
+		const results: Record<
+			string,
+			{
+				glossUserId: string | undefined;
+				firstName: string;
+				lastName: string;
+				curiusUsername: string;
+			}
+		> = {};
+		for (const curiusUserId of args.curiusUserIds) {
+			const row = await ctx.db
+				.query("curiusUserMappings")
+				.withIndex("by_curiusUserId", (q) => q.eq("curiusUserId", curiusUserId))
+				.first();
+			if (!row) continue;
+			results[curiusUserId] = {
+				glossUserId: row.glossUserId,
+				firstName: row.firstName,
+				lastName: row.lastName,
+				curiusUsername: row.curiusUsername,
+			};
+		}
+		return results;
 	},
 });
 
@@ -454,5 +513,182 @@ export const upsertMappings = mutation({
 				});
 			}
 		}
+	},
+});
+
+// ============================================================================
+// Dashboard feed bridge (Convex action + internal helpers)
+// ============================================================================
+
+/**
+ * How long the dashboard feed cache is trusted before the action hits Curius
+ * again. Short enough that re-sync feels responsive; long enough that
+ * repeated dashboard loads across tabs share a single API hit.
+ */
+const FEED_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export const getCredentialsInternal = internalQuery({
+	args: { userId: v.id("users") },
+	handler: async (ctx, args) => {
+		const row = await ctx.db
+			.query("curiusCredentials")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.first();
+		if (!row) return null;
+		return { token: row.token, curiusUserId: row.curiusUserId };
+	},
+});
+
+export const readFeedCacheInternal = internalQuery({
+	args: {
+		userId: v.id("users"),
+		kind: v.union(v.literal("highlights"), v.literal("bookmarks")),
+	},
+	handler: async (ctx, args) => {
+		const row = await ctx.db
+			.query("curiusActivityCache")
+			.withIndex("by_userId_kind", (q) =>
+				q.eq("userId", args.userId).eq("kind", args.kind)
+			)
+			.first();
+		if (!row) return null;
+		return { payload: row.payload, fetchedAt: row.fetchedAt };
+	},
+});
+
+export const writeFeedCacheInternal = internalMutation({
+	args: {
+		userId: v.id("users"),
+		kind: v.union(v.literal("highlights"), v.literal("bookmarks")),
+		payload: v.any(),
+	},
+	handler: async (ctx, args) => {
+		const existing = await ctx.db
+			.query("curiusActivityCache")
+			.withIndex("by_userId_kind", (q) =>
+				q.eq("userId", args.userId).eq("kind", args.kind)
+			)
+			.first();
+		const now = Date.now();
+		if (existing) {
+			await ctx.db.patch(existing._id, {
+				payload: args.payload,
+				fetchedAt: now,
+			});
+		} else {
+			await ctx.db.insert("curiusActivityCache", {
+				userId: args.userId,
+				kind: args.kind,
+				payload: args.payload,
+				fetchedAt: now,
+			});
+		}
+	},
+});
+
+/**
+ * Returns the authenticated user's id, matching `requireAuth` semantics but
+ * callable from an action context where `ctx.db` isn't available.
+ */
+async function requireActionUser(ctx: {
+	auth: { getUserIdentity: () => Promise<{ subject?: string } | null> };
+	runQuery: (
+		// biome-ignore lint/suspicious/noExplicitAny: narrowest possible
+		query: any,
+		// biome-ignore lint/suspicious/noExplicitAny: narrowest possible
+		args: any
+	) => Promise<unknown>;
+}): Promise<Id<"users">> {
+	const identity = await ctx.auth.getUserIdentity();
+	if (!identity?.subject) {
+		throw new Error("Authentication required");
+	}
+	// Use the existing internal query pattern other code relies on. Unlike
+	// `requireAuth`, we can't read the users table directly from an action.
+	const user = (await ctx.runQuery(api.users.getMe, {})) as {
+		_id: Id<"users">;
+	} | null;
+	if (!user) {
+		throw new Error("Authentication required");
+	}
+	return user._id;
+}
+
+/**
+ * Pull recent friend activity from the authenticated user's Curius account,
+ * filter to the requested kind (highlights or bookmarks), hydrate authors
+ * against `curiusUserMappings` so migrated friends get a Gloss user id, and
+ * reshape to match the dashboard's existing feed item structure.
+ *
+ * Cache is per (user, kind) with a 5-min TTL. Returns an empty list for
+ * non-connected users and on any Curius error — the bridge must never break
+ * the dashboard.
+ *
+ * The `shapeFeedFromLibrary` / `collectAuthorCuriusIds` helpers in
+ * `./lib/curiusFeed` hold the actual transformation logic; this action is
+ * the thin wrapper that does I/O and caching around them.
+ */
+export const getFriendFeed = action({
+	args: {
+		kind: v.union(v.literal("highlights"), v.literal("bookmarks")),
+		limit: v.optional(v.number()),
+	},
+	handler: async (ctx, args): Promise<{ items: BridgeFeedItem[] }> => {
+		const userId = await requireActionUser(ctx);
+		const limit = args.limit ?? 20;
+
+		const cached = (await ctx.runQuery(internal.curius.readFeedCacheInternal, {
+			userId,
+			kind: args.kind,
+		})) as { payload: BridgeFeedItem[]; fetchedAt: number } | null;
+
+		if (cached && Date.now() - cached.fetchedAt < FEED_CACHE_TTL_MS) {
+			return { items: cached.payload.slice(0, limit) };
+		}
+
+		const creds = (await ctx.runQuery(internal.curius.getCredentialsInternal, {
+			userId,
+		})) as { token: string; curiusUserId?: string } | null;
+
+		if (!creds?.token) {
+			return { items: [] };
+		}
+
+		const client = new CuriusClient({ token: creds.token, timeout: 15_000 });
+		let library: Awaited<ReturnType<typeof client.getLibrary>>;
+		try {
+			library = await client.getLibrary({ page: 0 });
+		} catch (error) {
+			if (error instanceof CuriusAuthError) {
+				// Token no longer valid — serve stale cache if we have one, else
+				// nothing. The extension owns the reconnect flow; this path just
+				// avoids breaking the dashboard.
+				if (cached) return { items: cached.payload.slice(0, limit) };
+				return { items: [] };
+			}
+			console.warn("[Curius feed] upstream error:", error);
+			if (cached) return { items: cached.payload.slice(0, limit) };
+			return { items: [] };
+		}
+
+		const curiusUserIds = collectAuthorCuriusIds(library, args.kind);
+		const mappings = (await ctx.runQuery(api.curius.getMappingsByCuriusIds, {
+			curiusUserIds,
+		})) as Record<string, FeedMapping>;
+
+		const items: BridgeFeedItem[] = shapeFeedFromLibrary(
+			library,
+			args.kind,
+			mappings,
+			limit
+		);
+
+		await ctx.runMutation(internal.curius.writeFeedCacheInternal, {
+			userId,
+			kind: args.kind,
+			payload: items,
+		});
+
+		return { items };
 	},
 });
