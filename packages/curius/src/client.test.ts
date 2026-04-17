@@ -248,6 +248,67 @@ describe("CuriusClient", () => {
 				})
 			);
 		});
+
+		test("includes highlight when provided at creation time", async () => {
+			mockFetchResponse({
+				link: {
+					id: "link-123",
+					link: "https://example.com",
+					title: "My Title",
+					snippet: "Text",
+					highlights: [],
+					nHighlights: 0,
+				},
+			});
+
+			await client.addLink({
+				url: "https://example.com",
+				title: "My Title",
+				snippet: "Text",
+				highlight: {
+					rawHighlight: "Selected",
+					leftContext: "before ",
+					rightContext: " after",
+				},
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"https://curius.app/api/links",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({
+						link: {
+							link: "https://example.com",
+							title: "My Title",
+							snippet: "Text",
+							classify: false,
+						},
+						highlight: {
+							highlightText: "Selected",
+							rawHighlight: "Selected",
+							leftContext: "before ",
+							rightContext: " after",
+						},
+					}),
+				})
+			);
+		});
+	});
+
+	describe("renameLink", () => {
+		test("POSTs the new title to the title endpoint", async () => {
+			mockFetchResponse({});
+
+			await client.renameLink("link-123", "New title");
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"https://curius.app/api/links/link-123/title",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({ title: "New title" }),
+				})
+			);
+		});
 	});
 
 	describe("getLinkByUrl", () => {
@@ -443,6 +504,20 @@ describe("CuriusClient", () => {
 			} catch (error) {
 				expect(error).toBeInstanceOf(CuriusError);
 				expect((error as CuriusError).message).toBe("Custom error message");
+			}
+		});
+
+		test("maps AbortError from fetch to a TIMEOUT CuriusError", async () => {
+			const abortError = new Error("The operation was aborted.");
+			abortError.name = "AbortError";
+			fetchSpy.mockRejectedValueOnce(abortError);
+
+			try {
+				await client.getUser();
+				expect.unreachable("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(CuriusError);
+				expect((error as CuriusError).code).toBe("TIMEOUT");
 			}
 		});
 	});

@@ -20,9 +20,6 @@ type FriendActivityItemProps =
 
 const WWW_REGEX = /^www\./;
 
-/**
- * Extract domain from URL for display.
- */
 function getDomain(url: string): string {
 	try {
 		return new URL(url).hostname.replace(WWW_REGEX, "");
@@ -31,9 +28,6 @@ function getDomain(url: string): string {
 	}
 }
 
-/**
- * Truncate text to a maximum length with ellipsis.
- */
 function truncate(text: string, maxLength: number): string {
 	if (text.length <= maxLength) {
 		return text;
@@ -51,11 +45,9 @@ export function FriendActivityItem(props: FriendActivityItemProps) {
 	return <HighlightItem item={props.item} />;
 }
 
-/**
- * Display a friend's bookmarked link.
- */
 function LinkItem({ item }: { item: FeedBookmark }) {
 	const domain = getDomain(item.url);
+	const userName = item.user?.name ?? "Unknown";
 
 	return (
 		<a
@@ -64,14 +56,14 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 			rel="noopener noreferrer"
 			target="_blank"
 		>
-			<UserDot className="mt-1 shrink-0" userId={item.user.id} />
+			<UserDot className="mt-1 shrink-0" userId={item.user?._id ?? ""} />
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline justify-between gap-3">
 					<span className="text-sm font-medium text-foreground">
-						{item.user.name}
+						{userName}
 					</span>
 					<span className="shrink-0 text-xs text-muted-foreground/60">
-						{formatRelativeTime(item.createdAt)}
+						{formatRelativeTime(item._creationTime)}
 					</span>
 				</div>
 				<p className="mt-0.5 truncate text-sm text-muted-foreground transition-colors group-hover:text-foreground/70">
@@ -82,11 +74,9 @@ function LinkItem({ item }: { item: FeedBookmark }) {
 	);
 }
 
-/**
- * Display a friend's highlight.
- */
 function HighlightItem({ item }: { item: FeedHighlight }) {
 	const domain = getDomain(item.url);
+	const userName = item.user?.name ?? "Unknown";
 
 	return (
 		<a
@@ -97,15 +87,15 @@ function HighlightItem({ item }: { item: FeedHighlight }) {
 		>
 			<div className="mb-1.5 flex items-center justify-between gap-3">
 				<div className="flex items-center gap-1.5 text-xs text-muted-foreground/70">
-					<span>{formatRelativeTime(item.createdAt)}</span>
+					<span>{formatRelativeTime(item._creationTime)}</span>
 					<span>·</span>
 					<span className="truncate">{truncate(domain, 24)}</span>
 				</div>
 				<div className="flex items-center gap-2">
 					<span className="text-xs font-medium text-foreground/80">
-						{item.user.name}
+						{userName}
 					</span>
-					<UserDot userId={item.user.id} />
+					<UserDot userId={item.user?._id ?? ""} />
 				</div>
 			</div>
 			<p className="text-sm leading-relaxed break-words text-foreground/90">

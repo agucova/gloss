@@ -74,7 +74,7 @@ export const create = mutation({
 			}
 		}
 
-		return bookmarkId;
+		return hydrateBookmark(ctx, bookmarkId);
 	},
 });
 
@@ -174,7 +174,8 @@ export const checkUrl = query({
 			)
 			.first();
 
-		return existing;
+		if (!existing) return null;
+		return hydrateBookmark(ctx, existing._id);
 	},
 });
 
@@ -212,7 +213,7 @@ export const update = mutation({
 			await syncBookmarkTags(ctx, args.id, tagIds);
 		}
 
-		return args.id;
+		return hydrateBookmark(ctx, args.id);
 	},
 });
 
@@ -251,21 +252,37 @@ export const listTags = query({
 export const toggleFavorite = mutation({
 	args: { id: v.id("bookmarks") },
 	handler: async (ctx, args) => {
-		return toggleSystemTag(ctx, args.id, "favorites");
+		const { added } = await toggleSystemTag(ctx, args.id, "favorites");
+		return { favorited: added, bookmark: await hydrateBookmark(ctx, args.id) };
 	},
 });
 
 export const toggleReadLater = mutation({
 	args: { id: v.id("bookmarks") },
 	handler: async (ctx, args) => {
-		return toggleSystemTag(ctx, args.id, "to-read");
+		const { added } = await toggleSystemTag(ctx, args.id, "to-read");
+		return { toRead: added, bookmark: await hydrateBookmark(ctx, args.id) };
 	},
 });
 
 // ─── Helper functions ───────────────────────────────
 
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+async function hydrateBookmark(
+	ctx: QueryCtx | MutationCtx,
+	id: Id<"bookmarks">
+) {
+	const bookmark = await ctx.db.get(id);
+	if (!bookmark) throw new Error("Bookmark not found");
+	const links = await ctx.db
+		.query("bookmarkTags")
+		.withIndex("by_bookmarkId", (q) => q.eq("bookmarkId", id))
+		.collect();
+	const tags = await Promise.all(links.map((l) => ctx.db.get(l.tagId)));
+	return { ...bookmark, tags: tags.filter((t) => t !== null) };
+}
 
 const SYSTEM_TAG_COLORS: Record<string, string> = {
 	favorites: "#fbbf24",

@@ -1,10 +1,10 @@
 import type { Doc } from "@convex/_generated/dataModel";
 
+import { cn } from "@gloss/dashboard";
 import { Bookmark, ExternalLink, Star, Trash2 } from "lucide-react";
 
 import { formatRelativeTime, getDomain } from "@/components/cards/utils";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export type ReadLaterBookmark = Doc<"bookmarks"> & {
 	tags?: Array<Doc<"tags">>;

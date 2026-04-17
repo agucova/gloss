@@ -7,7 +7,8 @@ import type { ActiveHighlight } from "@gloss/anchoring";
 
 import { For, Show, createEffect, createSignal, on } from "solid-js";
 
-import type { Friend, ServerComment } from "../utils/messages";
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Comment, Friend } from "../utils/messages";
 
 import {
 	type CommentThread,
@@ -22,15 +23,15 @@ interface CommentPanelProps {
 	highlight: ActiveHighlight | null;
 	element: HTMLElement | null;
 	isOwner: boolean;
-	currentUserId: string;
-	comments: ServerComment[];
+	currentUserId: Id<"users"> | null;
+	comments: Comment[];
 	visible: boolean;
 	onCreateComment: (
 		content: string,
-		mentions: string[],
-		parentId?: string
+		mentions: Id<"users">[],
+		parentId?: Id<"comments">
 	) => void;
-	onDeleteComment: (commentId: string) => void;
+	onDeleteComment: (commentId: Id<"comments">) => void;
 	onDeleteHighlight: () => void;
 	onSearchFriends: (query: string) => void;
 	onClose: () => void;
@@ -44,7 +45,7 @@ export function CommentPanel(props: CommentPanelProps) {
 	// oxlint-disable-next-line no-unassigned-vars -- Solid ref pattern: assigned via ref={textareaRef}
 	let textareaRef!: HTMLTextAreaElement;
 
-	const [replyingTo, setReplyingTo] = createSignal<string | null>(null);
+	const [replyingTo, setReplyingTo] = createSignal<Id<"comments"> | null>(null);
 	const [mentionFriends, setMentionFriends] = createSignal<Friend[]>([]);
 	const [mentionSelectedIndex, setMentionSelectedIndex] = createSignal(0);
 	const [showMentions, setShowMentions] = createSignal(false);
@@ -184,15 +185,18 @@ export function CommentPanel(props: CommentPanelProps) {
 		setShowMentions(false);
 	}
 
-	function extractMentionIds(content: string, friends: Friend[]): string[] {
+	function extractMentionIds(
+		content: string,
+		friends: Friend[]
+	): Id<"users">[] {
 		const mentionRegex = /@(\w+)/g;
-		const mentions: string[] = [];
+		const mentions: Id<"users">[] = [];
 		for (const match of content.matchAll(mentionRegex)) {
 			const name = match[1];
 			const friend = friends.find(
-				(f) => f.name?.toLowerCase() === name.toLowerCase()
+				(f) => f.name?.toLowerCase() === name?.toLowerCase()
 			);
-			if (friend) mentions.push(friend.id);
+			if (friend) mentions.push(friend._id);
 		}
 		return [...new Set(mentions)];
 	}
@@ -201,7 +205,7 @@ export function CommentPanel(props: CommentPanelProps) {
 		const { comment, replies } = thread;
 		const isOwn = () => props.currentUserId === comment.authorId;
 		const authorName = () =>
-			isOwn() ? "You" : comment.author.name || "Someone";
+			isOwn() ? "You" : comment.author?.name || "Someone";
 
 		return (
 			<>
@@ -211,7 +215,8 @@ export function CommentPanel(props: CommentPanelProps) {
 				>
 					<div class="gloss-comment-author">
 						<span>
-							{authorName()} {"\u00B7"} {formatRelativeTime(comment.createdAt)}
+							{authorName()} {"\u00B7"}{" "}
+							{formatRelativeTime(comment._creationTime)}
 						</span>
 						<span class="gloss-comment-actions">
 							<Show when={depth < 2}>
@@ -219,7 +224,7 @@ export function CommentPanel(props: CommentPanelProps) {
 									type="button"
 									class="gloss-action-btn"
 									onClick={() => {
-										setReplyingTo(comment.id);
+										setReplyingTo(comment._id);
 										focusInput();
 									}}
 								>
@@ -230,7 +235,7 @@ export function CommentPanel(props: CommentPanelProps) {
 								<button
 									type="button"
 									class="gloss-action-btn gloss-delete"
-									onClick={() => props.onDeleteComment(comment.id)}
+									onClick={() => props.onDeleteComment(comment._id)}
 								>
 									Delete
 								</button>

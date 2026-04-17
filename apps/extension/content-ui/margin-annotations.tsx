@@ -5,6 +5,9 @@
 
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Comment } from "../utils/messages";
+
 import { AnnotationItem } from "./annotation-item";
 import { annotationsVisible, commentSummary, manager } from "./store";
 
@@ -24,7 +27,10 @@ const CONTENT_SELECTORS = [
 ];
 
 interface MarginAnnotationsProps {
-	onAnnotationClick: (highlightId: string, element: HTMLElement | null) => void;
+	onAnnotationClick: (
+		highlightId: Id<"highlights">,
+		element: HTMLElement | null
+	) => void;
 }
 
 export function MarginAnnotations(props: MarginAnnotationsProps) {
@@ -92,25 +98,20 @@ export function MarginAnnotations(props: MarginAnnotationsProps) {
 		const mgr = manager();
 		if (!summary || !mgr) return [];
 
-		return summary.highlightComments
-			.map((hc) => {
-				const active = mgr.get(hc.highlightId);
-				if (!active || active.elements.length === 0) return null;
-				return {
-					highlightId: hc.highlightId,
-					comments: hc.comments,
-					anchor: active.elements[0],
-				};
-			})
-			.filter(
-				(
-					item
-				): item is {
-					highlightId: string;
-					comments: (typeof summary.highlightComments)[0]["comments"];
-					anchor: HTMLElement;
-				} => item !== null
-			);
+		const out: Array<{
+			highlightId: Id<"highlights">;
+			comments: Comment[];
+			anchor: HTMLElement;
+		}> = [];
+
+		for (const hc of summary.highlightComments) {
+			const active = mgr.get(hc.highlightId);
+			const anchor = active?.elements[0];
+			if (!(active && anchor)) continue;
+			out.push({ highlightId: hc.highlightId, comments: hc.comments, anchor });
+		}
+
+		return out;
 	};
 
 	return (

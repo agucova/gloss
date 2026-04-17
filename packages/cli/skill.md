@@ -89,4 +89,4 @@ Configure in Claude Desktop or other MCP clients:
 ## Environment Variables
 
 - `GLOSS_API_KEY` - API key for authentication (overrides config file)
-- `GLOSS_API_URL` - API server URL (default: https://api.gloss.agus.sh)
+- `GLOSS_API_URL` - API server URL (default: https://api.gloss.space)

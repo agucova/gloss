@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import type { ComponentProps } from "react";
 
-import { cn } from "../../utils/cn";
+import { cn } from "@gloss/dashboard";
 
 interface ButtonProps extends ComponentProps<"button"> {
 	variant?: "primary" | "secondary" | "ghost" | "link";

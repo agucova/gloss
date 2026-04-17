@@ -1,20 +1,20 @@
 /** @jsxImportSource react */
-import type { DashboardApiClient } from "../types";
+import type { SearchResults as SearchResultsData } from "../types";
 
 import { useSearch } from "../hooks/use-search";
 import { formatRelativeTime } from "../utils/relative-time";
 
 interface SearchResultsProps {
-	apiClient: DashboardApiClient;
+	fetcher: (query: string, limit: number) => Promise<SearchResultsData>;
 	query: string;
 }
 
 /**
  * Display search results for bookmarks and highlights.
  */
-export function SearchResults({ apiClient, query }: SearchResultsProps) {
+export function SearchResults({ fetcher, query }: SearchResultsProps) {
 	const { data, isLoading, error } = useSearch({
-		apiClient,
+		fetcher,
 		query,
 		enabled: query.length > 0,
 	});
@@ -35,15 +35,14 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 		);
 	}
 
-	if (!data) {
-		return null;
-	}
+	if (!data) return null;
 
-	const hasBookmarks = data.bookmarks.length > 0;
-	const hasHighlights = data.highlights.length > 0;
-	const hasResults = hasBookmarks || hasHighlights;
+	const bookmarks = data.results.filter((r) => r.entityType === "bookmark");
+	const highlights = data.results.filter((r) => r.entityType === "highlight");
+	const hasBookmarks = bookmarks.length > 0;
+	const hasHighlights = highlights.length > 0;
 
-	if (!hasResults) {
+	if (!(hasBookmarks || hasHighlights)) {
 		return (
 			<div className="mt-12 text-center text-sm text-muted-foreground">
 				No results found for "{query}"
@@ -59,24 +58,19 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 						Bookmarks
 					</h2>
 					<div className="space-y-3">
-						{data.bookmarks.map((bookmark) => (
+						{bookmarks.map((result) => (
 							<a
 								className="block rounded-lg border border-border/50 p-4 transition-colors hover:border-border hover:bg-muted/30"
-								href={bookmark.url}
-								key={bookmark.id}
+								href={result.url ?? "#"}
+								key={result.entityId}
 								rel="noopener noreferrer"
 								target="_blank"
 							>
 								<h3 className="text-sm font-medium text-foreground">
-									{bookmark.title || bookmark.url}
+									{result.content}
 								</h3>
-								{bookmark.description && (
-									<p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-										{bookmark.description}
-									</p>
-								)}
 								<span className="mt-2 block text-xs text-muted-foreground">
-									{formatRelativeTime(bookmark.createdAt)}
+									{formatRelativeTime(result.createdAt)}
 								</span>
 							</a>
 						))}
@@ -90,24 +84,19 @@ export function SearchResults({ apiClient, query }: SearchResultsProps) {
 						Highlights
 					</h2>
 					<div className="space-y-3">
-						{data.highlights.map((highlight) => (
+						{highlights.map((result) => (
 							<a
 								className="block rounded-lg bg-amber-50 p-4 transition-colors hover:bg-amber-100/80 dark:bg-amber-500/10 dark:hover:bg-amber-500/20"
-								href={highlight.url}
-								key={highlight.id}
+								href={result.url ?? "#"}
+								key={result.entityId}
 								rel="noopener noreferrer"
 								target="_blank"
 							>
 								<p className="text-sm leading-relaxed text-foreground">
-									{highlight.text}
+									{result.content}
 								</p>
-								{highlight.note && (
-									<p className="mt-2 text-xs text-muted-foreground italic">
-										{highlight.note}
-									</p>
-								)}
 								<span className="mt-2 block text-xs text-muted-foreground">
-									{formatRelativeTime(highlight.createdAt)}
+									{formatRelativeTime(result.createdAt)}
 								</span>
 							</a>
 						))}

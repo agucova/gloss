@@ -7,7 +7,8 @@ import type { ActiveHighlight } from "@gloss/anchoring";
 
 import { createSignal } from "solid-js";
 
-import type { Friend, ServerComment } from "../utils/messages";
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Comment, Friend } from "../utils/messages";
 import type { IndicatorCorner } from "./domain-settings";
 
 import { CommentIndicator } from "./comment-indicator";
@@ -22,13 +23,16 @@ export interface GlossAppCallbacks {
 	onToggleAnnotations: () => void;
 	onCornerChange: (corner: IndicatorCorner) => void;
 	onDisableDomain: () => void;
-	onAnnotationClick: (highlightId: string, element: HTMLElement | null) => void;
+	onAnnotationClick: (
+		highlightId: Id<"highlights">,
+		element: HTMLElement | null
+	) => void;
 	onCreateComment: (
 		content: string,
-		mentions: string[],
-		parentId?: string
+		mentions: Id<"users">[],
+		parentId?: Id<"comments">
 	) => void;
-	onDeleteComment: (commentId: string) => void;
+	onDeleteComment: (commentId: Id<"comments">) => void;
 	onDeleteHighlight: () => void;
 	onSearchFriends: (query: string) => void;
 	onPanelClosed: () => void;
@@ -43,14 +47,14 @@ export interface GlossAppApi {
 		highlight: ActiveHighlight;
 		element: HTMLElement;
 		isOwner: boolean;
-		currentUserId: string;
-		comments: ServerComment[];
-		serverId: string;
+		currentUserId: Id<"users"> | null;
+		comments: Comment[];
+		serverId: Id<"highlights">;
 		highlightId: string;
 	}): void;
 	hidePanel(): void;
-	setPanelComments(comments: ServerComment[]): void;
-	readonly panelServerId: string;
+	setPanelComments(comments: Comment[]): void;
+	readonly panelServerId: Id<"highlights"> | null;
 	readonly panelHighlightId: string;
 	readonly panelVisible: boolean;
 	setMentionResults(friends: Friend[]): void;
@@ -87,9 +91,11 @@ export function GlossApp(props: GlossAppProps) {
 		null
 	);
 	const [panelIsOwner, setPanelIsOwner] = createSignal(false);
-	const [panelCurrentUserId, setPanelCurrentUserId] = createSignal("");
-	const [panelComments, setPanelComments] = createSignal<ServerComment[]>([]);
-	const [panelServerId, setPanelServerId] = createSignal<string>("");
+	const [panelCurrentUserId, setPanelCurrentUserId] =
+		createSignal<Id<"users"> | null>(null);
+	const [panelComments, setPanelComments] = createSignal<Comment[]>([]);
+	const [panelServerId, setPanelServerId] =
+		createSignal<Id<"highlights"> | null>(null);
 	const [panelHighlightId, setPanelHighlightId] = createSignal<string>("");
 
 	// Mention results callback ref
@@ -123,9 +129,9 @@ export function GlossApp(props: GlossAppProps) {
 			highlight: ActiveHighlight;
 			element: HTMLElement;
 			isOwner: boolean;
-			currentUserId: string;
-			comments: ServerComment[];
-			serverId: string;
+			currentUserId: Id<"users"> | null;
+			comments: Comment[];
+			serverId: Id<"highlights">;
 			highlightId: string;
 		}) {
 			setPanelHighlight(opts.highlight);

@@ -2,10 +2,8 @@
 	"extends": "@gloss/config/tsconfig.base.json",
 	"compilerOptions": {
 		"jsx": "react-jsx",
-		"declaration": true,
-		"declarationMap": true,
-		"sourceMap": true,
-		"outDir": "dist",
-		"composite": true
-	}
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
+		"noEmit": true
+	},
+	"include": ["src/**/*", "../../convex/_generated/**/*"]
 }

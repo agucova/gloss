@@ -1,10 +1,10 @@
 /** @jsxImportSource react */
 import { Bookmark } from "lucide-react";
 
-import type { Bookmark as BookmarkType } from "../types";
+import type { MyBookmark } from "../types";
 
 interface BookmarkCardProps {
-	bookmark: BookmarkType;
+	bookmark: MyBookmark;
 }
 
 const WWW_REGEX = /^www\./;

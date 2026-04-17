@@ -47,7 +47,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 			magicLink({
 				sendMagicLink: async ({ email, url }) => {
 					const fromAddress =
-						process.env.EMAIL_FROM ?? "Gloss <noreply@gloss.agus.sh>";
+						process.env.EMAIL_FROM ?? "Gloss <noreply@gloss.space>";
 					const isProduction = process.env.NODE_ENV === "production";
 
 					// Use Resend directly since we're in an action context

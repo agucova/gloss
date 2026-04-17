@@ -24,12 +24,13 @@ export { useMyBookmarks } from "./hooks/use-my-bookmarks";
 export { useSearch } from "./hooks/use-search";
 // Types
 export type {
-	Bookmark,
-	DashboardApiClient,
+	DashboardFetchers,
 	FeedBookmark,
+	FeedBookmarksPage,
 	FeedHighlight,
-	FeedUser,
-	PaginatedResponse,
+	FeedHighlightsPage,
+	MyBookmark,
+	MyBookmarksPage,
 	SearchResults as SearchResultsType,
 } from "./types";
 // Utilities

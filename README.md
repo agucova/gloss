@@ -113,7 +113,7 @@ Pre-commit hook (Lefthook) runs `oxfmt` + `oxlint` on staged files.
 
 **Convex (backend)** — `bunx convex deploy` pushes to the prod deployment linked via `CONVEX_DEPLOY_KEY`. Remember to set the same env vars listed above on the prod deployment.
 
-**Web (Cloudflare Workers)** — `bun run deploy:web`. `apps/web/wrangler.toml` routes `gloss.agus.sh/*` to the worker. Static assets served from `apps/web/dist` with SPA fallback. Build-time env needs `VITE_CONVEX_URL`, `VITE_CONVEX_SITE_URL`, `VITE_WEB_URL`.
+**Web (Cloudflare Workers)** — `bun run deploy:web`. `apps/web/wrangler.toml` routes `gloss.space/*` to the worker. Static assets served from `apps/web/dist` with SPA fallback. Build-time env needs `VITE_CONVEX_URL`, `VITE_CONVEX_SITE_URL`, `VITE_WEB_URL`.
 
 **Extension** — `bun run zip:ext` (Chrome) / `bun run zip:ext:firefox`, then upload the ZIP to each store.
 

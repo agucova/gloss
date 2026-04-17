@@ -1,6 +1,5 @@
+import { cn } from "@gloss/dashboard";
 import { Loader2 } from "lucide-react";
-
-import { cn } from "@/lib/utils";
 
 interface LoaderProps {
 	className?: string;

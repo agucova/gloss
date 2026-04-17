@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@gloss/dashboard";
 
 export type ContentType = "all" | "bookmarks" | "highlights";
 

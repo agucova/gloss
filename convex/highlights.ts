@@ -98,7 +98,10 @@ export const create = mutation({
 			searchContent,
 		});
 
-		return id;
+		const doc = await ctx.db.get(id);
+		if (!doc) throw new Error("Failed to load created highlight");
+		const [hydrated] = await hydrateHighlights(ctx, [doc]);
+		return hydrated;
 	},
 });
 
@@ -144,7 +147,10 @@ export const update = mutation({
 		}
 
 		await ctx.db.patch(args.id, updates);
-		return args.id;
+		const doc = await ctx.db.get(args.id);
+		if (!doc) throw new Error("Failed to load updated highlight");
+		const [hydrated] = await hydrateHighlights(ctx, [doc]);
+		return hydrated;
 	},
 });
 

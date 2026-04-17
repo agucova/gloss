@@ -2,7 +2,7 @@
  * Format a date as a relative time string.
  * Returns strings like "just now", "5 minutes ago", "2 hours ago", "3 days ago".
  */
-export function formatRelativeTime(date: Date | string): string {
+export function formatRelativeTime(date: Date | string | number): string {
 	const now = new Date();
 	const then = new Date(date);
 	const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);

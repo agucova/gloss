@@ -1,4 +1,5 @@
 import { api } from "@convex/_generated/api";
+import { cn } from "@gloss/dashboard";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -11,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
 
@@ -116,7 +116,7 @@ function UsernameSetupPage() {
 						Choose your username
 					</h1>
 					<p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-						This will be your profile URL: gloss.agus.sh/u/
+						This will be your profile URL: gloss.space/u/
 						<span className="font-medium text-foreground">
 							{checkingUsername || "username"}
 						</span>

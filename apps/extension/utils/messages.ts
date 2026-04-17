@@ -1,190 +1,65 @@
 import type { AnnotationSelector } from "@gloss/anchoring";
+import type { FunctionReturnType } from "convex/server";
 
+import type { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import type { PageMetadata } from "./metadata";
 
-/**
- * Server-returned highlight shape (from API response).
- * Matches the shape returned by GET /api/highlights
- */
-export interface ServerHighlight {
-	id: string;
-	userId: string;
-	url: string;
-	urlHash: string;
-	selector: AnnotationSelector;
-	text: string;
-	visibility: "public" | "friends" | "private";
-	createdAt: string;
-	user?: {
-		id: string;
-		name: string | null;
-		image: string | null;
-	};
-}
+export type Highlight = NonNullable<
+	FunctionReturnType<typeof api.highlights.getByUrl>[number]
+>;
+export type HighlightDoc = NonNullable<
+	FunctionReturnType<typeof api.highlights.create>
+>;
+export type MyHighlight = FunctionReturnType<
+	typeof api.highlights.listMine
+>["page"][number];
 
-/**
- * Server-returned comment shape (from API response).
- */
-export interface ServerComment {
-	id: string;
-	highlightId: string;
-	authorId: string;
-	parentId: string | null;
-	content: string;
-	createdAt: string;
-	updatedAt: string;
-	author: {
-		id: string;
-		name: string | null;
-		image: string | null;
-	};
-	mentions: Array<{
-		mentionedUser: {
-			id: string;
-			name: string | null;
-		};
-	}>;
-}
+export type Comment = FunctionReturnType<
+	typeof api.comments.getForHighlight
+>[number];
+export type Mention = Comment["mentions"][number];
 
-/**
- * Friend for @mention autocomplete.
- */
-export interface Friend {
-	id: string;
-	name: string | null;
-	image: string | null;
-}
+export type Bookmark = FunctionReturnType<typeof api.bookmarks.create>;
+export type BookmarkStatus = FunctionReturnType<typeof api.bookmarks.checkUrl>;
+export type Tag = FunctionReturnType<typeof api.bookmarks.listTags>[number];
+export type MyBookmark = FunctionReturnType<
+	typeof api.bookmarks.list
+>["page"][number];
 
-/**
- * Comment summary for a highlight (used for margin annotations).
- */
-export interface HighlightCommentSummary {
-	highlightId: string;
-	comments: ServerComment[];
-}
+export type Friend = FunctionReturnType<
+	typeof api.friendships.searchFriends
+>[number];
 
-/**
- * Tag shape from the server.
- */
-export interface ServerTag {
-	id: string;
-	name: string;
-	color: string | null;
-	isSystem: boolean;
-}
+export type FeedHighlightItem = FunctionReturnType<
+	typeof api.feed.feedHighlights
+>["page"][number];
+export type FeedBookmarkItem = FunctionReturnType<
+	typeof api.feed.feedBookmarks
+>["page"][number];
+export type FeedHighlightsPage = FunctionReturnType<
+	typeof api.feed.feedHighlights
+>;
+export type FeedBookmarksPage = FunctionReturnType<
+	typeof api.feed.feedBookmarks
+>;
+export type MyBookmarksPage = FunctionReturnType<typeof api.bookmarks.list>;
+export type SearchResults = FunctionReturnType<typeof api.search.search>;
+export type UserSettings = NonNullable<
+	FunctionReturnType<typeof api.users.getSettings>
+>;
 
-/**
- * Bookmark shape from the server.
- */
-export interface ServerBookmark {
-	id: string;
-	userId: string;
-	url: string;
-	urlHash: string;
-	title: string | null;
-	description: string | null;
-	favicon: string | null;
-	ogImage: string | null;
-	ogDescription: string | null;
-	siteName: string | null;
-	createdAt: string;
-	tags: ServerTag[];
-}
-
-/**
- * Page comment summary response (aggregated comment data for all highlights on a page).
- */
 export interface PageCommentSummary {
-	highlightComments: HighlightCommentSummary[];
+	highlightComments: Array<{
+		highlightId: Id<"highlights">;
+		comments: Comment[];
+	}>;
 	totalComments: number;
 	commenters: Array<{
-		id: string;
-		name: string | null;
-		image: string | null;
+		_id: Id<"users">;
+		name: string;
+		image: string | undefined;
 	}>;
-}
-
-// ============================================================================
-// Dashboard types (for newtab)
-// ============================================================================
-
-/**
- * User info included with feed items.
- */
-export interface FeedUser {
-	id: string;
-	name: string;
-	image: string | null;
-}
-
-/**
- * A bookmark from the friends feed.
- */
-export interface FeedBookmark {
-	id: string;
-	url: string;
-	title: string | null;
-	description: string | null;
-	createdAt: string;
-	user: FeedUser;
-}
-
-/**
- * A highlight from the friends feed.
- */
-export interface FeedHighlight {
-	id: string;
-	url: string;
-	text: string;
-	note: string | null;
-	color: string;
-	createdAt: string;
-	user: FeedUser;
-}
-
-/**
- * User's own bookmark for dashboard.
- */
-export interface DashboardBookmark {
-	id: string;
-	url: string;
-	title: string | null;
-	description: string | null;
-	createdAt: string;
-}
-
-/**
- * Paginated response from feed endpoints.
- */
-export interface PaginatedResponse<T> {
-	items: T[];
-	nextCursor: string | null;
-}
-
-/**
- * Search results.
- */
-export interface SearchResults {
-	bookmarks: DashboardBookmark[];
-	highlights: {
-		id: string;
-		url: string;
-		text: string;
-		note: string | null;
-		createdAt: string;
-	}[];
-}
-
-/**
- * User settings (synced from server).
- */
-export interface UserSettings {
-	profileVisibility: "public" | "friends" | "private";
-	highlightsVisibility: "public" | "friends" | "private";
-	bookmarksVisibility: "public" | "friends" | "private";
-	highlightDisplayFilter: "anyone" | "friends" | "me";
-	commentDisplayMode: "expanded" | "collapsed";
-	themePreference: "light" | "dark" | "system";
 }
 
 /**
@@ -201,33 +76,31 @@ export type Message =
 	  }
 	| {
 			type: "UPDATE_HIGHLIGHT";
-			id: string;
+			id: Id<"highlights">;
 			updates: {
 				visibility?: "public" | "friends" | "private";
 			};
 	  }
-	| { type: "DELETE_HIGHLIGHT"; id: string }
+	| { type: "DELETE_HIGHLIGHT"; id: Id<"highlights"> }
 	| { type: "GET_AUTH_STATUS" }
 	| { type: "GET_RECENT_HIGHLIGHTS"; limit?: number }
-	// Comment messages
-	| { type: "LOAD_COMMENTS"; highlightId: string }
+	| { type: "LOAD_COMMENTS"; highlightId: Id<"highlights"> }
 	| {
 			type: "CREATE_COMMENT";
-			highlightId: string;
+			highlightId: Id<"highlights">;
 			content: string;
-			mentions: string[];
-			parentId?: string;
+			mentions: Id<"users">[];
+			parentId?: Id<"comments">;
 	  }
 	| {
 			type: "UPDATE_COMMENT";
-			id: string;
+			id: Id<"comments">;
 			content: string;
-			mentions: string[];
+			mentions: Id<"users">[];
 	  }
-	| { type: "DELETE_COMMENT"; id: string }
+	| { type: "DELETE_COMMENT"; id: Id<"comments"> }
 	| { type: "SEARCH_FRIENDS"; query: string }
-	| { type: "LOAD_PAGE_COMMENT_SUMMARY"; highlightIds: string[] }
-	// Bookmark messages
+	| { type: "LOAD_PAGE_COMMENT_SUMMARY"; highlightIds: Id<"highlights">[] }
 	| { type: "GET_PAGE_METADATA"; tabId?: number }
 	| { type: "GET_BOOKMARK_STATUS"; url: string }
 	| {
@@ -242,21 +115,19 @@ export type Message =
 	  }
 	| {
 			type: "UPDATE_BOOKMARK";
-			id: string;
+			id: Id<"bookmarks">;
 			title?: string;
 			description?: string;
 			tags?: string[];
 	  }
-	| { type: "DELETE_BOOKMARK"; id: string }
+	| { type: "DELETE_BOOKMARK"; id: Id<"bookmarks"> }
 	| { type: "GET_USER_TAGS" }
-	| { type: "TOGGLE_FAVORITE"; id: string }
-	| { type: "TOGGLE_READ_LATER"; id: string }
-	// Dashboard messages (for newtab)
+	| { type: "TOGGLE_FAVORITE"; id: Id<"bookmarks"> }
+	| { type: "TOGGLE_READ_LATER"; id: Id<"bookmarks"> }
 	| { type: "GET_FEED_HIGHLIGHTS"; cursor?: string; limit?: number }
 	| { type: "GET_FEED_BOOKMARKS"; cursor?: string; limit?: number }
 	| { type: "GET_MY_BOOKMARKS"; cursor?: string; limit?: number }
 	| { type: "SEARCH_DASHBOARD"; query: string; limit?: number }
-	// Settings messages
 	| { type: "GET_USER_SETTINGS" }
 	| { type: "SYNC_USER_SETTINGS" }
 	| {
@@ -264,54 +135,48 @@ export type Message =
 			themePreference: "light" | "dark" | "system";
 	  };
 
-/**
- * Response types mapped to each message type.
- */
+type ErrorResponse = { error: string };
+
 type MessageResponseMap = {
-	LOAD_HIGHLIGHTS: { highlights: ServerHighlight[] } | { error: string };
-	CREATE_HIGHLIGHT: { highlight: ServerHighlight } | { error: string };
-	UPDATE_HIGHLIGHT: { highlight: ServerHighlight } | { error: string };
-	DELETE_HIGHLIGHT: { success: boolean } | { error: string };
+	LOAD_HIGHLIGHTS: { highlights: Highlight[] } | ErrorResponse;
+	CREATE_HIGHLIGHT: { highlight: HighlightDoc } | ErrorResponse;
+	UPDATE_HIGHLIGHT: { highlight: HighlightDoc } | ErrorResponse;
+	DELETE_HIGHLIGHT: { success: boolean } | ErrorResponse;
 	GET_AUTH_STATUS: {
 		authenticated: boolean;
-		user?: { id: string; name: string | null };
+		user?: { _id: Id<"users">; name: string };
 	};
-	GET_RECENT_HIGHLIGHTS: { highlights: ServerHighlight[] } | { error: string };
-	LOAD_COMMENTS: { comments: ServerComment[] } | { error: string };
-	CREATE_COMMENT: { comment: ServerComment } | { error: string };
-	UPDATE_COMMENT: { comment: ServerComment } | { error: string };
-	DELETE_COMMENT: { success: boolean } | { error: string };
-	SEARCH_FRIENDS: { friends: Friend[] } | { error: string };
-	LOAD_PAGE_COMMENT_SUMMARY: PageCommentSummary | { error: string };
+	GET_RECENT_HIGHLIGHTS: { highlights: MyHighlight[] } | ErrorResponse;
+	LOAD_COMMENTS: { comments: Comment[] } | ErrorResponse;
+	CREATE_COMMENT: { comment: Comment } | ErrorResponse;
+	UPDATE_COMMENT: { comment: Comment } | ErrorResponse;
+	DELETE_COMMENT: { success: boolean } | ErrorResponse;
+	SEARCH_FRIENDS: { friends: Friend[] } | ErrorResponse;
+	LOAD_PAGE_COMMENT_SUMMARY: PageCommentSummary | ErrorResponse;
 	GET_PAGE_METADATA: { metadata: PageMetadata };
 	GET_BOOKMARK_STATUS:
-		| { bookmarked: true; bookmark: ServerBookmark }
+		| { bookmarked: true; bookmark: NonNullable<BookmarkStatus> }
 		| { bookmarked: false; bookmark: null }
-		| { error: string };
-	SAVE_BOOKMARK: { bookmark: ServerBookmark } | { error: string };
-	UPDATE_BOOKMARK: { bookmark: ServerBookmark } | { error: string };
-	DELETE_BOOKMARK: { success: boolean } | { error: string };
-	GET_USER_TAGS: { tags: ServerTag[] } | { error: string };
-	TOGGLE_FAVORITE:
-		| { favorited: boolean; bookmark: ServerBookmark }
-		| { error: string };
-	TOGGLE_READ_LATER:
-		| { toRead: boolean; bookmark: ServerBookmark }
-		| { error: string };
-	GET_FEED_HIGHLIGHTS: PaginatedResponse<FeedHighlight> | { error: string };
-	GET_FEED_BOOKMARKS: PaginatedResponse<FeedBookmark> | { error: string };
-	GET_MY_BOOKMARKS: PaginatedResponse<DashboardBookmark> | { error: string };
-	SEARCH_DASHBOARD: SearchResults | { error: string };
-	GET_USER_SETTINGS: { settings: UserSettings } | { error: string };
-	SYNC_USER_SETTINGS: { settings: UserSettings } | { error: string };
-	UPDATE_THEME_PREFERENCE: { success: boolean } | { error: string };
+		| ErrorResponse;
+	SAVE_BOOKMARK: { bookmark: Bookmark } | ErrorResponse;
+	UPDATE_BOOKMARK: { bookmark: Bookmark } | ErrorResponse;
+	DELETE_BOOKMARK: { success: boolean } | ErrorResponse;
+	GET_USER_TAGS: { tags: Tag[] } | ErrorResponse;
+	TOGGLE_FAVORITE: { favorited: boolean; bookmark: Bookmark } | ErrorResponse;
+	TOGGLE_READ_LATER: { toRead: boolean; bookmark: Bookmark } | ErrorResponse;
+	GET_FEED_HIGHLIGHTS: FeedHighlightsPage | ErrorResponse;
+	GET_FEED_BOOKMARKS: FeedBookmarksPage | ErrorResponse;
+	GET_MY_BOOKMARKS: MyBookmarksPage | ErrorResponse;
+	SEARCH_DASHBOARD: SearchResults | ErrorResponse;
+	GET_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
+	SYNC_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
+	UPDATE_THEME_PREFERENCE: { success: boolean } | ErrorResponse;
 };
 
 export type MessageResponse<T extends Message["type"]> = MessageResponseMap[T];
 
 /**
  * Type-safe message sending helper.
- * Use this in content scripts to communicate with the background script.
  */
 export async function sendMessage<T extends Message>(
 	message: T

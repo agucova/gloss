@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { DashboardApiClient, FeedHighlight } from "../types";
+import type { FeedHighlightsPage } from "../types";
 
 interface UseFriendsHighlightsOptions {
-	apiClient: DashboardApiClient;
+	fetcher: (limit: number) => Promise<FeedHighlightsPage>;
 	limit?: number;
 }
 
@@ -11,19 +11,11 @@ interface UseFriendsHighlightsOptions {
  * Fetch friends' recent highlights for the "Recent highlights" section.
  */
 export function useFriendsHighlights({
-	apiClient,
+	fetcher,
 	limit = 10,
 }: UseFriendsHighlightsOptions) {
 	return useQuery({
 		queryKey: ["feed", "highlights", { limit }],
-		queryFn: async () => {
-			const { data, error } = await apiClient.api.feed.get({
-				query: { limit },
-			});
-			if (error) {
-				throw new Error("Failed to fetch friends' highlights");
-			}
-			return data as { items: FeedHighlight[]; nextCursor: string | null };
-		},
+		queryFn: () => fetcher(limit),
 	});
 }

@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import type { DashboardApiClient } from "@gloss/dashboard";
+import type { DashboardFetchers } from "@gloss/dashboard";
 
 import { Dashboard } from "@gloss/dashboard";
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +10,6 @@ import { initTheme } from "../../utils/theme";
 
 const WEB_APP_URL = import.meta.env.VITE_WEB_URL || "http://localhost:3001";
 
-// Initialize theme as early as possible
 initTheme();
 
 function Header() {
@@ -65,65 +64,42 @@ function UnauthenticatedState() {
 	);
 }
 
-/**
- * Create a dashboard API client that routes through the background script.
- * This is necessary because extension pages can't send cookies directly.
- */
-function createDashboardClient(): DashboardApiClient {
+function createFetchers(): DashboardFetchers {
 	return {
-		api: {
-			feed: {
-				get: async (options) => {
-					const response = await sendMessage({
-						type: "GET_FEED_HIGHLIGHTS",
-						cursor: options?.query?.cursor,
-						limit: options?.query?.limit,
-					});
-					if (isErrorResponse(response)) {
-						return { error: response.error };
-					}
-					return { data: response };
-				},
-				bookmarks: {
-					get: async (options) => {
-						const response = await sendMessage({
-							type: "GET_FEED_BOOKMARKS",
-							cursor: options?.query?.cursor,
-							limit: options?.query?.limit,
-						});
-						if (isErrorResponse(response)) {
-							return { error: response.error };
-						}
-						return { data: response };
-					},
-				},
-			},
-			bookmarks: {
-				get: async (options) => {
-					const response = await sendMessage({
-						type: "GET_MY_BOOKMARKS",
-						cursor: options?.query?.cursor,
-						limit: options?.query?.limit,
-					});
-					if (isErrorResponse(response)) {
-						return { error: response.error };
-					}
-					return { data: response };
-				},
-			},
-			search: {
-				get: async (options) => {
-					const response = await sendMessage({
-						type: "SEARCH_DASHBOARD",
-						query: options.query.q,
-						limit: options.query.limit,
-					});
-					if (isErrorResponse(response)) {
-						return { error: response.error };
-					}
-					return { data: response };
-				},
-			},
+		async fetchFeedHighlights(limit) {
+			const response = await sendMessage({
+				type: "GET_FEED_HIGHLIGHTS",
+				limit,
+			});
+			if (isErrorResponse(response)) {
+				throw new Error(response.error);
+			}
+			return response;
+		},
+		async fetchFeedBookmarks(limit) {
+			const response = await sendMessage({ type: "GET_FEED_BOOKMARKS", limit });
+			if (isErrorResponse(response)) {
+				throw new Error(response.error);
+			}
+			return response;
+		},
+		async fetchMyBookmarks(limit) {
+			const response = await sendMessage({ type: "GET_MY_BOOKMARKS", limit });
+			if (isErrorResponse(response)) {
+				throw new Error(response.error);
+			}
+			return response;
+		},
+		async fetchSearch(query, limit) {
+			const response = await sendMessage({
+				type: "SEARCH_DASHBOARD",
+				query,
+				limit,
+			});
+			if (isErrorResponse(response)) {
+				throw new Error(response.error);
+			}
+			return response;
 		},
 	};
 }
@@ -131,7 +107,7 @@ function createDashboardClient(): DashboardApiClient {
 export default function App() {
 	const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-	const dashboardClient = useMemo(() => createDashboardClient(), []);
+	const fetchers = useMemo(() => createFetchers(), []);
 
 	useEffect(() => {
 		async function checkAuth() {
@@ -152,7 +128,7 @@ export default function App() {
 	return (
 		<div className="min-h-screen bg-background">
 			<Header />
-			<Dashboard apiClient={dashboardClient} />
+			<Dashboard fetchers={fetchers} />
 		</div>
 	);
 }

@@ -1,6 +1,7 @@
 import type { Id } from "@convex/_generated/dataModel";
 
 import { api } from "@convex/_generated/api";
+import { cn } from "@gloss/dashboard";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Bookmark, Highlighter, Search, X } from "lucide-react";
@@ -10,7 +11,6 @@ import { BookmarkCard, HighlightCard } from "@/components/cards";
 import Loader from "@/components/loader";
 import { TagFilterPills } from "@/components/profile/tag-filter-pills";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 
 interface ProfileTabsProps {
 	profile: {

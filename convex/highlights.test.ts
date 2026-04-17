@@ -29,7 +29,7 @@ describe("highlights", () => {
 			});
 		});
 
-		const highlightId = await asUser.mutation(api.highlights.create, {
+		const highlight = await asUser.mutation(api.highlights.create, {
 			url: "https://example.com/article",
 			selector: {
 				quote: {
@@ -43,7 +43,8 @@ describe("highlights", () => {
 			visibility: "public",
 		});
 
-		expect(highlightId).toBeDefined();
+		expect(highlight?._id).toBeDefined();
+		expect(highlight?.user?.name).toBe("Test User");
 
 		// Verify it's in the database
 		const highlights = await t.run(async (ctx) => {
@@ -72,7 +73,7 @@ describe("highlights", () => {
 		});
 
 		// Create highlight
-		const highlightId = await asUser.mutation(api.highlights.create, {
+		const highlight = await asUser.mutation(api.highlights.create, {
 			url: "https://example.com/article",
 			selector: {},
 			text: "some highlighted text",
@@ -81,7 +82,7 @@ describe("highlights", () => {
 		// Create a comment on the highlight
 		await t.run(async (ctx) => {
 			await ctx.db.insert("comments", {
-				highlightId,
+				highlightId: highlight._id,
 				authorId: userId,
 				content: "a comment",
 				searchContent: "a comment",
@@ -89,7 +90,7 @@ describe("highlights", () => {
 		});
 
 		// Delete the highlight
-		await asUser.mutation(api.highlights.remove, { id: highlightId });
+		await asUser.mutation(api.highlights.remove, { id: highlight._id });
 
 		// Verify both highlight and comment are gone
 		const highlights = await t.run(async (ctx) =>

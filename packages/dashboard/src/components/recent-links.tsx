@@ -1,23 +1,25 @@
 /** @jsxImportSource react */
-import type { DashboardApiClient } from "../types";
+import type { FeedBookmarksPage } from "../types";
 
 import { useFriendsBookmarks } from "../hooks/use-friends-bookmarks";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentLinksSkeleton } from "./skeleton-loaders";
 
 interface RecentLinksProps {
-	apiClient: DashboardApiClient;
+	fetcher: (limit: number) => Promise<FeedBookmarksPage>;
 	className?: string;
 }
 
 /**
  * Section showing friends' recent bookmarks/links.
  */
-export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
+export function RecentLinks({ fetcher, className = "" }: RecentLinksProps) {
 	const { data, isLoading, error } = useFriendsBookmarks({
-		apiClient,
+		fetcher,
 		limit: 8,
 	});
+
+	const items = data?.page ?? [];
 
 	return (
 		<section className={className}>
@@ -36,7 +38,7 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 					</div>
 				)}
 
-				{data && data.items.length === 0 && (
+				{data && items.length === 0 && (
 					<div className="flex h-24 items-center justify-center">
 						<p className="text-sm text-muted-foreground">
 							No recent bookmarks from friends yet
@@ -44,10 +46,10 @@ export function RecentLinks({ apiClient, className = "" }: RecentLinksProps) {
 					</div>
 				)}
 
-				{data && data.items.length > 0 && (
+				{data && items.length > 0 && (
 					<div className="-mx-2 divide-y divide-border/50">
-						{data.items.map((item) => (
-							<FriendActivityItem item={item} key={item.id} type="link" />
+						{items.map((item) => (
+							<FriendActivityItem item={item} key={item._id} type="link" />
 						))}
 					</div>
 				)}

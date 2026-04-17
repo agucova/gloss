@@ -134,6 +134,34 @@ describe.skipIf(!token)("Curius E2E (live API)", () => {
 			expect(Array.isArray(first.highlights)).toBe(true);
 		});
 
+		test("every link in the full account parses against the schema", async () => {
+			// Zod safeParse runs inside the client for the whole response, so a
+			// successful call implies every entry parsed. This test hardens that
+			// guarantee by iterating and asserting the invariants the importer
+			// will rely on: stable string id, a URL in `url` or `link`, and a
+			// highlights array whose entries also expose string ids.
+			const links = await client.getUserLinks();
+
+			// The account must be non-trivially populated for this test to mean
+			// anything as a schema-drift probe.
+			expect(links.length).toBeGreaterThan(10);
+
+			for (const link of links) {
+				expect(typeof link.id).toBe("string");
+				expect(link.id.length).toBeGreaterThan(0);
+				expect(typeof (link.url ?? link.link)).toBe("string");
+				expect(Array.isArray(link.highlights)).toBe(true);
+
+				for (const hl of link.highlights) {
+					expect(typeof hl.id).toBe("string");
+					// At least one of the highlight-text fields must be populated.
+					expect(
+						typeof (hl.highlight ?? hl.rawHighlight ?? hl.highlightText)
+					).toBe("string");
+				}
+			}
+		});
+
 		test("getLinkByUrl returns a link for a saved URL", async () => {
 			const links = await client.getUserLinks();
 			const savedUrl = links[0]!.link!;
@@ -204,6 +232,41 @@ describe.skipIf(!token)("Curius E2E (live API)", () => {
 			expect(found!.id).toBe(testLink.id);
 		});
 
+		test("getLinkByUrl behavior across URL variants (normalization probe)", async () => {
+			// Documents how Curius matches URLs so the importer can dedup safely.
+			// Each variant must either hit the same link or miss (null) — it must
+			// never return a different link and must never throw.
+			const variants = {
+				trailingSlash: `${TEST_URL}/`,
+				queryParam: `${TEST_URL}?utm_source=gloss-e2e`,
+				fragment: `${TEST_URL}#section`,
+				uppercaseScheme: TEST_URL.replace(/^https/, "HTTPS"),
+			};
+
+			const results: Record<string, "match" | "null"> = {};
+			for (const [name, url] of Object.entries(variants)) {
+				const found = await client.getLinkByUrl(url);
+				if (found === null) {
+					results[name] = "null";
+				} else {
+					expect(found.id).toBe(testLink.id);
+					results[name] = "match";
+				}
+			}
+
+			console.log("[curius e2e] URL normalization behavior:", results);
+		});
+
+		test("renameLink updates the title", async () => {
+			const newTitle = `Gloss E2E Renamed ${Date.now()}`;
+			await client.renameLink(testLink.id, newTitle);
+
+			const links = await client.getUserLinks();
+			const match = links.find((l) => l.id === testLink.id);
+			expect(match).toBeDefined();
+			expect(match!.title).toBe(newTitle);
+		});
+
 		test("addHighlight attaches a highlight to the link", async () => {
 			await client.addHighlight(testLink.id, TEST_HIGHLIGHT);
 
@@ -229,6 +292,38 @@ describe.skipIf(!token)("Curius E2E (live API)", () => {
 				(h) => h.highlight ?? h.rawHighlight ?? h.highlightText
 			);
 			expect(hlTexts).not.toContain(TEST_HIGHLIGHT.rawHighlight);
+		});
+
+		test("highlights with unicode and newlines roundtrip intact", async () => {
+			// Real Curius highlights often contain smart quotes, emoji, accented
+			// characters, and embedded newlines from multi-paragraph selections.
+			// The importer must round-trip these byte-for-byte, and
+			// deleteHighlight (which matches by text) must still find them.
+			const unicodeHighlight = {
+				rawHighlight: "Café — “naïve” approach\nwith emoji 🎉 and 日本語",
+				leftContext: "",
+				rightContext: "",
+			};
+
+			await client.addHighlight(testLink.id, unicodeHighlight);
+
+			const afterAdd = await client.getUserLinks();
+			const match = afterAdd.find((l) => l.id === testLink.id);
+			expect(match).toBeDefined();
+			const hlTexts = match!.highlights.map(
+				(h) => h.highlight ?? h.rawHighlight ?? h.highlightText
+			);
+			expect(hlTexts).toContain(unicodeHighlight.rawHighlight);
+
+			await client.deleteHighlight(testLink.id, unicodeHighlight.rawHighlight);
+
+			const afterDelete = await client.getUserLinks();
+			const stillThere = afterDelete
+				.find((l) => l.id === testLink.id)!
+				.highlights.map(
+					(h) => h.highlight ?? h.rawHighlight ?? h.highlightText
+				);
+			expect(stillThere).not.toContain(unicodeHighlight.rawHighlight);
 		});
 
 		test("deleteLink removes the test link", async () => {

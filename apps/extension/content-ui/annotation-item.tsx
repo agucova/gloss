@@ -5,17 +5,18 @@
 
 import { Show, createEffect, onCleanup } from "solid-js";
 
-import type { ServerComment } from "../utils/messages";
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Comment } from "../utils/messages";
 
 import { formatRelativeTime } from "./comment-utils";
 import { getDefaultPlacement, useFloating } from "./use-floating";
 
 interface AnnotationItemProps {
-	comments: ServerComment[];
+	comments: Comment[];
 	anchor: HTMLElement | null;
-	highlightId: string;
+	highlightId: Id<"highlights">;
 	mode: "full" | "compact" | "dots";
-	onClick: (highlightId: string, element: HTMLElement | null) => void;
+	onClick: (highlightId: Id<"highlights">, element: HTMLElement | null) => void;
 }
 
 export function AnnotationItem(props: AnnotationItemProps) {
@@ -67,25 +68,22 @@ export function AnnotationItem(props: AnnotationItemProps) {
 }
 
 function TextAnnotation(props: {
-	comments: ServerComment[];
+	comments: Comment[];
 	mode: "full" | "compact" | "dots";
 	onClick: (e: Event) => void;
 }) {
 	const isCompact = () => props.mode === "compact";
 
 	const sorted = () =>
-		[...props.comments].toSorted(
-			(a, b) =>
-				new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-		);
+		[...props.comments].toSorted((a, b) => b._creationTime - a._creationTime);
 
 	const first = () => sorted()[0];
 
 	return (
 		<Show when={first()}>
 			{(comment) => {
-				const authorName = () => comment().author.name || "Someone";
-				const time = () => formatRelativeTime(comment().createdAt);
+				const authorName = () => comment().author?.name || "Someone";
+				const time = () => formatRelativeTime(comment()._creationTime);
 				const text = () => {
 					const maxLen = isCompact() ? 80 : 150;
 					const content = comment().content;

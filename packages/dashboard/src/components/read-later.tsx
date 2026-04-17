@@ -1,14 +1,14 @@
 /** @jsxImportSource react */
 import { MoreHorizontal } from "lucide-react";
 
-import type { DashboardApiClient } from "../types";
+import type { MyBookmarksPage } from "../types";
 
 import { useMyBookmarks } from "../hooks/use-my-bookmarks";
 import { BookmarkCard } from "./bookmark-card";
 import { ReadLaterSkeleton } from "./skeleton-loaders";
 
 interface ReadLaterProps {
-	apiClient: DashboardApiClient;
+	fetcher: (limit: number) => Promise<MyBookmarksPage>;
 	className?: string;
 }
 
@@ -18,13 +18,13 @@ const MAX_VISIBLE_CARDS = 4;
  * Section showing user's own bookmarks for reading later.
  * Shows limited cards with a "+N more" overflow card.
  */
-export function ReadLater({ apiClient, className = "" }: ReadLaterProps) {
+export function ReadLater({ fetcher, className = "" }: ReadLaterProps) {
 	const { data, isLoading, error } = useMyBookmarks({
-		apiClient,
+		fetcher,
 		limit: 20,
 	});
 
-	const items = data?.items ?? [];
+	const items = data?.page ?? [];
 	const visibleItems = items.slice(0, MAX_VISIBLE_CARDS);
 	const remainingCount = Math.max(0, items.length - MAX_VISIBLE_CARDS);
 
@@ -55,7 +55,7 @@ export function ReadLater({ apiClient, className = "" }: ReadLaterProps) {
 			{data && items.length > 0 && (
 				<div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 					{visibleItems.map((bookmark) => (
-						<BookmarkCard bookmark={bookmark} key={bookmark.id} />
+						<BookmarkCard bookmark={bookmark} key={bookmark._id} />
 					))}
 					{remainingCount > 0 && (
 						<a

@@ -1,12 +1,12 @@
 /** @jsxImportSource react */
-import type { DashboardApiClient } from "../types";
+import type { FeedHighlightsPage } from "../types";
 
 import { useFriendsHighlights } from "../hooks/use-friends-highlights";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentHighlightsSkeleton } from "./skeleton-loaders";
 
 interface RecentHighlightsProps {
-	apiClient: DashboardApiClient;
+	fetcher: (limit: number) => Promise<FeedHighlightsPage>;
 	className?: string;
 }
 
@@ -14,13 +14,15 @@ interface RecentHighlightsProps {
  * Section showing friends' recent highlights.
  */
 export function RecentHighlights({
-	apiClient,
+	fetcher,
 	className = "",
 }: RecentHighlightsProps) {
 	const { data, isLoading, error } = useFriendsHighlights({
-		apiClient,
+		fetcher,
 		limit: 5,
 	});
+
+	const items = data?.page ?? [];
 
 	return (
 		<section className={className}>
@@ -39,7 +41,7 @@ export function RecentHighlights({
 					</div>
 				)}
 
-				{data && data.items.length === 0 && (
+				{data && items.length === 0 && (
 					<div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border">
 						<p className="text-sm text-muted-foreground">
 							No recent highlights from friends yet
@@ -47,10 +49,10 @@ export function RecentHighlights({
 					</div>
 				)}
 
-				{data && data.items.length > 0 && (
+				{data && items.length > 0 && (
 					<div className="space-y-3">
-						{data.items.map((item) => (
-							<FriendActivityItem item={item} key={item.id} type="highlight" />
+						{items.map((item) => (
+							<FriendActivityItem item={item} key={item._id} type="highlight" />
 						))}
 					</div>
 				)}

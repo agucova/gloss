@@ -1,7 +1,7 @@
 /** @jsxImportSource react */
 import { useState } from "react";
 
-import type { DashboardApiClient } from "../types";
+import type { DashboardFetchers } from "../types";
 
 import { ReadLater } from "./read-later";
 import { RecentHighlights } from "./recent-highlights";
@@ -10,14 +10,14 @@ import { SearchBar } from "./search-bar";
 import { SearchResults } from "./search-results";
 
 interface DashboardProps {
-	apiClient: DashboardApiClient;
+	fetchers: DashboardFetchers;
 }
 
 /**
  * Main dashboard component with search, friend activity, and bookmarks.
  * Follows a minimal, spacious, gallery-style layout.
  */
-export function Dashboard({ apiClient }: DashboardProps) {
+export function Dashboard({ fetchers }: DashboardProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const isSearching = searchQuery.length > 0;
 
@@ -26,15 +26,15 @@ export function Dashboard({ apiClient }: DashboardProps) {
 			<SearchBar onChange={setSearchQuery} value={searchQuery} />
 
 			{isSearching ? (
-				<SearchResults apiClient={apiClient} query={searchQuery} />
+				<SearchResults fetcher={fetchers.fetchSearch} query={searchQuery} />
 			) : (
 				<div className="mt-12 space-y-12">
 					<div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-						<RecentLinks apiClient={apiClient} />
-						<RecentHighlights apiClient={apiClient} />
+						<RecentLinks fetcher={fetchers.fetchFeedBookmarks} />
+						<RecentHighlights fetcher={fetchers.fetchFeedHighlights} />
 					</div>
 
-					<ReadLater apiClient={apiClient} />
+					<ReadLater fetcher={fetchers.fetchMyBookmarks} />
 				</div>
 			)}
 		</div>

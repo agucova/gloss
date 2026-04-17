@@ -1,8 +1,7 @@
 import type { Doc } from "@convex/_generated/dataModel";
 
+import { cn } from "@gloss/dashboard";
 import { Clock, Star } from "lucide-react";
-
-import { cn } from "@/lib/utils";
 
 type Tag = Doc<"tags"> & { bookmarkCount: number };
 

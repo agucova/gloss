@@ -5,7 +5,7 @@ compatibility_date = "2026-04-17"
 account_id = "d2fe37c02a1d31f3239f9c30c8907db7"
 
 # Custom domain
-routes = [{ pattern = "gloss.agus.sh/*", zone_name = "agus.sh" }]
+routes = [{ pattern = "gloss.space/*", zone_name = "gloss.space" }]
 
 # Static assets configuration
 [assets]

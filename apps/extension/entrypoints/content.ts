@@ -1,6 +1,8 @@
 import { type Highlight, HighlightManager } from "@gloss/anchoring";
 import { render } from "solid-js/web";
 
+import type { Id } from "../../../convex/_generated/dataModel";
+
 // Import content CSS as inline string for shadow DOM injection
 import contentCss from "../content-ui/content.css?inline";
 import {
@@ -37,8 +39,8 @@ import {
 import { generateId } from "../content-ui/utils";
 import { OWN_HIGHLIGHT_COLOR, userHighlightColor } from "../utils/colors";
 import {
-	type ServerComment,
-	type ServerHighlight,
+	type Comment,
+	type Highlight as ServerHighlight,
 	isErrorResponse,
 	sendMessage,
 } from "../utils/messages";
@@ -82,7 +84,7 @@ async function refreshAuthState(): Promise<void> {
 	try {
 		const response = await sendMessage({ type: "GET_AUTH_STATUS" });
 		setIsAuthenticated(response.authenticated);
-		setCurrentUserId(response.user?.id ?? null);
+		setCurrentUserId(response.user?._id ?? null);
 		console.log("[Gloss] Auth state:", {
 			isAuthenticated: isAuthenticated(),
 			currentUserId: currentUserId(),
@@ -232,7 +234,7 @@ export default defineContentScript({
 						parentId,
 					});
 					if (!isErrorResponse(response)) {
-						console.log("[Gloss] Comment created:", response.comment.id);
+						console.log("[Gloss] Comment created:", response.comment._id);
 						const commentsResp = await sendMessage({
 							type: "LOAD_COMMENTS",
 							highlightId: serverId,
@@ -454,11 +456,11 @@ export default defineContentScript({
 			const highlightData = active.highlight;
 			const userId = currentUserId();
 			const isOwner =
-				(highlightData.metadata?.userId as string | undefined) === userId;
-			const serverId =
-				(highlightData.metadata?.serverId as string | undefined) ?? highlightId;
+				(highlightData.metadata?.userId as Id<"users"> | undefined) === userId;
+			const serverId = (highlightData.metadata?.serverId ??
+				highlightId) as Id<"highlights">;
 
-			let comments: ServerComment[] = [];
+			let comments: Comment[] = [];
 			try {
 				const response = await Promise.race([
 					sendMessage({ type: "LOAD_COMMENTS", highlightId: serverId }),
@@ -480,7 +482,7 @@ export default defineContentScript({
 				highlight: active,
 				element,
 				isOwner,
-				currentUserId: userId ?? "",
+				currentUserId: userId,
 				comments,
 				serverId,
 				highlightId,
@@ -493,7 +495,9 @@ export default defineContentScript({
 // Standalone helper functions
 // =============================================================================
 
-async function refreshCommentSummary(highlightIds: string[]): Promise<void> {
+async function refreshCommentSummary(
+	highlightIds: Id<"highlights">[]
+): Promise<void> {
 	try {
 		const response = await sendMessage({
 			type: "LOAD_PAGE_COMMENT_SUMMARY",
@@ -501,7 +505,7 @@ async function refreshCommentSummary(highlightIds: string[]): Promise<void> {
 		});
 		if (!isErrorResponse(response)) {
 			setCommentSummary(response);
-			const counts = new Map<string, number>();
+			const counts = new Map<Id<"highlights">, number>();
 			for (const hc of response.highlightComments) {
 				counts.set(hc.highlightId, hc.comments.length);
 			}
@@ -514,7 +518,7 @@ async function refreshCommentSummary(highlightIds: string[]): Promise<void> {
 
 async function loadCommentSummary(
 	manager: HighlightManager,
-	highlightIds: string[],
+	highlightIds: Id<"highlights">[],
 	appApi: GlossAppApi | null
 ): Promise<void> {
 	try {
@@ -530,7 +534,7 @@ async function loadCommentSummary(
 
 		setCommentSummary(response);
 
-		const counts = new Map<string, number>();
+		const counts = new Map<Id<"highlights">, number>();
 		for (const hc of response.highlightComments) {
 			counts.set(hc.highlightId, hc.comments.length);
 		}
@@ -613,13 +617,13 @@ async function createHighlight(manager: HighlightManager): Promise<void> {
 			return;
 		}
 
-		console.log("[Gloss] Highlight saved:", response.highlight.id);
+		console.log("[Gloss] Highlight saved:", response.highlight?._id);
 
 		const active = manager.get(id);
-		if (active) {
+		if (active && response.highlight) {
 			active.highlight.metadata = {
 				...active.highlight.metadata,
-				serverId: response.highlight.id,
+				serverId: response.highlight._id,
 			};
 		}
 	} catch (error) {
@@ -636,21 +640,24 @@ function toHighlight(serverHighlight: ServerHighlight): Highlight {
 		: userHighlightColor(serverHighlight.user?.name ?? "Friend");
 
 	return {
-		id: serverHighlight.id,
-		selector: serverHighlight.selector,
+		id: serverHighlight._id,
+		selector: serverHighlight.selector as Highlight["selector"],
 		color,
 		metadata: {
 			userId: serverHighlight.userId,
+			serverId: serverHighlight._id,
 			userName: serverHighlight.user?.name,
 			userImage: serverHighlight.user?.image,
 			text: serverHighlight.text,
 			visibility: serverHighlight.visibility,
-			createdAt: serverHighlight.createdAt,
+			createdAt: serverHighlight._creationTime,
 		},
 	};
 }
 
-async function loadHighlights(manager: HighlightManager): Promise<string[]> {
+async function loadHighlights(
+	manager: HighlightManager
+): Promise<Id<"highlights">[]> {
 	const url = location.href;
 
 	try {
@@ -669,11 +676,11 @@ async function loadHighlights(manager: HighlightManager): Promise<string[]> {
 
 		let anchored = 0;
 		let orphaned = 0;
-		const loadedIds: string[] = [];
+		const loadedIds: Id<"highlights">[] = [];
 		for (const [id, success] of results.entries()) {
 			if (success) {
 				anchored++;
-				loadedIds.push(id);
+				loadedIds.push(id as Id<"highlights">);
 			} else {
 				orphaned++;
 			}

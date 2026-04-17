@@ -1,3 +1,4 @@
+import { cn } from "@gloss/dashboard";
 import {
 	For,
 	Show,
@@ -7,16 +8,11 @@ import {
 	onMount,
 } from "solid-js";
 
+import type { Id } from "../../../../convex/_generated/dataModel";
+import type { Bookmark, MyHighlight, Tag } from "../../utils/messages";
 import type { PageMetadata } from "../../utils/metadata";
 
-import { cn } from "../../utils/cn";
-import {
-	isErrorResponse,
-	type ServerBookmark,
-	type ServerHighlight,
-	type ServerTag,
-	sendMessage,
-} from "../../utils/messages";
+import { isErrorResponse, sendMessage } from "../../utils/messages";
 import {
 	applyTheme,
 	getTheme,
@@ -29,12 +25,12 @@ initTheme();
 
 interface AuthState {
 	authenticated: boolean;
-	user?: { id: string; name: string | null };
+	user?: { _id: Id<"users">; name: string };
 }
 
 function App() {
 	const [authState, setAuthState] = createSignal<AuthState | null>(null);
-	const [highlights, setHighlights] = createSignal<ServerHighlight[]>([]);
+	const [highlights, setHighlights] = createSignal<MyHighlight[]>([]);
 	const [loading, setLoading] = createSignal(true);
 	const [settingsOpen, setSettingsOpen] = createSignal(false);
 	const [theme, setTheme] = createSignal<Theme>("system");
@@ -291,7 +287,7 @@ function App() {
 													</span>
 													<span class="text-[10px] text-muted-foreground">
 														{getDomain(highlight.url)} ·{" "}
-														{formatRelativeTime(highlight.createdAt)}
+														{formatRelativeTime(highlight._creationTime)}
 													</span>
 												</button>
 											</li>
@@ -403,7 +399,7 @@ function BookmarkSection(props: BookmarkSectionProps) {
 	const [status, setStatus] = createSignal<
 		"loading" | "bookmarked" | "unbookmarked"
 	>("loading");
-	const [bookmark, setBookmark] = createSignal<ServerBookmark | null>(null);
+	const [bookmark, setBookmark] = createSignal<Bookmark | null>(null);
 	const [tags, setTags] = createSignal<string[]>([]);
 	const [isFavorite, setIsFavorite] = createSignal(false);
 	const [isToRead, setIsToRead] = createSignal(false);
@@ -479,7 +475,7 @@ function BookmarkSection(props: BookmarkSectionProps) {
 		try {
 			const response = await sendMessage({
 				type: "DELETE_BOOKMARK",
-				id: bm.id,
+				id: bm._id,
 			});
 			if (isErrorResponse(response)) {
 				console.error("[Gloss Popup] Error removing bookmark:", response.error);
@@ -529,7 +525,7 @@ function BookmarkSection(props: BookmarkSectionProps) {
 		try {
 			const response = await sendMessage({
 				type: "TOGGLE_FAVORITE",
-				id: bm.id,
+				id: bm._id,
 			});
 			if (isErrorResponse(response)) {
 				console.error("[Gloss Popup] Error toggling favorite:", response.error);
@@ -575,7 +571,7 @@ function BookmarkSection(props: BookmarkSectionProps) {
 		try {
 			const response = await sendMessage({
 				type: "TOGGLE_READ_LATER",
-				id: bm.id,
+				id: bm._id,
 			});
 			if (isErrorResponse(response)) {
 				console.error("[Gloss Popup] Error toggling to-read:", response.error);
@@ -599,7 +595,7 @@ function BookmarkSection(props: BookmarkSectionProps) {
 			try {
 				const response = await sendMessage({
 					type: "UPDATE_BOOKMARK",
-					id: bm.id,
+					id: bm._id,
 					tags: allTags,
 				});
 				if (!isErrorResponse(response)) {
@@ -729,7 +725,7 @@ const SYSTEM_TAG_NAMES = ["favorites", "to-read"];
 
 function TagInput(props: TagInputProps) {
 	const [input, setInput] = createSignal("");
-	const [suggestions, setSuggestions] = createSignal<ServerTag[]>([]);
+	const [suggestions, setSuggestions] = createSignal<Tag[]>([]);
 	const [showSuggestions, setShowSuggestions] = createSignal(false);
 	// oxlint-disable-next-line no-unassigned-vars -- assigned by Solid ref
 	let inputRef!: HTMLInputElement;
@@ -1073,8 +1069,8 @@ function getDomain(url: string): string {
 	}
 }
 
-function formatRelativeTime(dateString: string): string {
-	const date = new Date(dateString);
+function formatRelativeTime(timestamp: string | number | Date): string {
+	const date = new Date(timestamp);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffSeconds = Math.floor(diffMs / 1000);

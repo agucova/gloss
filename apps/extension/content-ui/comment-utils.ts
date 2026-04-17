@@ -3,7 +3,8 @@
  * Used by both comment-panel.ts and margin-annotations.ts.
  */
 
-import type { Friend, ServerComment } from "../utils/messages";
+import type { Id } from "../../../convex/_generated/dataModel";
+import type { Comment, Friend } from "../utils/messages";
 
 // ============================================================================
 // Markdown rendering
@@ -56,12 +57,12 @@ export function renderMarkdown(text: string): string {
 /**
  * Format a timestamp as relative time.
  */
-export function formatRelativeTime(dateString?: string): string {
-	if (!dateString) {
+export function formatRelativeTime(timestamp?: string | number | Date): string {
+	if (timestamp === undefined || timestamp === null) {
 		return "";
 	}
 
-	const date = new Date(dateString);
+	const date = new Date(timestamp);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffSeconds = Math.floor(diffMs / 1000);
@@ -214,17 +215,17 @@ export function insertMention(
 export function extractMentions(
 	content: string,
 	knownFriends: Friend[]
-): string[] {
+): Id<"users">[] {
 	const mentionRegex = /@(\w+)/g;
-	const mentions: string[] = [];
+	const mentions: Id<"users">[] = [];
 
 	for (const match of content.matchAll(mentionRegex)) {
 		const name = match[1];
 		const friend = knownFriends.find(
-			(f) => f.name?.toLowerCase() === name.toLowerCase()
+			(f) => f.name?.toLowerCase() === name?.toLowerCase()
 		);
 		if (friend) {
-			mentions.push(friend.id);
+			mentions.push(friend._id);
 		}
 	}
 
@@ -236,28 +237,24 @@ export function extractMentions(
 // ============================================================================
 
 export interface CommentThread {
-	comment: ServerComment;
+	comment: Comment;
 	replies: CommentThread[];
 }
 
 /**
  * Build a tree structure from a flat comments list.
  */
-export function buildCommentTree(comments: ServerComment[]): CommentThread[] {
-	const byId = new Map<string, CommentThread>();
+export function buildCommentTree(comments: Comment[]): CommentThread[] {
+	const byId = new Map<Id<"comments">, CommentThread>();
 	const roots: CommentThread[] = [];
 
-	// First pass: create all nodes
 	for (const comment of comments) {
-		byId.set(comment.id, { comment, replies: [] });
+		byId.set(comment._id, { comment, replies: [] });
 	}
 
-	// Second pass: build tree
 	for (const comment of comments) {
-		const node = byId.get(comment.id);
-		if (!node) {
-			continue;
-		}
+		const node = byId.get(comment._id);
+		if (!node) continue;
 		if (comment.parentId && byId.has(comment.parentId)) {
 			byId.get(comment.parentId)?.replies.push(node);
 		} else {
@@ -265,10 +262,8 @@ export function buildCommentTree(comments: ServerComment[]): CommentThread[] {
 		}
 	}
 
-	// Sort by createdAt (oldest first)
 	const sortByDate = (a: CommentThread, b: CommentThread) =>
-		new Date(a.comment.createdAt).getTime() -
-		new Date(b.comment.createdAt).getTime();
+		a.comment._creationTime - b.comment._creationTime;
 
 	roots.sort(sortByDate);
 	for (const node of byId.values()) {

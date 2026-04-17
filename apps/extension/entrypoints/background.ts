@@ -1,13 +1,10 @@
 import type { Id } from "../../../convex/_generated/dataModel";
 import type {
-	DashboardBookmark,
-	FeedBookmark,
-	FeedHighlight,
+	Comment,
 	Message,
 	MessageResponse,
-	PaginatedResponse,
-	SearchResults,
-	ServerHighlight,
+	PageCommentSummary,
+	UserSettings,
 } from "../utils/messages";
 
 import { api, getConvexClient } from "../utils/api";
@@ -149,11 +146,11 @@ async function handleMessage(
 		case "TOGGLE_READ_LATER":
 			return await handleToggleReadLater(message.id);
 		case "GET_FEED_HIGHLIGHTS":
-			return await handleGetFeedHighlights(message.cursor, message.limit);
+			return await handleGetFeedHighlights(message.limit);
 		case "GET_FEED_BOOKMARKS":
-			return await handleGetFeedBookmarks(message.cursor, message.limit);
+			return await handleGetFeedBookmarks(message.limit);
 		case "GET_MY_BOOKMARKS":
-			return await handleGetMyBookmarks(message.cursor, message.limit);
+			return await handleGetMyBookmarks(message.limit);
 		case "SEARCH_DASHBOARD":
 			return await handleSearchDashboard(message.query, message.limit);
 		case "GET_USER_SETTINGS":
@@ -169,41 +166,21 @@ async function handleMessage(
 
 // ─── Highlight handlers ─────────────────────────────
 
-async function handleLoadHighlights(
-	url: string
-): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
+async function handleLoadHighlights(url: string) {
 	const client = getConvexClient();
 	const result = await convexCall("load highlights", () =>
 		client.query(api.highlights.getByUrl, { url })
 	);
-
 	if ("error" in result) return result;
-
-	// Map Convex shape to extension's expected shape
-	const highlights: ServerHighlight[] = (result as unknown[]).map((h: any) => ({
-		id: h._id,
-		userId: h.userId,
-		url: h.url,
-		urlHash: h.urlHash,
-		selector: h.selector,
-		text: h.text,
-		visibility: h.visibility,
-		createdAt: new Date(h._creationTime).toISOString(),
-		user: h.user
-			? { id: h.user._id, name: h.user.name, image: h.user.image }
-			: undefined,
-	}));
-
-	console.log(`[Gloss] Loaded ${highlights.length} highlights for ${url}`);
-	return { highlights };
+	return { highlights: result };
 }
 
 async function handleCreateHighlight(message: {
 	url: string;
-	selector: ServerHighlight["selector"];
+	selector: unknown;
 	text: string;
 	visibility?: "public" | "friends" | "private";
-}): Promise<{ highlight: ServerHighlight } | { error: string }> {
+}) {
 	const client = getConvexClient();
 	const result = await convexCall("create highlight", () =>
 		client.mutation(api.highlights.create, {
@@ -213,253 +190,149 @@ async function handleCreateHighlight(message: {
 			visibility: message.visibility,
 		})
 	);
-
 	if ("error" in result) return result;
-
-	// The mutation returns an ID — construct a minimal highlight object
-	const id = result as string;
-	const highlight: ServerHighlight = {
-		id,
-		userId: "",
-		url: message.url,
-		urlHash: "",
-		selector: message.selector,
-		text: message.text,
-		visibility: message.visibility ?? "friends",
-		createdAt: new Date().toISOString(),
-	};
-
-	console.log("[Gloss] Created highlight:", id);
-	return { highlight };
+	return { highlight: result };
 }
 
 async function handleUpdateHighlight(
-	id: string,
+	id: Id<"highlights">,
 	updates: { visibility?: "public" | "friends" | "private" }
-): Promise<{ highlight: ServerHighlight } | { error: string }> {
+) {
 	const client = getConvexClient();
 	const result = await convexCall("update highlight", () =>
 		client.mutation(api.highlights.update, {
-			id: id as Id<"highlights">,
+			id,
 			visibility: updates.visibility,
 		})
 	);
-
 	if ("error" in result) return result;
-
-	return {
-		highlight: {
-			id,
-			visibility: updates.visibility ?? "friends",
-		} as ServerHighlight,
-	};
+	return { highlight: result };
 }
 
-async function handleDeleteHighlight(
-	id: string
-): Promise<{ success: boolean } | { error: string }> {
+async function handleDeleteHighlight(id: Id<"highlights">) {
 	const client = getConvexClient();
 	const result = await convexCall("delete highlight", () =>
-		client.mutation(api.highlights.remove, { id: id as Id<"highlights"> })
+		client.mutation(api.highlights.remove, { id })
 	);
-
 	if ("error" in result) return result;
-
-	console.log("[Gloss] Deleted highlight:", id);
 	return { success: true };
 }
 
-async function handleGetAuthStatus(): Promise<{
-	authenticated: boolean;
-	user?: { id: string; name: string | null };
-}> {
+async function handleGetAuthStatus(): Promise<
+	MessageResponse<"GET_AUTH_STATUS">
+> {
 	try {
-		// Check if we have a stored auth token
 		const stored = await browser.storage.sync.get("glossAuthToken");
-		if (!stored.glossAuthToken) {
-			return { authenticated: false };
-		}
+		if (!stored.glossAuthToken) return { authenticated: false };
 
-		// Try to query the current user to verify the token
 		const client = getConvexClient();
 		const user = await client.query(api.users.getMe);
+		if (!user) return { authenticated: false };
 
-		if (user) {
-			return {
-				authenticated: true,
-				user: { id: user._id, name: user.name },
-			};
-		}
-
-		return { authenticated: false };
+		return {
+			authenticated: true,
+			user: { _id: user._id, name: user.name },
+		};
 	} catch {
 		return { authenticated: false };
 	}
 }
 
-async function handleGetRecentHighlights(
-	limit = 5
-): Promise<{ highlights: ServerHighlight[] } | { error: string }> {
+async function handleGetRecentHighlights(limit = 5) {
 	const client = getConvexClient();
 	const result = await convexCall("get recent highlights", () =>
 		client.query(api.highlights.listMine, {
 			paginationOpts: { numItems: limit, cursor: null },
 		})
 	);
-
 	if ("error" in result) return result;
-
-	const page = (result as any).page ?? [];
-	const highlights: ServerHighlight[] = page.map((h: any) => ({
-		id: h._id,
-		userId: h.userId,
-		url: h.url,
-		urlHash: h.urlHash,
-		selector: h.selector,
-		text: h.text,
-		visibility: h.visibility,
-		createdAt: new Date(h._creationTime).toISOString(),
-	}));
-
-	return { highlights };
+	return { highlights: result.page };
 }
 
 // ─── Comment handlers ─────────────────────────────
 
-async function handleLoadComments(
-	highlightId: string
-): Promise<{ comments: any[] } | { error: string }> {
+async function handleLoadComments(highlightId: Id<"highlights">) {
 	const client = getConvexClient();
 	const result = await convexCall("load comments", () =>
-		client.query(api.comments.getForHighlight, {
-			highlightId: highlightId as Id<"highlights">,
-		})
+		client.query(api.comments.getForHighlight, { highlightId })
 	);
-
 	if ("error" in result) return result;
-
-	const comments = (result as any[]).map((c: any) => ({
-		id: c._id,
-		highlightId: c.highlightId,
-		authorId: c.authorId,
-		parentId: c.parentId ?? null,
-		content: c.content,
-		createdAt: new Date(c._creationTime).toISOString(),
-		updatedAt: c.updatedAt
-			? new Date(c.updatedAt).toISOString()
-			: new Date(c._creationTime).toISOString(),
-		author: c.author
-			? { id: c.author._id, name: c.author.name, image: c.author.image }
-			: { id: c.authorId, name: null, image: null },
-		mentions: (c.mentions ?? []).map((m: any) => ({
-			mentionedUser: { id: m._id, name: m.name },
-		})),
-	}));
-
-	return { comments };
+	return { comments: result };
 }
 
 async function handleCreateComment(message: {
-	highlightId: string;
+	highlightId: Id<"highlights">;
 	content: string;
-	mentions: string[];
-	parentId?: string;
-}): Promise<{ comment: any } | { error: string }> {
+	mentions: Id<"users">[];
+	parentId?: Id<"comments">;
+}) {
 	const client = getConvexClient();
 	const result = await convexCall("create comment", () =>
 		client.mutation(api.comments.create, {
-			highlightId: message.highlightId as Id<"highlights">,
-			content: message.content,
-			mentionedUserIds: message.mentions as Id<"users">[],
-			parentId: message.parentId as Id<"comments"> | undefined,
-		})
-	);
-
-	if ("error" in result) return result;
-
-	return {
-		comment: {
-			id: result as string,
 			highlightId: message.highlightId,
 			content: message.content,
-			createdAt: new Date().toISOString(),
-			updatedAt: new Date().toISOString(),
-			author: { id: "", name: null, image: null },
-			mentions: [],
-		},
-	};
+			mentionedUserIds: message.mentions,
+			parentId: message.parentId,
+		})
+	);
+	if ("error" in result) return result;
+	return { comment: result };
 }
 
 async function handleUpdateComment(message: {
-	id: string;
+	id: Id<"comments">;
 	content: string;
-	mentions: string[];
-}): Promise<{ comment: any } | { error: string }> {
+	mentions: Id<"users">[];
+}) {
 	const client = getConvexClient();
 	const result = await convexCall("update comment", () =>
 		client.mutation(api.comments.update, {
-			id: message.id as Id<"comments">,
-			content: message.content,
-			mentionedUserIds: message.mentions as Id<"users">[],
-		})
-	);
-
-	if ("error" in result) return result;
-
-	return {
-		comment: {
 			id: message.id,
 			content: message.content,
-			updatedAt: new Date().toISOString(),
-		},
-	};
+			mentionedUserIds: message.mentions,
+		})
+	);
+	if ("error" in result) return result;
+	return { comment: result };
 }
 
-async function handleDeleteComment(
-	id: string
-): Promise<{ success: boolean } | { error: string }> {
+async function handleDeleteComment(id: Id<"comments">) {
 	const client = getConvexClient();
 	const result = await convexCall("delete comment", () =>
-		client.mutation(api.comments.remove, { id: id as Id<"comments"> })
+		client.mutation(api.comments.remove, { id })
 	);
-
 	if ("error" in result) return result;
 	return { success: true };
 }
 
-async function handleSearchFriends(
-	query: string
-): Promise<{ friends: any[] } | { error: string }> {
+async function handleSearchFriends(query: string) {
 	const client = getConvexClient();
 	const result = await convexCall("search friends", () =>
 		client.query(api.friendships.searchFriends, { q: query })
 	);
-
 	if ("error" in result) return result;
-
-	const friends = (result as any[]).map((f: any) => ({
-		id: f._id,
-		name: f.name,
-		image: f.image ?? null,
-	}));
-
-	return { friends };
+	return { friends: result };
 }
 
-async function handleLoadPageCommentSummary(highlightIds: string[]) {
+async function handleLoadPageCommentSummary(
+	highlightIds: Id<"highlights">[]
+): Promise<PageCommentSummary | { error: string }> {
 	if (highlightIds.length === 0) {
 		return { highlightComments: [], totalComments: 0, commenters: [] };
 	}
 
 	const client = getConvexClient();
-	const highlightComments: Array<{ highlightId: string; comments: any[] }> = [];
-	const commenterMap = new Map<string, any>();
+	const highlightComments: PageCommentSummary["highlightComments"] = [];
+	const commenterMap = new Map<
+		Id<"users">,
+		{ _id: Id<"users">; name: string; image: string | undefined }
+	>();
 	let totalComments = 0;
 
 	const results = await Promise.allSettled(
 		highlightIds.map(async (highlightId) => {
 			const comments = await client.query(api.comments.getForHighlight, {
-				highlightId: highlightId as Id<"highlights">,
+				highlightId,
 			});
 			return { highlightId, comments };
 		})
@@ -468,29 +341,18 @@ async function handleLoadPageCommentSummary(highlightIds: string[]) {
 	for (const settledResult of results) {
 		if (settledResult.status === "rejected") continue;
 		const { highlightId, comments } = settledResult.value;
-		if (comments.length > 0) {
-			const mapped = comments.map((c: any) => ({
-				id: c._id,
-				highlightId: c.highlightId,
-				authorId: c.authorId,
-				parentId: c.parentId ?? null,
-				content: c.content,
-				createdAt: new Date(c._creationTime).toISOString(),
-				updatedAt: c.updatedAt
-					? new Date(c.updatedAt).toISOString()
-					: new Date(c._creationTime).toISOString(),
-				author: c.author
-					? { id: c.author._id, name: c.author.name, image: c.author.image }
-					: { id: c.authorId, name: null, image: null },
-				mentions: [],
-			}));
-			highlightComments.push({ highlightId, comments: mapped });
-			totalComments += mapped.length;
+		if (comments.length === 0) continue;
 
-			for (const c of mapped) {
-				if (!commenterMap.has(c.authorId)) {
-					commenterMap.set(c.authorId, c.author);
-				}
+		highlightComments.push({ highlightId, comments: comments as Comment[] });
+		totalComments += comments.length;
+
+		for (const c of comments) {
+			if (c.author && !commenterMap.has(c.author._id)) {
+				commenterMap.set(c.author._id, {
+					_id: c.author._id,
+					name: c.author.name,
+					image: c.author.image,
+				});
 			}
 		}
 	}
@@ -561,30 +423,8 @@ async function handleGetBookmarkStatus(url: string) {
 	const result = await convexCall("check bookmark status", () =>
 		client.query(api.bookmarks.checkUrl, { url })
 	);
-
-	if ("error" in result) return result;
-
-	if (result) {
-		const b = result as any;
-		return {
-			bookmarked: true as const,
-			bookmark: {
-				id: b._id,
-				userId: b.userId,
-				url: b.url,
-				urlHash: b.urlHash,
-				title: b.title ?? null,
-				description: b.description ?? null,
-				favicon: b.favicon ?? null,
-				ogImage: b.ogImage ?? null,
-				ogDescription: b.ogDescription ?? null,
-				siteName: b.siteName ?? null,
-				createdAt: new Date(b._creationTime).toISOString(),
-				tags: [],
-			},
-		};
-	}
-
+	if (result && "error" in result) return result;
+	if (result) return { bookmarked: true as const, bookmark: result };
 	return { bookmarked: false as const, bookmark: null };
 }
 
@@ -609,29 +449,12 @@ async function handleSaveBookmark(message: {
 			tags: message.tags,
 		})
 	);
-
 	if ("error" in result) return result;
-
-	return {
-		bookmark: {
-			id: result as string,
-			userId: "",
-			url: message.url,
-			urlHash: "",
-			title: message.title ?? null,
-			description: null,
-			favicon: message.favicon ?? null,
-			ogImage: message.ogImage ?? null,
-			ogDescription: message.ogDescription ?? null,
-			siteName: message.siteName ?? null,
-			createdAt: new Date().toISOString(),
-			tags: [],
-		},
-	};
+	return { bookmark: result };
 }
 
 async function handleUpdateBookmark(message: {
-	id: string;
+	id: Id<"bookmarks">;
 	title?: string;
 	description?: string;
 	tags?: string[];
@@ -639,26 +462,21 @@ async function handleUpdateBookmark(message: {
 	const client = getConvexClient();
 	const result = await convexCall("update bookmark", () =>
 		client.mutation(api.bookmarks.update, {
-			id: message.id as Id<"bookmarks">,
+			id: message.id,
 			title: message.title,
 			description: message.description,
 			tags: message.tags,
 		})
 	);
-
 	if ("error" in result) return result;
-
-	return { bookmark: { id: message.id } as any };
+	return { bookmark: result };
 }
 
-async function handleDeleteBookmark(
-	id: string
-): Promise<{ success: boolean } | { error: string }> {
+async function handleDeleteBookmark(id: Id<"bookmarks">) {
 	const client = getConvexClient();
 	const result = await convexCall("delete bookmark", () =>
-		client.mutation(api.bookmarks.remove, { id: id as Id<"bookmarks"> })
+		client.mutation(api.bookmarks.remove, { id })
 	);
-
 	if ("error" in result) return result;
 	return { success: true };
 }
@@ -668,135 +486,66 @@ async function handleGetUserTags() {
 	const result = await convexCall("get user tags", () =>
 		client.query(api.bookmarks.listTags, {})
 	);
-
 	if ("error" in result) return result;
-
-	const tags = (result as any[]).map((t: any) => ({
-		id: t._id,
-		name: t.name,
-		color: t.color ?? null,
-		isSystem: t.isSystem,
-	}));
-
-	return { tags };
+	return { tags: result };
 }
 
-async function handleToggleFavorite(id: string) {
+async function handleToggleFavorite(id: Id<"bookmarks">) {
 	const client = getConvexClient();
 	const result = await convexCall("toggle favorite", () =>
-		client.mutation(api.bookmarks.toggleFavorite, { id: id as Id<"bookmarks"> })
+		client.mutation(api.bookmarks.toggleFavorite, { id })
 	);
-
 	if ("error" in result) return result;
-
-	const r = result as { added: boolean };
-	return { favorited: r.added, bookmark: {} as any };
+	return result;
 }
 
-async function handleToggleReadLater(id: string) {
+async function handleToggleReadLater(id: Id<"bookmarks">) {
 	const client = getConvexClient();
 	const result = await convexCall("toggle to-read", () =>
-		client.mutation(api.bookmarks.toggleReadLater, {
-			id: id as Id<"bookmarks">,
-		})
+		client.mutation(api.bookmarks.toggleReadLater, { id })
 	);
-
 	if ("error" in result) return result;
-
-	const r = result as { added: boolean };
-	return { toRead: r.added, bookmark: {} as any };
+	return result;
 }
 
 // ─── Dashboard handlers ─────────────────────────────
 
 const DEFAULT_LIMIT = 20;
 
-async function handleGetFeedHighlights(
-	_cursor?: string,
-	limit?: number
-): Promise<PaginatedResponse<FeedHighlight> | { error: string }> {
+async function handleGetFeedHighlights(limit?: number) {
 	const client = getConvexClient();
 	const result = await convexCall("get feed highlights", () =>
 		client.query(api.feed.feedHighlights, {
 			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
 		})
 	);
-
 	if ("error" in result) return result;
-
-	const data = result as any;
-	const items: FeedHighlight[] = (data.page ?? []).map((h: any) => ({
-		id: h._id,
-		url: h.url,
-		text: h.text,
-		note: null,
-		color: "#fbbf24",
-		createdAt: new Date(h._creationTime).toISOString(),
-		user: h.user
-			? { id: h.user._id, name: h.user.name, image: h.user.image }
-			: { id: "", name: "", image: null },
-	}));
-
-	return { items, nextCursor: null };
+	return result;
 }
 
-async function handleGetFeedBookmarks(
-	_cursor?: string,
-	limit?: number
-): Promise<PaginatedResponse<FeedBookmark> | { error: string }> {
+async function handleGetFeedBookmarks(limit?: number) {
 	const client = getConvexClient();
 	const result = await convexCall("get feed bookmarks", () =>
 		client.query(api.feed.feedBookmarks, {
 			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
 		})
 	);
-
 	if ("error" in result) return result;
-
-	const data = result as any;
-	const items: FeedBookmark[] = (data.page ?? []).map((b: any) => ({
-		id: b._id,
-		url: b.url,
-		title: b.title ?? null,
-		description: b.description ?? null,
-		createdAt: new Date(b._creationTime).toISOString(),
-		user: b.user
-			? { id: b.user._id, name: b.user.name, image: b.user.image }
-			: { id: "", name: "", image: null },
-	}));
-
-	return { items, nextCursor: null };
+	return result;
 }
 
-async function handleGetMyBookmarks(
-	_cursor?: string,
-	limit?: number
-): Promise<PaginatedResponse<DashboardBookmark> | { error: string }> {
+async function handleGetMyBookmarks(limit?: number) {
 	const client = getConvexClient();
 	const result = await convexCall("get my bookmarks", () =>
 		client.query(api.bookmarks.list, {
 			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT, cursor: null },
 		})
 	);
-
 	if ("error" in result) return result;
-
-	const data = result as any;
-	const items: DashboardBookmark[] = (data.page ?? []).map((b: any) => ({
-		id: b._id,
-		url: b.url,
-		title: b.title ?? null,
-		description: b.description ?? null,
-		createdAt: new Date(b._creationTime).toISOString(),
-	}));
-
-	return { items, nextCursor: null };
+	return result;
 }
 
-async function handleSearchDashboard(
-	searchQuery: string,
-	limit?: number
-): Promise<SearchResults | { error: string }> {
+async function handleSearchDashboard(searchQuery: string, limit?: number) {
 	const client = getConvexClient();
 	const result = await convexCall("search dashboard", () =>
 		client.query(api.search.search, {
@@ -804,32 +553,8 @@ async function handleSearchDashboard(
 			limit: limit ?? DEFAULT_LIMIT,
 		})
 	);
-
 	if ("error" in result) return result;
-
-	const data = result as any;
-	const results = data.results ?? [];
-
-	return {
-		bookmarks: results
-			.filter((r: any) => r.entityType === "bookmark")
-			.map((r: any) => ({
-				id: r.entityId,
-				url: r.url ?? "",
-				title: r.content,
-				description: null,
-				createdAt: new Date(r.createdAt).toISOString(),
-			})),
-		highlights: results
-			.filter((r: any) => r.entityType === "highlight")
-			.map((r: any) => ({
-				id: r.entityId,
-				url: r.url ?? "",
-				text: r.content,
-				note: null,
-				createdAt: new Date(r.createdAt).toISOString(),
-			})),
-	};
+	return result;
 }
 
 // ─── Settings handlers ─────────────────────────────
@@ -838,16 +563,7 @@ const SETTINGS_STORAGE_KEY = "glossUserSettings";
 const SETTINGS_LAST_SYNC_KEY = "glossSettingsLastSync";
 const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-interface UserSettingsData {
-	profileVisibility: "public" | "friends" | "private";
-	highlightsVisibility: "public" | "friends" | "private";
-	bookmarksVisibility: "public" | "friends" | "private";
-	highlightDisplayFilter: "anyone" | "friends" | "me";
-	commentDisplayMode: "expanded" | "collapsed";
-	themePreference: "light" | "dark" | "system";
-}
-
-const DEFAULT_SETTINGS: UserSettingsData = {
+const DEFAULT_SETTINGS: UserSettings = {
 	profileVisibility: "public",
 	highlightsVisibility: "friends",
 	bookmarksVisibility: "public",
@@ -859,7 +575,7 @@ const DEFAULT_SETTINGS: UserSettingsData = {
 const THEME_STORAGE_KEY = "theme";
 
 async function handleGetUserSettings(): Promise<
-	{ settings: UserSettingsData } | { error: string }
+	{ settings: UserSettings } | { error: string }
 > {
 	try {
 		const stored = await browser.storage.sync.get([
@@ -869,7 +585,7 @@ async function handleGetUserSettings(): Promise<
 
 		const lastSync = stored[SETTINGS_LAST_SYNC_KEY] as number | undefined;
 		const cachedSettings = stored[SETTINGS_STORAGE_KEY] as
-			| UserSettingsData
+			| UserSettings
 			| undefined;
 
 		if (
@@ -887,18 +603,18 @@ async function handleGetUserSettings(): Promise<
 }
 
 async function handleSyncUserSettings(): Promise<
-	{ settings: UserSettingsData } | { error: string }
+	{ settings: UserSettings } | { error: string }
 > {
 	const client = getConvexClient();
 	const result = await convexCall("sync user settings", () =>
 		client.query(api.users.getSettings)
 	);
 
-	if ("error" in result) {
+	if (result && "error" in result) {
 		try {
 			const stored = await browser.storage.sync.get(SETTINGS_STORAGE_KEY);
 			const cachedSettings = stored[SETTINGS_STORAGE_KEY] as
-				| UserSettingsData
+				| UserSettings
 				| undefined;
 			if (cachedSettings) return { settings: cachedSettings };
 		} catch {
@@ -907,7 +623,7 @@ async function handleSyncUserSettings(): Promise<
 		return { settings: DEFAULT_SETTINGS };
 	}
 
-	const settings = (result as UserSettingsData) ?? DEFAULT_SETTINGS;
+	const settings = result ?? DEFAULT_SETTINGS;
 
 	try {
 		await browser.storage.sync.set({
@@ -928,7 +644,7 @@ async function handleUpdateThemePreference(
 	// Write local cache immediately so popup/content reflect the change even if offline.
 	try {
 		const stored = await browser.storage.sync.get(SETTINGS_STORAGE_KEY);
-		const cached = stored[SETTINGS_STORAGE_KEY] as UserSettingsData | undefined;
+		const cached = stored[SETTINGS_STORAGE_KEY] as UserSettings | undefined;
 		await browser.storage.sync.set({
 			[THEME_STORAGE_KEY]: themePreference,
 			[SETTINGS_STORAGE_KEY]: {

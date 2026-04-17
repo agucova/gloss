@@ -1,9 +1,53 @@
 import { v } from "convex/values";
 
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
 import { mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { softDeleteComment } from "./lib/cascade";
 import { areFriends, getFriendIds } from "./lib/friends";
+
+async function hydrateComment(
+	ctx: QueryCtx | MutationCtx,
+	comment: Doc<"comments">
+) {
+	const author = await ctx.db.get(comment.authorId);
+	const mentions = await ctx.db
+		.query("commentMentions")
+		.withIndex("by_commentId", (q) => q.eq("commentId", comment._id))
+		.collect();
+	const mentionedUsers = await Promise.all(
+		mentions.map(async (m) => {
+			const user = await ctx.db.get(m.mentionedUserId);
+			return user
+				? { _id: user._id, name: user.name, username: user.username }
+				: null;
+		})
+	);
+
+	return {
+		...comment,
+		author: author
+			? {
+					_id: author._id,
+					name: author.name,
+					image: author.image,
+					username: author.username,
+				}
+			: null,
+		mentions: mentionedUsers.filter((m) => m !== null),
+	};
+}
+
+async function hydrateCommentById(
+	ctx: QueryCtx | MutationCtx,
+	id: Id<"comments">
+) {
+	const comment = await ctx.db.get(id);
+	if (!comment) throw new Error("Comment not found");
+	return hydrateComment(ctx, comment);
+}
 
 export const getForHighlight = query({
 	args: { highlightId: v.id("highlights") },
@@ -32,44 +76,8 @@ export const getForHighlight = query({
 			.order("asc")
 			.collect();
 
-		// Filter out soft-deleted
 		const activeComments = comments.filter((c) => !c.deletedAt);
-
-		// Hydrate with author info and mentions
-		return Promise.all(
-			activeComments.map(async (comment) => {
-				const author = await ctx.db.get(comment.authorId);
-				const mentions = await ctx.db
-					.query("commentMentions")
-					.withIndex("by_commentId", (q) => q.eq("commentId", comment._id))
-					.collect();
-				const mentionedUsers = await Promise.all(
-					mentions.map(async (m) => {
-						const user = await ctx.db.get(m.mentionedUserId);
-						return user
-							? {
-									_id: user._id,
-									name: user.name,
-									username: user.username,
-								}
-							: null;
-					})
-				);
-
-				return {
-					...comment,
-					author: author
-						? {
-								_id: author._id,
-								name: author.name,
-								image: author.image,
-								username: author.username,
-							}
-						: null,
-					mentions: mentionedUsers.filter(Boolean),
-				};
-			})
-		);
+		return Promise.all(activeComments.map((c) => hydrateComment(ctx, c)));
 	},
 });
 
@@ -126,7 +134,7 @@ export const create = mutation({
 			});
 		}
 
-		return commentId;
+		return hydrateCommentById(ctx, commentId);
 	},
 });
 
@@ -171,7 +179,7 @@ export const update = mutation({
 			}
 		}
 
-		return args.id;
+		return hydrateCommentById(ctx, args.id);
 	},
 });
 
