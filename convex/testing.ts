@@ -4,7 +4,7 @@
  */
 import { v } from "convex/values";
 
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
 
 /**
  * Check if a seed user exists by email.

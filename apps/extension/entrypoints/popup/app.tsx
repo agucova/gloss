@@ -135,8 +135,13 @@ function App() {
 
 	async function handleSignOut() {
 		try {
-			const baseUrl =
-				import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+			// Better-Auth routes are served by the Convex site URL (see convex/http.ts).
+			const baseUrl = import.meta.env.VITE_CONVEX_SITE_URL as
+				| string
+				| undefined;
+			if (!baseUrl) {
+				throw new Error("VITE_CONVEX_SITE_URL is not configured");
+			}
 			await fetch(`${baseUrl}/api/auth/sign-out`, {
 				method: "POST",
 				credentials: "include",

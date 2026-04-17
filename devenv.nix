@@ -12,21 +12,13 @@
     jq
   ];
 
-  # Environment variables for local development
+  # Environment variables for local development.
+  # NOTE: do NOT set NODE_ENV here. Devenv injects this into the shell, and
+  # Vite picks up `process.env.NODE_ENV` ahead of its own mode detection —
+  # `NODE_ENV=development` would make `vite build` produce a dev bundle and
+  # leak dev-only UI (e.g. the /login impersonation panel) into production.
   env = {
-    # Database
-    DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:5432/gloss";
-
-    # Auth
-    BETTER_AUTH_SECRET = "devenv-local-secret-min-32-chars-long";
-    BETTER_AUTH_URL = "http://localhost:3000";
-
-    # Server
-    NODE_ENV = "development";
-    PORT = "3000";
-
     # URLs (VITE_ prefix makes them available to Vite client builds)
-    VITE_SERVER_URL = "http://localhost:3000";
     VITE_WEB_URL = "http://localhost:3001";
   };
 
