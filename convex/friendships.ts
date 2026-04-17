@@ -2,12 +2,25 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
+import { rateLimiter } from "./lib/ratelimit";
 
 export const sendRequest = mutation({
 	args: { addresseeId: v.id("users") },
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
 		if (userId === args.addresseeId) throw new Error("Cannot friend yourself");
+
+		// Rate limits (both have to pass). Check *after* auth so anonymous
+		// callers can't poke the limiter, and *before* any DB writes so a
+		// rate-limited request doesn't do half the work.
+		await rateLimiter.limit(ctx, "friendRequestPerMinute", {
+			key: userId,
+			throws: true,
+		});
+		await rateLimiter.limit(ctx, "friendRequestPerDay", {
+			key: userId,
+			throws: true,
+		});
 
 		// Check target exists
 		const target = await ctx.db.get(args.addresseeId);

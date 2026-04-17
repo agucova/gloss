@@ -1,22 +1,20 @@
 /** @jsxImportSource react */
-import type { FeedBookmarksPage } from "../types";
+import { useQuery } from "convex/react";
 
-import { useFriendsBookmarks } from "../hooks/use-friends-bookmarks";
+import { api } from "../../../../convex/_generated/api";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentLinksSkeleton } from "./skeleton-loaders";
 
 interface RecentLinksProps {
-	fetcher: (limit: number) => Promise<FeedBookmarksPage>;
 	className?: string;
 }
 
 /**
  * Section showing friends' recent bookmarks/links.
  */
-export function RecentLinks({ fetcher, className = "" }: RecentLinksProps) {
-	const { data, isLoading, error } = useFriendsBookmarks({
-		fetcher,
-		limit: 8,
+export function RecentLinks({ className = "" }: RecentLinksProps) {
+	const data = useQuery(api.feed.feedBookmarks, {
+		paginationOpts: { numItems: 8, cursor: null },
 	});
 
 	const items = data?.page ?? [];
@@ -28,15 +26,7 @@ export function RecentLinks({ fetcher, className = "" }: RecentLinksProps) {
 			</h2>
 
 			<div className="min-h-32 rounded-xl border border-border bg-card px-4 py-1.5">
-				{isLoading && <RecentLinksSkeleton />}
-
-				{error && (
-					<div className="flex h-24 items-center justify-center">
-						<p className="text-sm text-muted-foreground">
-							Unable to load recent bookmarks
-						</p>
-					</div>
-				)}
+				{data === undefined && <RecentLinksSkeleton />}
 
 				{data && items.length === 0 && (
 					<div className="flex h-24 items-center justify-center">

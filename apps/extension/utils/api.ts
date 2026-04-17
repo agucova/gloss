@@ -18,17 +18,5 @@ export function getConvexClient(): ConvexHttpClient {
 	return convexClient;
 }
 
-/**
- * Set the auth token on the Convex client.
- */
-export function setAuthToken(token: string | null) {
-	const client = getConvexClient();
-	if (token) {
-		client.setAuth(token);
-	} else {
-		client.clearAuth();
-	}
-}
-
 export { api };
 export { DEFAULT_CONVEX_URL };

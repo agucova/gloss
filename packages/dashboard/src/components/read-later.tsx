@@ -1,14 +1,12 @@
 /** @jsxImportSource react */
+import { useQuery } from "convex/react";
 import { MoreHorizontal } from "lucide-react";
 
-import type { MyBookmarksPage } from "../types";
-
-import { useMyBookmarks } from "../hooks/use-my-bookmarks";
+import { api } from "../../../../convex/_generated/api";
 import { BookmarkCard } from "./bookmark-card";
 import { ReadLaterSkeleton } from "./skeleton-loaders";
 
 interface ReadLaterProps {
-	fetcher: (limit: number) => Promise<MyBookmarksPage>;
 	className?: string;
 }
 
@@ -18,10 +16,9 @@ const MAX_VISIBLE_CARDS = 4;
  * Section showing user's own bookmarks for reading later.
  * Shows limited cards with a "+N more" overflow card.
  */
-export function ReadLater({ fetcher, className = "" }: ReadLaterProps) {
-	const { data, isLoading, error } = useMyBookmarks({
-		fetcher,
-		limit: 20,
+export function ReadLater({ className = "" }: ReadLaterProps) {
+	const data = useQuery(api.bookmarks.list, {
+		paginationOpts: { numItems: 20, cursor: null },
 	});
 
 	const items = data?.page ?? [];
@@ -34,15 +31,7 @@ export function ReadLater({ fetcher, className = "" }: ReadLaterProps) {
 				Read later
 			</h2>
 
-			{isLoading && <ReadLaterSkeleton />}
-
-			{error && (
-				<div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-border">
-					<p className="text-sm text-muted-foreground">
-						Unable to load bookmarks
-					</p>
-				</div>
-			)}
+			{data === undefined && <ReadLaterSkeleton />}
 
 			{data && items.length === 0 && (
 				<div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-border">

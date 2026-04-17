@@ -1,3 +1,4 @@
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
@@ -7,9 +8,15 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/!(*.test).*s");
 
+function setupTest() {
+	const t = convexTest(schema, modules);
+	registerRateLimiter(t);
+	return t;
+}
+
 describe("highlights", () => {
 	it("should create a highlight", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 		const authId = "test_auth_user_1";
 		const asUser = t.withIdentity({
 			subject: authId,
@@ -60,7 +67,7 @@ describe("highlights", () => {
 	});
 
 	it("should delete a highlight and cascade to comments", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 		const authId = "test_auth_user_1";
 		const asUser = t.withIdentity({
 			subject: authId,
@@ -111,7 +118,7 @@ describe("highlights", () => {
 	});
 
 	it("should filter highlights by visibility", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 
 		// Create two users
 		const authId1 = "test_auth_user_1";

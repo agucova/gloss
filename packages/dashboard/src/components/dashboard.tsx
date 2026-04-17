@@ -1,23 +1,20 @@
 /** @jsxImportSource react */
 import { useState } from "react";
 
-import type { DashboardFetchers } from "../types";
-
 import { ReadLater } from "./read-later";
 import { RecentHighlights } from "./recent-highlights";
 import { RecentLinks } from "./recent-links";
 import { SearchBar } from "./search-bar";
 import { SearchResults } from "./search-results";
 
-interface DashboardProps {
-	fetchers: DashboardFetchers;
-}
-
 /**
  * Main dashboard component with search, friend activity, and bookmarks.
  * Follows a minimal, spacious, gallery-style layout.
+ *
+ * Data comes from Convex via `useQuery` inside each subsection — the host only
+ * needs to provide a `ConvexProvider` / `ConvexBetterAuthProvider` ancestor.
  */
-export function Dashboard({ fetchers }: DashboardProps) {
+export function Dashboard() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const isSearching = searchQuery.length > 0;
 
@@ -26,15 +23,15 @@ export function Dashboard({ fetchers }: DashboardProps) {
 			<SearchBar onChange={setSearchQuery} value={searchQuery} />
 
 			{isSearching ? (
-				<SearchResults fetcher={fetchers.fetchSearch} query={searchQuery} />
+				<SearchResults query={searchQuery} />
 			) : (
 				<div className="mt-12 space-y-12">
 					<div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-						<RecentLinks fetcher={fetchers.fetchFeedBookmarks} />
-						<RecentHighlights fetcher={fetchers.fetchFeedHighlights} />
+						<RecentHighlights />
+						<RecentLinks />
 					</div>
 
-					<ReadLater fetcher={fetchers.fetchMyBookmarks} />
+					<ReadLater />
 				</div>
 			)}
 		</div>

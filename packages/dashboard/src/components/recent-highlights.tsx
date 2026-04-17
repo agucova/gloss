@@ -1,25 +1,20 @@
 /** @jsxImportSource react */
-import type { FeedHighlightsPage } from "../types";
+import { useQuery } from "convex/react";
 
-import { useFriendsHighlights } from "../hooks/use-friends-highlights";
+import { api } from "../../../../convex/_generated/api";
 import { FriendActivityItem } from "./friend-activity-item";
 import { RecentHighlightsSkeleton } from "./skeleton-loaders";
 
 interface RecentHighlightsProps {
-	fetcher: (limit: number) => Promise<FeedHighlightsPage>;
 	className?: string;
 }
 
 /**
  * Section showing friends' recent highlights.
  */
-export function RecentHighlights({
-	fetcher,
-	className = "",
-}: RecentHighlightsProps) {
-	const { data, isLoading, error } = useFriendsHighlights({
-		fetcher,
-		limit: 5,
+export function RecentHighlights({ className = "" }: RecentHighlightsProps) {
+	const data = useQuery(api.feed.feedHighlights, {
+		paginationOpts: { numItems: 5, cursor: null },
 	});
 
 	const items = data?.page ?? [];
@@ -31,15 +26,7 @@ export function RecentHighlights({
 			</h2>
 
 			<div className="min-h-32">
-				{isLoading && <RecentHighlightsSkeleton />}
-
-				{error && (
-					<div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border">
-						<p className="text-sm text-muted-foreground">
-							Unable to load recent highlights
-						</p>
-					</div>
-				)}
+				{data === undefined && <RecentHighlightsSkeleton />}
 
 				{data && items.length === 0 && (
 					<div className="flex min-h-24 items-center justify-center rounded-xl border border-dashed border-border">

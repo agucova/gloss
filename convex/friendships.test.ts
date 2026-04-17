@@ -1,3 +1,4 @@
+import { register as registerRateLimiter } from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
 
@@ -6,9 +7,17 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/!(*.test).*s");
 
+// Shared setup: sendRequest hits the rateLimiter component, so every test
+// here needs it registered.
+function setupTest() {
+	const t = convexTest(schema, modules);
+	registerRateLimiter(t);
+	return t;
+}
+
 describe("friendships", () => {
 	it("should send and accept a friend request", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 
 		// Create two users
 		const authId1 = "test_auth_user_1";
@@ -64,7 +73,7 @@ describe("friendships", () => {
 	});
 
 	it("should auto-accept mutual friend requests", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 
 		const authId1 = "test_auth_user_1";
 		const authId2 = "test_auth_user_2";
@@ -113,7 +122,7 @@ describe("friendships", () => {
 	});
 
 	it("should prevent self-friending", async () => {
-		const t = convexTest(schema, modules);
+		const t = setupTest();
 
 		const authId = "test_auth_user_1";
 		const userId = await t.run(async (ctx) => {

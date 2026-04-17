@@ -16,15 +16,8 @@ export {
 	RecentLinksSkeleton,
 } from "./components/skeleton-loaders";
 export { UserDot } from "./components/user-dot";
-
-// Hooks
-export { useFriendsBookmarks } from "./hooks/use-friends-bookmarks";
-export { useFriendsHighlights } from "./hooks/use-friends-highlights";
-export { useMyBookmarks } from "./hooks/use-my-bookmarks";
-export { useSearch } from "./hooks/use-search";
 // Types
 export type {
-	DashboardFetchers,
 	FeedBookmark,
 	FeedBookmarksPage,
 	FeedHighlight,

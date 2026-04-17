@@ -6,6 +6,7 @@ import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { cascadeDeleteHighlight } from "./lib/cascade";
 import { getFriendIds } from "./lib/friends";
+import { rateLimiter } from "./lib/ratelimit";
 import { extractDomain, hashUrl, normalizeUrl } from "./lib/url";
 
 /**
@@ -82,6 +83,11 @@ export const create = mutation({
 	},
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
+
+		await rateLimiter.limit(ctx, "highlightCreate", {
+			key: userId,
+			throws: true,
+		});
 
 		const normalizedUrl = normalizeUrl(args.url);
 		const urlHash = await hashUrl(normalizedUrl);

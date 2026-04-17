@@ -31,20 +31,6 @@ export type Friend = FunctionReturnType<
 	typeof api.friendships.searchFriends
 >[number];
 
-export type FeedHighlightItem = FunctionReturnType<
-	typeof api.feed.feedHighlights
->["page"][number];
-export type FeedBookmarkItem = FunctionReturnType<
-	typeof api.feed.feedBookmarks
->["page"][number];
-export type FeedHighlightsPage = FunctionReturnType<
-	typeof api.feed.feedHighlights
->;
-export type FeedBookmarksPage = FunctionReturnType<
-	typeof api.feed.feedBookmarks
->;
-export type MyBookmarksPage = FunctionReturnType<typeof api.bookmarks.list>;
-export type SearchResults = FunctionReturnType<typeof api.search.search>;
 export type UserSettings = NonNullable<
 	FunctionReturnType<typeof api.users.getSettings>
 >;
@@ -83,6 +69,7 @@ export type Message =
 	  }
 	| { type: "DELETE_HIGHLIGHT"; id: Id<"highlights"> }
 	| { type: "GET_AUTH_STATUS" }
+	| { type: "GET_CONVEX_JWT" }
 	| { type: "GET_RECENT_HIGHLIGHTS"; limit?: number }
 	| { type: "LOAD_COMMENTS"; highlightId: Id<"highlights"> }
 	| {
@@ -124,10 +111,6 @@ export type Message =
 	| { type: "GET_USER_TAGS" }
 	| { type: "TOGGLE_FAVORITE"; id: Id<"bookmarks"> }
 	| { type: "TOGGLE_READ_LATER"; id: Id<"bookmarks"> }
-	| { type: "GET_FEED_HIGHLIGHTS"; cursor?: string; limit?: number }
-	| { type: "GET_FEED_BOOKMARKS"; cursor?: string; limit?: number }
-	| { type: "GET_MY_BOOKMARKS"; cursor?: string; limit?: number }
-	| { type: "SEARCH_DASHBOARD"; query: string; limit?: number }
 	| { type: "GET_USER_SETTINGS" }
 	| { type: "SYNC_USER_SETTINGS" }
 	| {
@@ -146,6 +129,7 @@ type MessageResponseMap = {
 		authenticated: boolean;
 		user?: { _id: Id<"users">; name: string };
 	};
+	GET_CONVEX_JWT: { token: string | null };
 	GET_RECENT_HIGHLIGHTS: { highlights: MyHighlight[] } | ErrorResponse;
 	LOAD_COMMENTS: { comments: Comment[] } | ErrorResponse;
 	CREATE_COMMENT: { comment: Comment } | ErrorResponse;
@@ -164,10 +148,6 @@ type MessageResponseMap = {
 	GET_USER_TAGS: { tags: Tag[] } | ErrorResponse;
 	TOGGLE_FAVORITE: { favorited: boolean; bookmark: Bookmark } | ErrorResponse;
 	TOGGLE_READ_LATER: { toRead: boolean; bookmark: Bookmark } | ErrorResponse;
-	GET_FEED_HIGHLIGHTS: FeedHighlightsPage | ErrorResponse;
-	GET_FEED_BOOKMARKS: FeedBookmarksPage | ErrorResponse;
-	GET_MY_BOOKMARKS: MyBookmarksPage | ErrorResponse;
-	SEARCH_DASHBOARD: SearchResults | ErrorResponse;
 	GET_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
 	SYNC_USER_SETTINGS: { settings: UserSettings } | ErrorResponse;
 	UPDATE_THEME_PREFERENCE: { success: boolean } | ErrorResponse;

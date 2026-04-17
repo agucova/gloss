@@ -15,9 +15,11 @@
 		"postinstall": "wxt prepare"
 	},
 	"dependencies": {
+		"@convex-dev/better-auth": "^0.11.4",
 		"@floating-ui/dom": "^1.7.4",
 		"@gloss/anchoring": "workspace:*",
 		"@gloss/dashboard": "workspace:*",
+		"better-auth": "catalog:",
 		"clsx": "^2.1.1",
 		"convex": "^1.35.1",
 		"lucide-react": "^0.473.0",

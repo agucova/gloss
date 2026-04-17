@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { mkdirSync } from "node:fs";
+import path from "node:path";
 import solid from "vite-plugin-solid";
 import { defineConfig } from "wxt";
 
@@ -19,6 +20,8 @@ export default defineConfig({
 		},
 	},
 	vite: () => ({
+		// Load .env from monorepo root (VITE_CONVEX_URL, VITE_CONVEX_SITE_URL, etc.)
+		envDir: path.resolve(__dirname, "../.."),
 		plugins: [
 			tailwindcss(),
 			solid({

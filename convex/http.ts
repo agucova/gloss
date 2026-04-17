@@ -3,13 +3,25 @@ import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
+import { rateLimiter } from "./lib/ratelimit";
 
 const http = httpRouter();
 
-// Register Better-Auth routes (handles /api/auth/*)
+// Register Better-Auth routes (handles /api/auth/*).
+//
+// CORS allowlist tracks the trusted origins in convex/auth.ts:
+// - SITE_URL for the web app
+// - EXTENSION_ORIGINS (comma-separated chrome-extension://ID / moz-extension://ID
+//   values) so the browser extension can hit /api/auth/* and /api/auth/convex/token
+//   via the crossDomain plugin.
+const extensionOrigins = (process.env.EXTENSION_ORIGINS ?? "")
+	.split(",")
+	.map((o) => o.trim())
+	.filter(Boolean);
+
 authComponent.registerRoutes(http, createAuth, {
 	cors: {
-		allowedOrigins: [process.env.SITE_URL!],
+		allowedOrigins: [process.env.SITE_URL!, ...extensionOrigins],
 	},
 });
 
@@ -69,6 +81,26 @@ http.route({
 	path: "/api/auth/cli/authorize",
 	method: "GET",
 	handler: httpAction(async (ctx, request) => {
+		// Rate-limit per client IP — each authorize call inserts a row into
+		// `cliAuthPending`, so without this a script could fill the table.
+		// `x-forwarded-for` is the Convex edge proxy's header; falls back to
+		// a constant so missing-header doesn't become a bypass.
+		const ip =
+			request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+			"unknown";
+		const limit = await rateLimiter.limit(ctx, "cliAuthorizePerIp", {
+			key: ip,
+		});
+		if (!limit.ok) {
+			return json(
+				{
+					error: "rate_limited",
+					retry_after_ms: limit.retryAfter,
+				},
+				429
+			);
+		}
+
 		const url = new URL(request.url);
 		const codeChallenge = url.searchParams.get("code_challenge");
 		const redirectUri = url.searchParams.get("redirect_uri");

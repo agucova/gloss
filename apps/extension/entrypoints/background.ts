@@ -8,6 +8,7 @@ import type {
 } from "../utils/messages";
 
 import { api, getConvexClient } from "../utils/api";
+import { authClient } from "../utils/auth-client";
 
 export default defineBackground(() => {
 	console.log("[Gloss] Background script initialized", {
@@ -29,7 +30,8 @@ export default defineBackground(() => {
 		}
 
 		const msg = message as Message;
-		handleMessage(msg)
+		ensureAuth()
+			.then(() => handleMessage(msg))
 			.then(sendResponse)
 			.catch((error) => {
 				console.error("[Gloss] Message handler error:", error);
@@ -41,6 +43,47 @@ export default defineBackground(() => {
 		return true;
 	});
 });
+
+// ─── Auth ────────────────────────────────────────────
+//
+// The extension authClient (see utils/auth-client.ts) holds the Better-Auth
+// session via the `crossDomain` plugin. Before each incoming message we fetch
+// a fresh Convex JWT from `/api/auth/convex/token` and push it onto the shared
+// ConvexHttpClient. A short in-memory TTL cache keeps the token refresh rate
+// reasonable — Convex JWTs default to ~5 minutes, so we refresh every 4.
+
+const JWT_TTL_MS = 4 * 60 * 1000;
+let cachedJwt: { token: string; fetchedAt: number } | null = null;
+
+async function fetchConvexJwt(): Promise<string | null> {
+	try {
+		const result = (await authClient.$fetch("/convex/token")) as {
+			data: { token: string } | null;
+			error: unknown;
+		};
+		return result.data?.token ?? null;
+	} catch (err) {
+		console.warn("[Gloss] Failed to fetch Convex JWT:", err);
+		return null;
+	}
+}
+
+async function ensureAuth(): Promise<void> {
+	const client = getConvexClient();
+	const now = Date.now();
+	if (cachedJwt && now - cachedJwt.fetchedAt < JWT_TTL_MS) {
+		client.setAuth(cachedJwt.token);
+		return;
+	}
+	const token = await fetchConvexJwt();
+	if (token) {
+		cachedJwt = { token, fetchedAt: now };
+		client.setAuth(token);
+	} else {
+		cachedJwt = null;
+		client.clearAuth();
+	}
+}
 
 function updateToolbarIcon(isDark: boolean): void {
 	const dir = isDark ? "icon-dark" : "icon";
@@ -115,6 +158,8 @@ async function handleMessage(
 			return await handleDeleteHighlight(message.id);
 		case "GET_AUTH_STATUS":
 			return await handleGetAuthStatus();
+		case "GET_CONVEX_JWT":
+			return { token: cachedJwt?.token ?? null };
 		case "GET_RECENT_HIGHLIGHTS":
 			return await handleGetRecentHighlights(message.limit);
 		case "LOAD_COMMENTS":
@@ -145,14 +190,6 @@ async function handleMessage(
 			return await handleToggleFavorite(message.id);
 		case "TOGGLE_READ_LATER":
 			return await handleToggleReadLater(message.id);
-		case "GET_FEED_HIGHLIGHTS":
-			return await handleGetFeedHighlights(message.limit);
-		case "GET_FEED_BOOKMARKS":
-			return await handleGetFeedBookmarks(message.limit);
-		case "GET_MY_BOOKMARKS":
-			return await handleGetMyBookmarks(message.limit);
-		case "SEARCH_DASHBOARD":
-			return await handleSearchDashboard(message.query, message.limit);
 		case "GET_USER_SETTINGS":
 			return await handleGetUserSettings();
 		case "UPDATE_THEME_PREFERENCE":
@@ -222,13 +259,12 @@ async function handleGetAuthStatus(): Promise<
 	MessageResponse<"GET_AUTH_STATUS">
 > {
 	try {
-		const stored = await browser.storage.sync.get("glossAuthToken");
-		if (!stored.glossAuthToken) return { authenticated: false };
-
+		// `ensureAuth()` has already populated the Convex client (or cleared it
+		// when there is no session). A successful `users.getMe` query proves we
+		// have both a Better-Auth session AND a matching app-side users row.
 		const client = getConvexClient();
 		const user = await client.query(api.users.getMe);
 		if (!user) return { authenticated: false };
-
 		return {
 			authenticated: true,
 			user: { _id: user._id, name: user.name },
@@ -503,55 +539,6 @@ async function handleToggleReadLater(id: Id<"bookmarks">) {
 	const client = getConvexClient();
 	const result = await convexCall("toggle to-read", () =>
 		client.mutation(api.bookmarks.toggleReadLater, { id })
-	);
-	if ("error" in result) return result;
-	return result;
-}
-
-// ─── Dashboard handlers ─────────────────────────────
-
-const DEFAULT_LIMIT = 20;
-
-async function handleGetFeedHighlights(limit?: number) {
-	const client = getConvexClient();
-	const result = await convexCall("get feed highlights", () =>
-		client.query(api.feed.feedHighlights, {
-			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
-		})
-	);
-	if ("error" in result) return result;
-	return result;
-}
-
-async function handleGetFeedBookmarks(limit?: number) {
-	const client = getConvexClient();
-	const result = await convexCall("get feed bookmarks", () =>
-		client.query(api.feed.feedBookmarks, {
-			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT },
-		})
-	);
-	if ("error" in result) return result;
-	return result;
-}
-
-async function handleGetMyBookmarks(limit?: number) {
-	const client = getConvexClient();
-	const result = await convexCall("get my bookmarks", () =>
-		client.query(api.bookmarks.list, {
-			paginationOpts: { numItems: limit ?? DEFAULT_LIMIT, cursor: null },
-		})
-	);
-	if ("error" in result) return result;
-	return result;
-}
-
-async function handleSearchDashboard(searchQuery: string, limit?: number) {
-	const client = getConvexClient();
-	const result = await convexCall("search dashboard", () =>
-		client.query(api.search.search, {
-			q: searchQuery,
-			limit: limit ?? DEFAULT_LIMIT,
-		})
 	);
 	if ("error" in result) return result;
 	return result;

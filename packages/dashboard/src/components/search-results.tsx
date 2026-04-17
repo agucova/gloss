@@ -1,41 +1,29 @@
 /** @jsxImportSource react */
-import type { SearchResults as SearchResultsData } from "../types";
+import { useQuery } from "convex/react";
 
-import { useSearch } from "../hooks/use-search";
+import { api } from "../../../../convex/_generated/api";
 import { formatRelativeTime } from "../utils/relative-time";
 
 interface SearchResultsProps {
-	fetcher: (query: string, limit: number) => Promise<SearchResultsData>;
 	query: string;
 }
 
 /**
  * Display search results for bookmarks and highlights.
  */
-export function SearchResults({ fetcher, query }: SearchResultsProps) {
-	const { data, isLoading, error } = useSearch({
-		fetcher,
-		query,
-		enabled: query.length > 0,
-	});
+export function SearchResults({ query }: SearchResultsProps) {
+	const data = useQuery(
+		api.search.search,
+		query.length > 0 ? { q: query, limit: 20 } : "skip"
+	);
 
-	if (isLoading) {
+	if (data === undefined) {
 		return (
 			<div className="mt-12 text-center text-sm text-muted-foreground">
 				Searching...
 			</div>
 		);
 	}
-
-	if (error) {
-		return (
-			<div className="mt-12 text-center text-sm text-muted-foreground">
-				Unable to search
-			</div>
-		);
-	}
-
-	if (!data) return null;
 
 	const bookmarks = data.results.filter((r) => r.entityType === "bookmark");
 	const highlights = data.results.filter((r) => r.entityType === "highlight");

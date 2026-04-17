@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { areFriends, getFriendIds } from "./lib/friends";
+import { rateLimiter } from "./lib/ratelimit";
 import { canViewProfile } from "./lib/visibility";
 
 export const checkUsername = query({
@@ -148,6 +149,12 @@ export const setUsername = mutation({
 	args: { username: v.string() },
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
+
+		await rateLimiter.limit(ctx, "usernameChange", {
+			key: userId,
+			throws: true,
+		});
+
 		const normalized = args.username.toLowerCase().trim();
 
 		// Check uniqueness

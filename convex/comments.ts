@@ -7,6 +7,7 @@ import { mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { softDeleteComment } from "./lib/cascade";
 import { areFriends, getFriendIds } from "./lib/friends";
+import { rateLimiter } from "./lib/ratelimit";
 
 async function hydrateComment(
 	ctx: QueryCtx | MutationCtx,
@@ -90,6 +91,11 @@ export const create = mutation({
 	},
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
+
+		await rateLimiter.limit(ctx, "commentCreate", {
+			key: userId,
+			throws: true,
+		});
 
 		const highlight = await ctx.db.get(args.highlightId);
 		if (!highlight) throw new Error("Highlight not found");

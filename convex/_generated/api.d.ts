@@ -21,6 +21,7 @@ import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_cascade from "../lib/cascade.js";
 import type * as lib_friends from "../lib/friends.js";
+import type * as lib_ratelimit from "../lib/ratelimit.js";
 import type * as lib_url from "../lib/url.js";
 import type * as lib_visibility from "../lib/visibility.js";
 import type * as search from "../search.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/cascade": typeof lib_cascade;
   "lib/friends": typeof lib_friends;
+  "lib/ratelimit": typeof lib_ratelimit;
   "lib/url": typeof lib_url;
   "lib/visibility": typeof lib_visibility;
   search: typeof search;
@@ -84,4 +86,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("../betterAuth/_generated/component.js").ComponentApi<"betterAuth">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
 };

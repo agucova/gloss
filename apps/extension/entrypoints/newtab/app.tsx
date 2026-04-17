@@ -1,11 +1,9 @@
 /** @jsxImportSource react */
-import type { DashboardFetchers } from "@gloss/dashboard";
-
 import { Dashboard } from "@gloss/dashboard";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Logo } from "../../components/logo";
-import { isErrorResponse, sendMessage } from "../../utils/messages";
+import { sendMessage } from "../../utils/messages";
 import { initTheme } from "../../utils/theme";
 
 const WEB_APP_URL = import.meta.env.VITE_WEB_URL || "http://localhost:3001";
@@ -64,71 +62,36 @@ function UnauthenticatedState() {
 	);
 }
 
-function createFetchers(): DashboardFetchers {
-	return {
-		async fetchFeedHighlights(limit) {
-			const response = await sendMessage({
-				type: "GET_FEED_HIGHLIGHTS",
-				limit,
-			});
-			if (isErrorResponse(response)) {
-				throw new Error(response.error);
-			}
-			return response;
-		},
-		async fetchFeedBookmarks(limit) {
-			const response = await sendMessage({ type: "GET_FEED_BOOKMARKS", limit });
-			if (isErrorResponse(response)) {
-				throw new Error(response.error);
-			}
-			return response;
-		},
-		async fetchMyBookmarks(limit) {
-			const response = await sendMessage({ type: "GET_MY_BOOKMARKS", limit });
-			if (isErrorResponse(response)) {
-				throw new Error(response.error);
-			}
-			return response;
-		},
-		async fetchSearch(query, limit) {
-			const response = await sendMessage({
-				type: "SEARCH_DASHBOARD",
-				query,
-				limit,
-			});
-			if (isErrorResponse(response)) {
-				throw new Error(response.error);
-			}
-			return response;
-		},
-	};
-}
+type AuthState = "loading" | "authenticated" | "unauthenticated";
 
 export default function App() {
-	const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-	const fetchers = useMemo(() => createFetchers(), []);
+	const [authState, setAuthState] = useState<AuthState>("loading");
 
 	useEffect(() => {
-		async function checkAuth() {
-			const response = await sendMessage({ type: "GET_AUTH_STATUS" });
-			setIsAuthenticated(response.authenticated);
+		let cancelled = false;
+		async function check() {
+			try {
+				const response = await sendMessage({ type: "GET_AUTH_STATUS" });
+				if (cancelled) return;
+				setAuthState(
+					response.authenticated ? "authenticated" : "unauthenticated"
+				);
+			} catch {
+				if (!cancelled) setAuthState("unauthenticated");
+			}
 		}
-		checkAuth();
+		check();
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
-	if (isAuthenticated === null) {
-		return <LoadingState />;
-	}
-
-	if (!isAuthenticated) {
-		return <UnauthenticatedState />;
-	}
-
+	if (authState === "loading") return <LoadingState />;
+	if (authState === "unauthenticated") return <UnauthenticatedState />;
 	return (
 		<div className="min-h-screen bg-background">
 			<Header />
-			<Dashboard fetchers={fetchers} />
+			<Dashboard />
 		</div>
 	);
 }
