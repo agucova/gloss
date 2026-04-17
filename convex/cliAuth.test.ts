@@ -24,8 +24,10 @@ async function pkce() {
 }
 
 async function setupUser(t: ReturnType<typeof convexTest>) {
+	const authId = "test_auth_user_1";
 	const userId = await t.run(async (ctx) => {
 		return await ctx.db.insert("users", {
+			authId,
 			name: "Test User",
 			email: "test@example.com",
 			emailVerified: true,
@@ -37,6 +39,7 @@ async function setupUser(t: ReturnType<typeof convexTest>) {
 		});
 	});
 	const asUser = t.withIdentity({
+		subject: authId,
 		name: "Test User",
 		email: "test@example.com",
 	});

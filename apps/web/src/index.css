@@ -1,4 +1,5 @@
 @import "@gloss/fonts/satoshi.css";
+@import "@gloss/fonts/gambarino.css";
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -40,6 +41,20 @@
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
+
+	/* Landing page surface and ink (warm off-white, warm ink) */
+	--landing-surface: oklch(0.985 0.008 85);
+	--landing-ink: oklch(0.18 0.005 60);
+	--landing-ink-muted: oklch(0.46 0.008 60);
+	--landing-ink-subtle: oklch(0.62 0.008 70);
+	--landing-rule: oklch(0.9 0.01 75);
+	--landing-surface-2: oklch(0.96 0.012 80);
+
+	/* Highlight swatches (shared with extension palette) */
+	--highlight-own: oklch(0.94 0.07 95);
+	--highlight-friend-a: oklch(0.89 0.08 45);
+	--highlight-friend-b: oklch(0.9 0.06 15);
+	--highlight-friend-c: oklch(0.91 0.06 165);
 }
 
 .dark {
@@ -74,10 +89,26 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+
+	/* Landing tokens stay at their light values regardless of system theme.
+	   The landing is a paper-warm editorial page, not a dark-mode surface —
+	   it should feel the same in any lighting. */
 }
 
 @theme inline {
 	--font-sans: "Satoshi", sans-serif;
+	--font-display: "Gambarino", Georgia, "Times New Roman", serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--color-landing-surface: var(--landing-surface);
+	--color-landing-surface-2: var(--landing-surface-2);
+	--color-landing-ink: var(--landing-ink);
+	--color-landing-ink-muted: var(--landing-ink-muted);
+	--color-landing-ink-subtle: var(--landing-ink-subtle);
+	--color-landing-rule: var(--landing-rule);
+	--color-highlight-own: var(--highlight-own);
+	--color-highlight-friend-a: var(--highlight-friend-a);
+	--color-highlight-friend-b: var(--highlight-friend-b);
+	--color-highlight-friend-c: var(--highlight-friend-c);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -127,5 +158,32 @@
 	}
 	html {
 		@apply font-sans;
+	}
+}
+
+@keyframes landing-highlight-bloom {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(1);
+	}
+}
+
+@keyframes landing-rise-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.landing-bloom,
+	.landing-rise {
+		animation: none !important;
 	}
 }

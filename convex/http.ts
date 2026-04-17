@@ -33,7 +33,7 @@ function json(data: unknown, status = 200): Response {
 async function validateApiKeyFromRequest(
 	ctx: any,
 	request: Request
-): Promise<{ userId: string; scope: string } | null> {
+): Promise<{ userId: string; keyId: string; scope: string } | null> {
 	const authHeader = request.headers.get("Authorization");
 	if (!authHeader?.startsWith("Bearer ")) return null;
 
@@ -48,6 +48,16 @@ async function validateApiKeyFromRequest(
 
 	const result = await ctx.runQuery(internal.apiKeys.validate, { keyHash });
 	return result ?? null;
+}
+
+// Fire-and-forget lastUsedAt bump. Logs failures but never throws — the
+// request has already succeeded by the time we touch the key.
+async function touchApiKey(ctx: any, keyId: string): Promise<void> {
+	try {
+		await ctx.runMutation(internal.apiKeys.touch, { keyId });
+	} catch (err) {
+		console.error("[http] failed to touch api key", err);
+	}
 }
 
 // ─── CLI OAuth (PKCE) endpoints ─────────────────────
@@ -137,6 +147,122 @@ http.route({
 	}),
 });
 
+// ─── Dev-only: session-cookie helper for e2e ────────
+// Mints a Better-Auth session for an existing seed user so Playwright tests
+// can inject the cookie into a browser context. Uses the testUtils plugin
+// which is registered in convex/auth.ts only when ALLOW_DEV_MINT=true. This
+// endpoint MUST stay 404 when the plugin isn't registered (i.e. on prod).
+http.route({
+	path: "/api/auth/_dev/create-session",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		if (process.env.ALLOW_DEV_MINT !== "true") {
+			return json({ error: "disabled" }, 404);
+		}
+
+		let body: { email?: string };
+		try {
+			body = (await request.json()) as typeof body;
+		} catch {
+			return json({ error: "Invalid JSON body" }, 400);
+		}
+		const email = body.email;
+		if (!email) return json({ error: "email is required" }, 400);
+
+		const { auth } = await authComponent.getAuth(createAuth, ctx);
+
+		const authCtx = await (
+			auth as unknown as {
+				$context: Promise<{
+					test?: {
+						login: (opts: { userId: string }) => Promise<{
+							cookies: Array<{
+								name: string;
+								value: string;
+								domain: string;
+								path: string;
+								httpOnly?: boolean;
+								secure?: boolean;
+								sameSite?: "Lax" | "Strict" | "None";
+							}>;
+						}>;
+					};
+				}>;
+			}
+		).$context;
+		if (!authCtx.test) {
+			return json(
+				{ error: "testUtils plugin is not registered — check ALLOW_DEV_MINT" },
+				500
+			);
+		}
+
+		// Look up the Better-Auth userId via our users table's authId column
+		// (populated by the onCreate user trigger in convex/auth.ts). Every
+		// seed user already has a Better-Auth user record because the seed
+		// runs through the same component triggers.
+		const appUser = await ctx.runQuery(internal.cliAuth._devLookupAuthId, {
+			email,
+		});
+		if (!appUser?.authId) {
+			return json({ error: `No Better-Auth user found for ${email}` }, 404);
+		}
+
+		const { cookies } = await authCtx.test.login({ userId: appUser.authId });
+		return json({ cookies });
+	}),
+});
+
+// Dev-only: flip a seed user's profileVisibility so e2e tests can exercise
+// the access-control matrix. 404 when ALLOW_DEV_MINT isn't set.
+http.route({
+	path: "/api/_dev/set-visibility",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		if (process.env.ALLOW_DEV_MINT !== "true") {
+			return json({ error: "disabled" }, 404);
+		}
+		let body: {
+			email?: string;
+			visibility?: "public" | "friends" | "private";
+		};
+		try {
+			body = (await request.json()) as typeof body;
+		} catch {
+			return json({ error: "Invalid JSON body" }, 400);
+		}
+		const { email, visibility } = body;
+		if (
+			!email ||
+			(visibility !== "public" &&
+				visibility !== "friends" &&
+				visibility !== "private")
+		) {
+			return json({ error: "email and visibility are required" }, 400);
+		}
+		try {
+			await ctx.runMutation(internal.testing.setVisibility, {
+				email,
+				visibility,
+			});
+			return json({ success: true });
+		} catch (err) {
+			return json(
+				{ error: err instanceof Error ? err.message : "mutation failed" },
+				400
+			);
+		}
+	}),
+});
+
+http.route({
+	path: "/api/_dev/set-visibility",
+	method: "OPTIONS",
+	handler: httpAction(async () => {
+		return new Response(null, { status: 204, headers: corsHeaders() });
+	}),
+});
+
 // ─── CLI API endpoints ──────────────────────────────
 // These provide REST-like access for the CLI and MCP server,
 // authenticated via API key Bearer tokens.
@@ -164,6 +290,7 @@ http.route({
 			before: url.searchParams.get("before") || undefined,
 			sortBy: url.searchParams.get("sortBy") || undefined,
 		});
+		await touchApiKey(ctx, auth.keyId);
 
 		return json({
 			results: results.results.map((r: any) => ({
@@ -205,6 +332,7 @@ http.route({
 			userId: auth.userId as any,
 			paginationOpts: { numItems: limit, cursor: null },
 		});
+		await touchApiKey(ctx, auth.keyId);
 
 		return json({
 			items: (result.page ?? []).map((h: any) => ({
@@ -234,6 +362,7 @@ http.route({
 			userId: auth.userId as any,
 			paginationOpts: { numItems: limit, cursor: null },
 		});
+		await touchApiKey(ctx, auth.keyId);
 
 		return json({
 			items: (result.page ?? []).map((b: any) => ({
@@ -259,6 +388,7 @@ http.route({
 		const tags = await ctx.runQuery(internal.bookmarks.listTagsByUserInternal, {
 			userId: auth.userId as any,
 		});
+		await touchApiKey(ctx, auth.keyId);
 
 		return json({
 			tags: (tags as any[]).map((t: any) => ({
@@ -282,6 +412,7 @@ http.route({
 			userId: auth.userId as any,
 		});
 		if (!user) return json({ error: "User not found" }, 404);
+		await touchApiKey(ctx, auth.keyId);
 
 		return json({
 			id: user._id,

@@ -1,5 +1,5 @@
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx, MutationCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 export type AuthMethod = "session" | "api_key";
 export type ApiKeyScope = "read" | "write";
@@ -13,22 +13,27 @@ export interface AuthContext {
 
 /**
  * Get the authenticated user from a query/mutation context.
- * Uses Convex's built-in auth identity, then looks up the user in our users table.
+ *
+ * Uses Convex's JWT identity (populated by the Better-Auth Convex plugin),
+ * whose `subject` is the Better-Auth user id, and looks up the matching
+ * app-side `users` row by the `authId` field. `users` rows are created by
+ * the `onCreate` trigger in `convex/auth.ts`, so this returns null for
+ * identities that pre-date the trigger or whose row was deleted.
+ *
  * Returns null if not authenticated.
  */
 export async function getAuthenticatedUser(
 	ctx: QueryCtx | MutationCtx
-): Promise<{ userId: Id<"users"> } | null> {
+): Promise<{ userId: Id<"users">; authId: string } | null> {
 	const identity = await ctx.auth.getUserIdentity();
-	if (!identity) return null;
+	if (!identity?.subject) return null;
 
-	// Look up the user by email in our users table
 	const user = await ctx.db
 		.query("users")
-		.withIndex("by_email", (q) => q.eq("email", identity.email!))
+		.withIndex("by_authId", (q) => q.eq("authId", identity.subject))
 		.first();
 	if (!user) return null;
-	return { userId: user._id };
+	return { userId: user._id, authId: identity.subject };
 }
 
 /**
@@ -36,7 +41,7 @@ export async function getAuthenticatedUser(
  */
 export async function requireAuth(
 	ctx: QueryCtx | MutationCtx
-): Promise<{ userId: Id<"users"> }> {
+): Promise<{ userId: Id<"users">; authId: string }> {
 	const user = await getAuthenticatedUser(ctx);
 	if (!user) {
 		throw new Error("Authentication required");

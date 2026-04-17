@@ -161,3 +161,15 @@ export const validate = internalQuery({
 		};
 	},
 });
+
+// Bump the key's lastUsedAt. Called fire-and-forget from the API httpActions
+// after a successful authenticated request so the settings UI can show when
+// each key was last seen.
+export const touch = internalMutation({
+	args: { keyId: v.id("apiKeys") },
+	handler: async (ctx, args) => {
+		const key = await ctx.db.get(args.keyId);
+		if (!key || key.revoked) return;
+		await ctx.db.patch(args.keyId, { lastUsedAt: Date.now() });
+	},
+});

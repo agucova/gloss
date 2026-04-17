@@ -4,6 +4,8 @@
 	"private": true,
 	"exports": {
 		"./satoshi.css": "./satoshi/satoshi.css",
-		"./satoshi/*": "./satoshi/*"
+		"./satoshi/*": "./satoshi/*",
+		"./gambarino.css": "./gambarino/gambarino.css",
+		"./gambarino/*": "./gambarino/*"
 	}
 }

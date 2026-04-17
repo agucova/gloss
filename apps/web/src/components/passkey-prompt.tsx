@@ -47,7 +47,16 @@ export function PasskeyPrompt() {
 		try {
 			const result = await authClient.passkey.addPasskey();
 			if (result?.error) {
-				toast.error(result.error.message ?? "Failed to add passkey.");
+				const err = result.error as {
+					message?: string | { message?: string };
+					code?: string;
+					statusText?: string;
+				};
+				const rawMessage =
+					typeof err.message === "string" ? err.message : err.message?.message;
+				toast.error(
+					rawMessage ?? err.code ?? err.statusText ?? "Failed to add passkey."
+				);
 			} else {
 				toast.success("Passkey added successfully!");
 				setVisible(false);

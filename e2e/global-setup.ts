@@ -8,6 +8,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { SEED_USERS } from "./fixtures/seed-ids";
 
@@ -15,7 +16,8 @@ const CONVEX_URL =
 	process.env.VITE_CONVEX_URL || "https://glorious-toad-644.convex.cloud";
 
 function ensureCliBuilt() {
-	const repoRoot = resolve(__dirname, "..");
+	const thisDir = fileURLToPath(new URL(".", import.meta.url));
+	const repoRoot = resolve(thisDir, "..");
 	const cliDist = resolve(repoRoot, "packages/cli/dist/cli.js");
 	const mcpDist = resolve(repoRoot, "packages/cli/dist/mcp.js");
 

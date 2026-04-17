@@ -35,7 +35,11 @@ export default defineSchema({
 	// via the component. We define the user table with our extended profile fields.
 	// ──────────────────────────────────────────────
 	users: defineTable({
-		// Better-Auth core fields
+		// Link back to the Better-Auth component user row. Set by the onCreate
+		// trigger in convex/auth.ts. This is how queries identify the current
+		// caller: identity.subject == authId.
+		authId: v.string(),
+		// Better-Auth core fields (mirrored from the component on create/update)
 		name: v.string(),
 		email: v.string(),
 		emailVerified: v.boolean(),
@@ -75,7 +79,8 @@ export default defineSchema({
 		updatedAt: v.optional(v.float64()),
 	})
 		.index("by_username", ["username"])
-		.index("by_email", ["email"]),
+		.index("by_email", ["email"])
+		.index("by_authId", ["authId"]),
 
 	// ──────────────────────────────────────────────
 	// Highlights

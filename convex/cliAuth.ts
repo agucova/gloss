@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 
-import { internalMutation, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { requireAuth } from "./lib/auth";
 
 const REQUEST_TTL_MS = 5 * 60 * 1000;
@@ -193,6 +198,27 @@ export const exchangeForApiKey = internalMutation({
 	},
 });
 
+// Delete expired pending CLI auth rows. Invoked hourly by convex/crons.ts —
+// TTL check on each row (expiresAt < Date.now()) means expired rows can't be
+// exchanged or approved, but without this sweep the table would grow
+// unboundedly with never-completed or abandoned flows. Keep a 1h grace
+// window after expiry so the consent page can still show an "expired"
+// message instead of "not found" if the user arrives late.
+export const cleanupExpired = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		const cutoff = Date.now() - 60 * 60 * 1000;
+		const expired = await ctx.db
+			.query("cliAuthPending")
+			.filter((q) => q.lt(q.field("expiresAt"), cutoff))
+			.take(500);
+		for (const row of expired) {
+			await ctx.db.delete(row._id);
+		}
+		return { deleted: expired.length };
+	},
+});
+
 async function sha256Hex(input: string): Promise<string> {
 	const data = new TextEncoder().encode(input);
 	const hash = await crypto.subtle.digest("SHA-256", data);
@@ -234,5 +260,21 @@ export const _devMintApiKey = internalMutation({
 		});
 
 		return { apiKey: plaintext, keyId, userId: user._id };
+	},
+});
+
+// Dev-only: resolve a Better-Auth userId from an email. Called by
+// /api/auth/_dev/create-session so Playwright can feed `test.login` the
+// right userId. Gated by ALLOW_DEV_MINT on the enclosing httpAction.
+export const _devLookupAuthId = internalQuery({
+	args: { email: v.string() },
+	handler: async (ctx, args) => {
+		if (process.env.ALLOW_DEV_MINT !== "true") return null;
+		const user = await ctx.db
+			.query("users")
+			.withIndex("by_email", (q) => q.eq("email", args.email))
+			.first();
+		if (!user) return null;
+		return { authId: user.authId ?? null };
 	},
 });

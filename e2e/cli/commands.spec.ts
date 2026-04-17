@@ -19,16 +19,11 @@ async function runCli(args: string[]) {
 
 test.describe("CLI commands (read-only, API key auth)", () => {
 	test("whoami returns the seed user's profile", async () => {
-		const { code, stdout } = await runCli([
-			"auth",
-			"whoami",
-			"--format",
-			"json",
-		]);
+		// whoami has no --format flag; parse the human-readable output.
+		const { code, stdout } = await runCli(["auth", "whoami"]);
 		expect(code).toBe(0);
-		const parsed = JSON.parse(stdout);
-		expect(parsed.email).toBe(SEED_USERS.agucova.email);
-		expect(parsed.name).toBe(SEED_USERS.agucova.name);
+		expect(stdout).toContain(SEED_USERS.agucova.email);
+		expect(stdout).toContain(SEED_USERS.agucova.name);
 	});
 
 	test("search returns results with the expected shape", async () => {

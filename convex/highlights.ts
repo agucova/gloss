@@ -106,6 +106,28 @@ export const create = mutation({
 });
 
 /**
+ * List public highlights for the landing gallery. No auth required.
+ * Returns the most recent `limit` highlights with visibility === "public",
+ * hydrated with author name + image, enriched with the page domain.
+ */
+export const listPublic = query({
+	args: { limit: v.optional(v.number()) },
+	handler: async (ctx, args) => {
+		const limit = Math.min(args.limit ?? 12, 50);
+		const rows = await ctx.db
+			.query("highlights")
+			.withIndex("by_visibility", (q) => q.eq("visibility", "public"))
+			.order("desc")
+			.take(limit);
+		const hydrated = await hydrateHighlights(ctx, rows);
+		return hydrated.map((h) => ({
+			...h,
+			domain: extractDomain(h.url),
+		}));
+	},
+});
+
+/**
  * List own highlights (paginated).
  */
 export const listMine = query({

@@ -1,11 +1,18 @@
 import type { Id } from "./_generated/dataModel";
 
+import { components } from "./_generated/api";
 /**
  * Seed script for Convex development database.
- * Run via Convex dashboard or: npx convex run seed:run
+ * Run via: `bunx convex run seed:run`
+ *
+ * Requires ALLOW_DEV_MINT=true on the deployment — the seed inserts
+ * Better-Auth user rows directly via the component adapter (no sign-up
+ * endpoint, no password). Playwright logs seed users in via the
+ * testUtils plugin exposed at /api/auth/_dev/create-session.
  */
 import { internalMutation } from "./_generated/server";
-import { normalizeUrl, hashUrl } from "./lib/url";
+import { authComponent } from "./auth";
+import { hashUrl, normalizeUrl } from "./lib/url";
 
 // ─── Seed data ──────────────────────────────────────
 
@@ -62,24 +69,104 @@ export const run = internalMutation({
 	handler: async (ctx) => {
 		console.log("=== Gloss Convex Seed ===");
 
-		// Create users
+		if (process.env.ALLOW_DEV_MINT !== "true") {
+			throw new Error(
+				"seed:run refuses to run without ALLOW_DEV_MINT=true. " +
+					"This gate prevents the seed from ever running on prod."
+			);
+		}
+
+		// Create each seed user by:
+		//   1. inserting the Better-Auth `user` row via the component adapter,
+		//   2. inserting the matching app-side `users` row with authId set,
+		//   3. calling setUserId so the BA row backlinks to the app row.
+		// We bypass the onCreate trigger on purpose (direct adapter.create
+		// doesn't fire it — see `createApi` in @convex-dev/better-auth) so
+		// we can set username and role atomically.
 		const userIds: Record<string, Id<"users">> = {};
 		for (const u of USERS) {
-			const id = await ctx.db.insert("users", {
-				name: u.name,
-				email: u.email,
-				emailVerified: true,
-				username: u.username,
-				role: "role" in u ? u.role : "user",
-				profileVisibility: "public",
-				highlightsVisibility: "friends",
-				bookmarksVisibility: "public",
-				highlightDisplayFilter: "friends",
-				commentDisplayMode: "collapsed",
-			});
-			userIds[u.username] = id;
+			const role = "role" in u ? u.role : "user";
+
+			// Idempotent: look for an existing BA user by email first.
+			const existingAuth = (await ctx.runQuery(
+				components.betterAuth.adapter.findOne,
+				{
+					model: "user",
+					where: [{ field: "email", value: u.email }],
+				}
+			)) as { _id: string } | null;
+
+			let authUserId: string;
+			if (existingAuth) {
+				authUserId = existingAuth._id;
+			} else {
+				const now = Date.now();
+				const authUser = (await ctx.runMutation(
+					components.betterAuth.adapter.create,
+					{
+						input: {
+							model: "user",
+							data: {
+								name: u.name,
+								email: u.email,
+								emailVerified: true,
+								createdAt: now,
+								updatedAt: now,
+								role,
+							},
+						},
+					}
+				)) as { _id: string };
+				authUserId = authUser._id;
+			}
+
+			// Idempotent: look for an existing app-side users row by authId.
+			let appUser = await ctx.db
+				.query("users")
+				.withIndex("by_authId", (q) => q.eq("authId", authUserId))
+				.first();
+			if (!appUser) {
+				const id = await ctx.db.insert("users", {
+					authId: authUserId,
+					name: u.name,
+					email: u.email,
+					emailVerified: true,
+					username: u.username,
+					role,
+					profileVisibility: "public",
+					highlightsVisibility: "friends",
+					bookmarksVisibility: "public",
+					highlightDisplayFilter: "friends",
+					commentDisplayMode: "collapsed",
+				});
+				appUser = await ctx.db.get(id);
+			} else {
+				await ctx.db.patch(appUser._id, {
+					username: u.username,
+					role,
+					updatedAt: Date.now(),
+				});
+			}
+			if (!appUser)
+				throw new Error(`Seed: failed to load users row for ${u.email}`);
+
+			await authComponent.setUserId(ctx, authUserId, appUser._id);
+
+			// Admin role must also be mirrored onto the BA user row — the
+			// admin plugin reads role from there, not from our users table.
+			if (role === "admin") {
+				await ctx.runMutation(components.betterAuth.adapter.updateOne, {
+					input: {
+						model: "user",
+						where: [{ field: "_id", value: authUserId }],
+						update: { role: "admin" },
+					},
+				});
+			}
+
+			userIds[u.username] = appUser._id;
 		}
-		console.log(`Created ${USERS.length} users`);
+		console.log(`Created/updated ${USERS.length} users`);
 
 		// Create friendships
 		const friendships = [

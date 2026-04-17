@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
-import { requireAuth } from "./lib/auth";
+import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 
 export const sendRequest = mutation({
 	args: { addresseeId: v.id("users") },
@@ -130,27 +130,20 @@ export const removeFriend = mutation({
 export const listFriends = query({
 	args: {},
 	handler: async (ctx) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return [];
-
-		// Find the user by their token identifier
-		const user = await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", identity.email!))
-			.first();
-		if (!user) return [];
+		const auth = await getAuthenticatedUser(ctx);
+		if (!auth) return [];
 
 		const asRequester = await ctx.db
 			.query("friendships")
 			.withIndex("by_requesterId_status", (q) =>
-				q.eq("requesterId", user._id).eq("status", "accepted")
+				q.eq("requesterId", auth.userId).eq("status", "accepted")
 			)
 			.collect();
 
 		const asAddressee = await ctx.db
 			.query("friendships")
 			.withIndex("by_addresseeId_status", (q) =>
-				q.eq("addresseeId", user._id).eq("status", "accepted")
+				q.eq("addresseeId", auth.userId).eq("status", "accepted")
 			)
 			.collect();
 
@@ -172,19 +165,13 @@ export const listFriends = query({
 export const listPending = query({
 	args: {},
 	handler: async (ctx) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return [];
-
-		const user = await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", identity.email!))
-			.first();
-		if (!user) return [];
+		const auth = await getAuthenticatedUser(ctx);
+		if (!auth) return [];
 
 		const pending = await ctx.db
 			.query("friendships")
 			.withIndex("by_addresseeId_status", (q) =>
-				q.eq("addresseeId", user._id).eq("status", "pending")
+				q.eq("addresseeId", auth.userId).eq("status", "pending")
 			)
 			.collect();
 
@@ -210,19 +197,13 @@ export const listPending = query({
 export const listSent = query({
 	args: {},
 	handler: async (ctx) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return [];
-
-		const user = await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", identity.email!))
-			.first();
-		if (!user) return [];
+		const auth = await getAuthenticatedUser(ctx);
+		if (!auth) return [];
 
 		const sent = await ctx.db
 			.query("friendships")
 			.withIndex("by_requesterId_status", (q) =>
-				q.eq("requesterId", user._id).eq("status", "pending")
+				q.eq("requesterId", auth.userId).eq("status", "pending")
 			)
 			.collect();
 
@@ -248,17 +229,11 @@ export const listSent = query({
 export const searchFriends = query({
 	args: { q: v.string() },
 	handler: async (ctx, args) => {
-		const identity = await ctx.auth.getUserIdentity();
-		if (!identity) return [];
-
-		const user = await ctx.db
-			.query("users")
-			.withIndex("by_email", (q) => q.eq("email", identity.email!))
-			.first();
-		if (!user) return [];
+		const auth = await getAuthenticatedUser(ctx);
+		if (!auth) return [];
 
 		const { getFriendIds } = await import("./lib/friends");
-		const friendIds = await getFriendIds(ctx, user._id);
+		const friendIds = await getFriendIds(ctx, auth.userId);
 
 		const friends = await Promise.all(friendIds.map((id) => ctx.db.get(id)));
 		const query = args.q.toLowerCase();

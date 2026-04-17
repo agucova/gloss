@@ -106,7 +106,17 @@ function RouteComponent() {
 		try {
 			const result = await authClient.signIn.passkey();
 			if (result?.error) {
-				toast.error(result.error.message ?? "Passkey authentication failed.");
+				const err = result.error as {
+					message?: string;
+					code?: string;
+					statusText?: string;
+				};
+				toast.error(
+					err.message ??
+						err.code ??
+						err.statusText ??
+						"Passkey authentication failed."
+				);
 			} else if (returnTo) {
 				window.location.replace(returnTo);
 			} else {

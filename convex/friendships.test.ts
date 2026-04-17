@@ -11,13 +11,17 @@ describe("friendships", () => {
 		const t = convexTest(schema, modules);
 
 		// Create two users
-		const [userId1, userId2] = await t.run(async (ctx) => {
+		const authId1 = "test_auth_user_1";
+		const authId2 = "test_auth_user_2";
+		const [, userId2] = await t.run(async (ctx) => {
 			const u1 = await ctx.db.insert("users", {
+				authId: authId1,
 				name: "User 1",
 				email: "user1@example.com",
 				emailVerified: true,
 			});
 			const u2 = await ctx.db.insert("users", {
+				authId: authId2,
 				name: "User 2",
 				email: "user2@example.com",
 				emailVerified: true,
@@ -26,10 +30,12 @@ describe("friendships", () => {
 		});
 
 		const asUser1 = t.withIdentity({
+			subject: authId1,
 			name: "User 1",
 			email: "user1@example.com",
 		});
 		const asUser2 = t.withIdentity({
+			subject: authId2,
 			name: "User 2",
 			email: "user2@example.com",
 		});
@@ -60,13 +66,17 @@ describe("friendships", () => {
 	it("should auto-accept mutual friend requests", async () => {
 		const t = convexTest(schema, modules);
 
+		const authId1 = "test_auth_user_1";
+		const authId2 = "test_auth_user_2";
 		const [userId1, userId2] = await t.run(async (ctx) => {
 			const u1 = await ctx.db.insert("users", {
+				authId: authId1,
 				name: "User 1",
 				email: "user1@example.com",
 				emailVerified: true,
 			});
 			const u2 = await ctx.db.insert("users", {
+				authId: authId2,
 				name: "User 2",
 				email: "user2@example.com",
 				emailVerified: true,
@@ -75,10 +85,12 @@ describe("friendships", () => {
 		});
 
 		const asUser1 = t.withIdentity({
+			subject: authId1,
 			name: "User 1",
 			email: "user1@example.com",
 		});
 		const asUser2 = t.withIdentity({
+			subject: authId2,
 			name: "User 2",
 			email: "user2@example.com",
 		});
@@ -103,8 +115,10 @@ describe("friendships", () => {
 	it("should prevent self-friending", async () => {
 		const t = convexTest(schema, modules);
 
+		const authId = "test_auth_user_1";
 		const userId = await t.run(async (ctx) => {
 			return await ctx.db.insert("users", {
+				authId,
 				name: "User 1",
 				email: "user1@example.com",
 				emailVerified: true,
@@ -112,6 +126,7 @@ describe("friendships", () => {
 		});
 
 		const asUser = t.withIdentity({
+			subject: authId,
 			name: "User 1",
 			email: "user1@example.com",
 		});

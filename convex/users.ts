@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { areFriends, getFriendIds } from "./lib/friends";
+import { canViewProfile } from "./lib/visibility";
 
 export const checkUsername = query({
 	args: { username: v.string() },
@@ -173,6 +174,9 @@ export const getByUsername = query({
 		if (!user) return null;
 
 		const auth = await getAuthenticatedUser(ctx);
+		const access = await canViewProfile(ctx, auth?.userId ?? null, user);
+		if (access === "none") return null;
+
 		const isOwnProfile = auth?.userId === user._id;
 		const isFriend = auth
 			? await areFriends(ctx, auth.userId, user._id)
@@ -240,6 +244,15 @@ export const getUserHighlights = query({
 	},
 	handler: async (ctx, args) => {
 		const auth = await getAuthenticatedUser(ctx);
+
+		const targetUser = await ctx.db.get(args.userId);
+		if (!targetUser) return { page: [], isDone: true, continueCursor: "" };
+
+		const access = await canViewProfile(ctx, auth?.userId ?? null, targetUser);
+		if (access === "none") {
+			return { page: [], isDone: true, continueCursor: "" };
+		}
+
 		const isOwn = auth?.userId === args.userId;
 		const isFriend = auth
 			? await areFriends(ctx, auth.userId, args.userId)
@@ -281,14 +294,24 @@ export const getUserBookmarks = query({
 	},
 	handler: async (ctx, args) => {
 		const auth = await getAuthenticatedUser(ctx);
+
+		const targetUser = await ctx.db.get(args.userId);
+		if (!targetUser) return { page: [], isDone: true, continueCursor: "" };
+
+		// Profile-level visibility gates everything — a hidden profile hides its
+		// bookmarks too.
+		const access = await canViewProfile(ctx, auth?.userId ?? null, targetUser);
+		if (access === "none") {
+			return { page: [], isDone: true, continueCursor: "" };
+		}
+
 		const isOwn = auth?.userId === args.userId;
 		const isFriend = auth
 			? await areFriends(ctx, auth.userId, args.userId)
 			: false;
 
-		// Check bookmarks visibility
-		const targetUser = await ctx.db.get(args.userId);
-		const bookmarksVis = targetUser?.bookmarksVisibility ?? "public";
+		// Bookmark-specific visibility (the user's own tighter setting).
+		const bookmarksVis = targetUser.bookmarksVisibility ?? "public";
 		if (
 			!isOwn &&
 			(bookmarksVis === "private" || (bookmarksVis === "friends" && !isFriend))
@@ -317,6 +340,14 @@ export const getUserBookmarks = query({
 export const getUserTags = query({
 	args: { userId: v.id("users") },
 	handler: async (ctx, args) => {
+		const auth = await getAuthenticatedUser(ctx);
+
+		const targetUser = await ctx.db.get(args.userId);
+		if (!targetUser) return [];
+
+		const access = await canViewProfile(ctx, auth?.userId ?? null, targetUser);
+		if (access === "none") return [];
+
 		const tags = await ctx.db
 			.query("tags")
 			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
@@ -344,6 +375,17 @@ export const getUserTags = query({
 export const getUserFriends = query({
 	args: { userId: v.id("users") },
 	handler: async (ctx, args) => {
+		// Require auth: previously this was unauthenticated and let anyone
+		// enumerate any user's friend graph from outside the app.
+		const auth = await getAuthenticatedUser(ctx);
+		if (!auth) return [];
+
+		const targetUser = await ctx.db.get(args.userId);
+		if (!targetUser) return [];
+
+		const access = await canViewProfile(ctx, auth.userId, targetUser);
+		if (access === "none") return [];
+
 		const friendIds = await getFriendIds(ctx, args.userId);
 		const friends = await Promise.all(friendIds.map((id) => ctx.db.get(id)));
 		return friends.filter(Boolean).map((f) => ({

@@ -4,6 +4,7 @@ import {
 	Outlet,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { Authenticated } from "convex/react";
 
 import Header from "@/components/header";
 import { PasskeyPrompt } from "@/components/passkey-prompt";
@@ -38,7 +39,9 @@ function RootComponent() {
 				storageKey="vite-ui-theme"
 			>
 				<div className="grid h-svh grid-rows-[auto_1fr]">
-					<Header />
+					<Authenticated>
+						<Header />
+					</Authenticated>
 					<Outlet />
 				</div>
 				<Toaster richColors />

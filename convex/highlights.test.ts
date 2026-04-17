@@ -10,7 +10,9 @@ const modules = import.meta.glob("./**/!(*.test).*s");
 describe("highlights", () => {
 	it("should create a highlight", async () => {
 		const t = convexTest(schema, modules);
+		const authId = "test_auth_user_1";
 		const asUser = t.withIdentity({
+			subject: authId,
 			name: "Test User",
 			email: "test@example.com",
 		});
@@ -18,6 +20,7 @@ describe("highlights", () => {
 		// First create a user in the DB so auth lookup works
 		await t.run(async (ctx) => {
 			await ctx.db.insert("users", {
+				authId,
 				name: "Test User",
 				email: "test@example.com",
 				emailVerified: true,
@@ -58,7 +61,9 @@ describe("highlights", () => {
 
 	it("should delete a highlight and cascade to comments", async () => {
 		const t = convexTest(schema, modules);
+		const authId = "test_auth_user_1";
 		const asUser = t.withIdentity({
+			subject: authId,
 			name: "Test User",
 			email: "test@example.com",
 		});
@@ -66,6 +71,7 @@ describe("highlights", () => {
 		// Create user
 		const userId = await t.run(async (ctx) => {
 			return await ctx.db.insert("users", {
+				authId,
 				name: "Test User",
 				email: "test@example.com",
 				emailVerified: true,
@@ -108,14 +114,18 @@ describe("highlights", () => {
 		const t = convexTest(schema, modules);
 
 		// Create two users
+		const authId1 = "test_auth_user_1";
+		const authId2 = "test_auth_user_2";
 		const [userId1, userId2] = await t.run(async (ctx) => {
 			const u1 = await ctx.db.insert("users", {
+				authId: authId1,
 				name: "User 1",
 				email: "user1@example.com",
 				emailVerified: true,
 				highlightDisplayFilter: "anyone",
 			});
 			const u2 = await ctx.db.insert("users", {
+				authId: authId2,
 				name: "User 2",
 				email: "user2@example.com",
 				emailVerified: true,
@@ -149,6 +159,7 @@ describe("highlights", () => {
 
 		// Query as user1 (not a friend) — should only see public
 		const asUser1 = t.withIdentity({
+			subject: authId1,
 			name: "User 1",
 			email: "user1@example.com",
 		});

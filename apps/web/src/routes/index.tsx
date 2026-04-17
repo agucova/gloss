@@ -1,9 +1,7 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Authenticated, Unauthenticated } from "convex/react";
 
-// TODO: Replace with Convex-native dashboard
-// The dashboard package needs to be rewritten to use Convex hooks directly.
-// For now, show a placeholder that confirms auth is working.
+import { Landing } from "@/components/landing/landing";
 
 export const Route = createFileRoute("/")({
 	component: RouteComponent,
@@ -16,12 +14,13 @@ function RouteComponent() {
 				<DashboardPlaceholder />
 			</Authenticated>
 			<Unauthenticated>
-				<Navigate to="/login" />
+				<Landing />
 			</Unauthenticated>
 		</>
 	);
 }
 
+// Dashboard is being migrated to Convex. Landing above handles unauth'd visitors.
 function DashboardPlaceholder() {
 	return (
 		<div className="mx-auto max-w-4xl px-6 py-12">
