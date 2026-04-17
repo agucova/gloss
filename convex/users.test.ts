@@ -205,7 +205,14 @@ describe("users.getUserHighlights visibility", () => {
 				userId: ownerId as any,
 				url: "https://example.com",
 				urlHash: "hash",
-				selector: { quote: { type: "TextQuoteSelector", exact: "x" } },
+				selector: {
+					quote: {
+						type: "TextQuoteSelector" as const,
+						exact: "x",
+						prefix: "",
+						suffix: "",
+					},
+				},
 				text: "x",
 				visibility: "public",
 			});

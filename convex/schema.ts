@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { selectorValidator } from "./lib/validators";
+
 // Enum-like validators (replacing PostgreSQL pgEnum)
 export const visibility = v.union(
 	v.literal("private"),
@@ -91,7 +93,7 @@ export default defineSchema({
 		url: v.string(),
 		urlHash: v.string(),
 		// W3C Web Annotation selector (RangeSelector, TextPositionSelector, TextQuoteSelector)
-		selector: v.any(),
+		selector: selectorValidator,
 		// Denormalized highlighted text for display/search
 		text: v.string(),
 		visibility: v.union(
@@ -254,6 +256,14 @@ export default defineSchema({
 		curiusUsername: v.optional(v.string()),
 		lastVerifiedAt: v.optional(v.float64()),
 		updatedAt: v.optional(v.float64()),
+		lastImportStatus: v.optional(
+			v.union(v.literal("running"), v.literal("completed"), v.literal("failed"))
+		),
+		lastImportStartedAt: v.optional(v.float64()),
+		lastImportFinishedAt: v.optional(v.float64()),
+		lastImportError: v.optional(v.string()),
+		linksProcessed: v.optional(v.number()),
+		highlightsImported: v.optional(v.number()),
 	}).index("by_userId", ["userId"]),
 
 	curiusUserMappings: defineTable({

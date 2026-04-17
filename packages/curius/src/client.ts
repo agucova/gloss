@@ -22,6 +22,7 @@ import {
 	getNetworkLinksResponseSchema,
 	getUserLinksResponseSchema,
 	getUserResponseSchema,
+	loginResponseSchema,
 } from "./schemas";
 
 const CURIUS_BASE_URL = "https://curius.app";
@@ -31,6 +32,9 @@ const DEFAULT_TIMEOUT = 10_000;
  * API endpoints for Curius
  */
 const ENDPOINTS = {
+	// Authentication
+	LOGIN: "/api/login",
+
 	// User
 	GET_USER: "/api/user",
 	GET_FOLLOWING: "/api/user/following/",
@@ -389,6 +393,80 @@ export class CuriusClient {
 			}
 			throw error;
 		}
+	}
+
+	/**
+	 * Authenticate with email + password and return the resulting JWT.
+	 *
+	 * This is a static helper because login is the step that produces the
+	 * token — callers don't have one yet. The instance `request()` wraps every
+	 * call with an Authorization header; here we make a bare fetch so we don't
+	 * send a spurious empty Bearer.
+	 *
+	 * Response shape is loosely validated; the surface we depend on is
+	 * `token`. Tighten the schema after a live probe confirms the rest.
+	 */
+	static async login(
+		email: string,
+		password: string,
+		options: { baseUrl?: string; timeout?: number } = {}
+	): Promise<{ token: string; user?: CuriusUser }> {
+		const baseUrl = options.baseUrl ?? CURIUS_BASE_URL;
+		const timeout = options.timeout ?? DEFAULT_TIMEOUT;
+		const url = `${baseUrl}${ENDPOINTS.LOGIN}`;
+
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+		let response: Response;
+		try {
+			response = await fetch(url, {
+				method: "POST",
+				signal: controller.signal,
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ email, password }),
+			});
+		} catch (error) {
+			clearTimeout(timeoutId);
+			if (error instanceof Error && error.name === "AbortError") {
+				throw new CuriusError("Request timeout", undefined, "TIMEOUT");
+			}
+			throw new CuriusError(
+				error instanceof Error ? error.message : "Unknown error"
+			);
+		}
+		clearTimeout(timeoutId);
+
+		if (!response.ok) {
+			if (response.status === 401) {
+				throw new CuriusAuthError("Invalid email or password");
+			}
+			if (response.status === 429) {
+				const retryAfter = response.headers.get("Retry-After");
+				throw new CuriusRateLimitError(
+					"Rate limit exceeded",
+					retryAfter ? Number.parseInt(retryAfter, 10) : undefined
+				);
+			}
+			let message = `HTTP ${response.status}`;
+			try {
+				const body = (await response.json()) as Record<string, unknown>;
+				if (typeof body.error === "string") message = body.error;
+				else if (typeof body.message === "string") message = body.message;
+			} catch {
+				// JSON body isn't required
+			}
+			throw new CuriusError(message, response.status);
+		}
+
+		const data = await response.json();
+		const result = loginResponseSchema.safeParse(data);
+		if (!result.success) {
+			throw new CuriusValidationError(
+				`Invalid login response: ${result.error.message}`
+			);
+		}
+		return result.data;
 	}
 }
 

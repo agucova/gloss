@@ -566,6 +566,84 @@ describe("CuriusClient", () => {
 	});
 
 	// =========================================================================
+	// Static login (email + password)
+	// =========================================================================
+
+	describe("CuriusClient.login", () => {
+		test("POSTs credentials without an Authorization header", async () => {
+			mockFetchResponse({
+				token: "new-jwt",
+				user: {
+					id: "6361",
+					firstName: "Test",
+					lastName: "User",
+					userLink: "test-user",
+				},
+			});
+
+			const result = await CuriusClient.login("test@example.com", "hunter2");
+
+			expect(result.token).toBe("new-jwt");
+			expect(result.user?.id).toBe("6361");
+
+			const call = fetchSpy.mock.calls[0]!;
+			const [url, init] = call as [string, RequestInit];
+			expect(url).toBe("https://curius.app/api/login");
+			expect(init.method).toBe("POST");
+			expect(init.body).toBe(
+				JSON.stringify({ email: "test@example.com", password: "hunter2" })
+			);
+			// Critically: no Authorization header since the caller doesn't have
+			// a token yet. Sending "Bearer " with no value would confuse Curius.
+			const headers = init.headers as Record<string, string>;
+			expect(headers.Authorization).toBeUndefined();
+			expect(headers["Content-Type"]).toBe("application/json");
+		});
+
+		test("throws CuriusAuthError on 401", async () => {
+			mockFetchError(401);
+
+			await expect(
+				CuriusClient.login("test@example.com", "wrong")
+			).rejects.toThrow(CuriusAuthError);
+		});
+
+		test("throws CuriusRateLimitError on 429 with retry-after", async () => {
+			mockFetchError(429, null, { "Retry-After": "30" });
+
+			try {
+				await CuriusClient.login("test@example.com", "x");
+				expect.unreachable("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(CuriusRateLimitError);
+				expect((error as CuriusRateLimitError).retryAfter).toBe(30);
+			}
+		});
+
+		test("throws CuriusValidationError on malformed response", async () => {
+			mockFetchResponse({ no_token_here: true });
+
+			await expect(CuriusClient.login("test@example.com", "x")).rejects.toThrow(
+				CuriusValidationError
+			);
+		});
+
+		test("maps AbortError to a TIMEOUT CuriusError", async () => {
+			const abortError = new Error("The operation was aborted.");
+			abortError.name = "AbortError";
+			fetchSpy.mockRejectedValueOnce(abortError);
+
+			try {
+				await CuriusClient.login("test@example.com", "x");
+				expect.unreachable("Should have thrown");
+			} catch (error) {
+				expect(error).toBeInstanceOf(CuriusError);
+				expect((error as CuriusError).code).toBe("TIMEOUT");
+			}
+		});
+	});
+
+	// =========================================================================
 	// Configuration
 	// =========================================================================
 

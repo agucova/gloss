@@ -292,31 +292,37 @@ export function anchor(
 	const { root = document.body, maxFuzzyErrors, positionHint } = options;
 	const expectedText = selector.quote.exact;
 
-	// Strategy 1: RangeSelector (XPath-based)
-	const rangeResult = tryRangeSelector(selector.range, root);
-	if (rangeResult && validateQuote(rangeResult, expectedText)) {
-		const ctx = quickContextMatch(root, rangeResult, selector.quote);
-		if (ctx === true) {
-			return { range: rangeResult, method: "range", confidence: 1.0 };
+	// Strategy 1: RangeSelector (XPath-based). Skipped for selectors without
+	// DOM context (e.g., Curius-imported highlights).
+	if (selector.range) {
+		const rangeResult = tryRangeSelector(selector.range, root);
+		if (rangeResult && validateQuote(rangeResult, expectedText)) {
+			const ctx = quickContextMatch(root, rangeResult, selector.quote);
+			if (ctx === true) {
+				return { range: rangeResult, method: "range", confidence: 1.0 };
+			}
+			if (ctx === null) {
+				// No context available — can't verify, slightly lower confidence
+				return { range: rangeResult, method: "range", confidence: 0.9 };
+			}
+			// Context mismatch — text matches but wrong occurrence, continue cascade
 		}
-		if (ctx === null) {
-			// No context available — can't verify, slightly lower confidence
-			return { range: rangeResult, method: "range", confidence: 0.9 };
-		}
-		// Context mismatch — text matches but wrong occurrence, continue cascade
 	}
 
-	// Strategy 2: TextPositionSelector (character offsets)
-	const positionResult = tryPositionSelector(selector.position, root);
-	if (positionResult && validateQuote(positionResult, expectedText)) {
-		const ctx = quickContextMatch(root, positionResult, selector.quote);
-		if (ctx === true) {
-			return { range: positionResult, method: "position", confidence: 1.0 };
+	// Strategy 2: TextPositionSelector (character offsets). Also skipped for
+	// quote-only selectors.
+	if (selector.position) {
+		const positionResult = tryPositionSelector(selector.position, root);
+		if (positionResult && validateQuote(positionResult, expectedText)) {
+			const ctx = quickContextMatch(root, positionResult, selector.quote);
+			if (ctx === true) {
+				return { range: positionResult, method: "position", confidence: 1.0 };
+			}
+			if (ctx === null) {
+				return { range: positionResult, method: "position", confidence: 0.9 };
+			}
+			// Context mismatch — continue cascade
 		}
-		if (ctx === null) {
-			return { range: positionResult, method: "position", confidence: 0.9 };
-		}
-		// Context mismatch — continue cascade
 	}
 
 	// Pre-compute normalized text with offset mapping for quote-based strategies.
@@ -331,9 +337,11 @@ export function anchor(
 		return { range: quoteResult, method: "quote", confidence: 0.95 };
 	}
 
-	// Strategy 4: Fuzzy matching (last resort)
+	// Strategy 4: Fuzzy matching (last resort). Without a position anchor we
+	// leave the hint undefined so fuzzy scans the full document by base score;
+	// defaulting to 0 would bias results toward the top of the page.
 	const errors = maxFuzzyErrors ?? recommendedMaxErrors(expectedText.length);
-	const hint = positionHint ?? selector.position.start;
+	const hint = positionHint ?? selector.position?.start;
 	const fuzzyResult = tryFuzzySelector(
 		selector.quote,
 		root,

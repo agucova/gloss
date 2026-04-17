@@ -97,6 +97,15 @@ export class HighlightManager {
 	 * @returns AnchorResult if successful, null if orphaned
 	 */
 	add(highlight: Highlight): AnchorResult | null {
+		// Adding a highlight whose ID already exists must replace the prior DOM
+		// overlay. Without this, repeated loads (SPA nav, bridge refresh, retries)
+		// leak the old <mark> elements and stack overlays on top of each other.
+		const existing = this.highlights.get(highlight.id);
+		if (existing) {
+			existing.cleanup();
+			this.highlights.delete(highlight.id);
+		}
+
 		// Try to anchor
 		const result = anchor(highlight.selector, { root: this.root });
 

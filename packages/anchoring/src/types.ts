@@ -50,12 +50,16 @@ export interface TextQuoteSelector {
 }
 
 /**
- * All three selector types stored together for maximum resilience.
- * Anchoring tries each in order until one succeeds.
+ * Selector bundle stored with a highlight. `quote` is always present (it's
+ * text-based, always computable from a selection). `range` and `position` are
+ * captured when the highlight is created in-page but absent when highlights are
+ * imported from external sources like Curius that only carry text + context.
+ * Anchoring skips strategies whose input is missing and falls through to
+ * quote-based matching.
  */
 export interface AnnotationSelector {
-	range: RangeSelector;
-	position: TextPositionSelector;
+	range?: RangeSelector;
+	position?: TextPositionSelector;
 	quote: TextQuoteSelector;
 }
 

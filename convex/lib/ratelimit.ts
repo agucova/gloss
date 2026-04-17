@@ -53,4 +53,13 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		rate: 10,
 		period: HOUR,
 	},
+
+	// Magic-link emails — keyed by the recipient address. Bounds the inbox
+	// of any one user (against harassment + Resend billing) without making
+	// legitimate "didn't arrive, resend" loops painful.
+	magicLinkEmail: {
+		kind: "fixed window",
+		rate: 10,
+		period: HOUR,
+	},
 });

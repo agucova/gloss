@@ -8,6 +8,7 @@ import { cascadeDeleteHighlight } from "./lib/cascade";
 import { getFriendIds } from "./lib/friends";
 import { rateLimiter } from "./lib/ratelimit";
 import { extractDomain, hashUrl, normalizeUrl } from "./lib/url";
+import { selectorValidator } from "./lib/validators";
 
 /**
  * Get highlights for a URL, filtered by visibility and user display preferences.
@@ -75,7 +76,7 @@ export const getByUrl = query({
 export const create = mutation({
 	args: {
 		url: v.string(),
-		selector: v.any(),
+		selector: selectorValidator,
 		text: v.string(),
 		visibility: v.optional(
 			v.union(v.literal("private"), v.literal("friends"), v.literal("public"))

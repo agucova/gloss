@@ -160,6 +160,18 @@ export const addLinkResponseSchema = z.object({
 export const addHighlightResponseSchema = curiusHighlightSchema;
 
 /**
+ * Response from POST /api/login. Shape is not fully reverse-engineered — the
+ * JWT is the only field we actually use, and we keep the rest loose so the
+ * schema doesn't fail on unexpected extras. Tighten after a live probe.
+ */
+export const loginResponseSchema = z
+	.object({
+		token: z.string(),
+		user: curiusUserSchema.optional(),
+	})
+	.passthrough();
+
+/**
  * Response from GET /api/users/:id/links (user's own links).
  * Returns {userSaved: [...]} with links and their highlights.
  */

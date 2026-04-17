@@ -15,6 +15,7 @@ import { query } from "./_generated/server";
 import authConfig from "./auth.config";
 import betterAuthSchema from "./betterAuth/schema";
 import { cascadeDeleteUser } from "./lib/cascade";
+import { rateLimiter } from "./lib/ratelimit";
 
 const siteUrl = process.env.SITE_URL!;
 
@@ -128,6 +129,24 @@ export const createAuthOptions = (
 		plugins.push(
 			magicLink({
 				sendMagicLink: async ({ email, url }) => {
+					// Rate-limit per recipient before we touch Resend. Throws a
+					// ConvexError on cap, which Better-Auth surfaces to the
+					// caller as a sign-in failure — intentionally indistinct
+					// from a normal send to avoid leaking whether the email
+					// has requested too many links (enumeration).
+					//
+					// `createAuthOptions` is typed with a generic ctx that
+					// could theoretically be a query ctx, but sendMagicLink
+					// only fires from the sign-in httpAction (mutation-
+					// capable). Narrow the cast here with a comment rather
+					// than threading mutation-only ctx through the whole
+					// options builder.
+					await rateLimiter.limit(
+						ctx as Parameters<typeof rateLimiter.limit>[0],
+						"magicLinkEmail",
+						{ key: email.toLowerCase(), throws: true }
+					);
+
 					const fromAddress =
 						process.env.EMAIL_FROM ?? "Gloss <noreply@gloss.space>";
 					const isProduction = process.env.NODE_ENV === "production";
@@ -184,6 +203,20 @@ export const createAuthOptions = (
 		baseURL: process.env.CONVEX_SITE_URL,
 		trustedOrigins: [siteUrl, "https://appleid.apple.com", ...extensionOrigins],
 		database: authComponent.adapter(ctx),
+		// Cookies are issued on the Convex site origin and consumed by the
+		// web app (different origin) + the browser extension (different
+		// origin). SameSite=None is required for cross-origin cookies to be
+		// sent at all — Lax would strand any flow that falls back to real
+		// cookies (e.g. the extension service worker, which can't reach the
+		// crossDomain plugin's localStorage shim). Secure is required by
+		// browsers whenever SameSite=None is set. Better-Auth auto-disables
+		// Secure on localhost so dev still works.
+		advanced: {
+			defaultCookieAttributes: {
+				sameSite: "none",
+				secure: true,
+			},
+		},
 		socialProviders:
 			Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
 		account: {

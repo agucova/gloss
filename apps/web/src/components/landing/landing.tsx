@@ -1,7 +1,6 @@
 import { LandingBanner } from "./landing-banner";
-import { LandingBasics } from "./landing-basics";
 import { LandingDemo } from "./landing-demo";
-import { LandingDistinctive } from "./landing-distinctive";
+import { LandingFeatures } from "./landing-features";
 import { LandingFooter } from "./landing-footer";
 import { LandingGallery } from "./landing-gallery";
 import { LandingHero } from "./landing-hero";
@@ -23,8 +22,7 @@ export function Landing() {
 				<main className="flex flex-col">
 					<LandingHero />
 					<LandingDemo />
-					<LandingBasics />
-					<LandingDistinctive />
+					<LandingFeatures />
 					<LandingGallery />
 				</main>
 				<LandingFooter />

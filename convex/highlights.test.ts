@@ -14,6 +14,17 @@ function setupTest() {
 	return t;
 }
 
+// Minimal valid selector for tests that don't care about anchoring
+// semantics — the schema now requires a populated `quote`.
+const QUOTE_ONLY = {
+	quote: {
+		type: "TextQuoteSelector" as const,
+		exact: "x",
+		prefix: "",
+		suffix: "",
+	},
+};
+
 describe("highlights", () => {
 	it("should create a highlight", async () => {
 		const t = setupTest();
@@ -88,7 +99,7 @@ describe("highlights", () => {
 		// Create highlight
 		const highlight = await asUser.mutation(api.highlights.create, {
 			url: "https://example.com/article",
-			selector: {},
+			selector: QUOTE_ONLY,
 			text: "some highlighted text",
 		});
 
@@ -148,7 +159,7 @@ describe("highlights", () => {
 				userId: userId2,
 				url,
 				urlHash,
-				selector: {},
+				selector: QUOTE_ONLY,
 				text: "public highlight",
 				visibility: "public",
 				searchContent: "public highlight",
@@ -157,7 +168,7 @@ describe("highlights", () => {
 				userId: userId2,
 				url,
 				urlHash,
-				selector: {},
+				selector: QUOTE_ONLY,
 				text: "private highlight",
 				visibility: "private",
 				searchContent: "private highlight",

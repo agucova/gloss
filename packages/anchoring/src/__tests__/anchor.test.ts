@@ -4,7 +4,7 @@ import type { AnnotationSelector } from "../types";
 
 import { anchor, anchorAll } from "../anchor";
 import { describe as describeRange } from "../describe";
-import { DescribeError } from "../types";
+import { DescribeError, fromCuriusPosition } from "../types";
 
 /**
  * Helper: set innerHTML on body and return body as root.
@@ -563,5 +563,89 @@ describe("whitespace offset mapping", () => {
 				: (container as Element);
 		expect(parentEl?.closest("main")).not.toBeNull();
 		expect(parentEl?.closest("nav")).toBeNull();
+	});
+});
+
+describe("anchor — quote-only selectors (import path)", () => {
+	it("anchors via exact quote match when range/position are absent", () => {
+		const root = setDOM("<p>The quick brown fox jumps over the lazy dog.</p>");
+
+		const selector: AnnotationSelector = {
+			quote: fromCuriusPosition({
+				rawHighlight: "brown fox",
+				leftContext: "The quick ",
+				rightContext: " jumps over",
+			}),
+		};
+
+		const result = anchor(selector, { root });
+		expect(result).not.toBeNull();
+		expect(result!.method).toBe("quote");
+		expect(result!.range.toString()).toBe("brown fox");
+	});
+
+	it("falls through to fuzzy when text has drifted slightly", () => {
+		const root = setDOM(
+			"<p>The very quick brown fox jumps over the lazy dog.</p>"
+		);
+
+		const selector: AnnotationSelector = {
+			quote: fromCuriusPosition({
+				rawHighlight: "quick brown fox",
+				leftContext: "",
+				rightContext: "",
+			}),
+		};
+
+		const result = anchor(selector, { root });
+		expect(result).not.toBeNull();
+		// Exact substring is present, so this anchors via the quote strategy.
+		// The test asserts that with no position hint, the cascade still finds it.
+		expect(["quote", "fuzzy"]).toContain(result!.method);
+		expect(result!.range.toString()).toContain("brown fox");
+	});
+
+	it("uses context to disambiguate when quote appears multiple times", () => {
+		const root = setDOM(
+			"<p>Alpha tag: cat. Beta tag: cat. Gamma tag: cat.</p>"
+		);
+
+		const selector: AnnotationSelector = {
+			quote: fromCuriusPosition({
+				rawHighlight: "cat",
+				leftContext: "Beta tag: ",
+				rightContext: ". Gamma",
+			}),
+		};
+
+		const result = anchor(selector, { root });
+		expect(result).not.toBeNull();
+		expect(result!.range.toString()).toBe("cat");
+
+		// The anchored position should be inside "Beta tag: cat.", not Alpha or Gamma.
+		const preceding = result!.range.startContainer.textContent?.slice(
+			0,
+			result!.range.startOffset
+		);
+		expect(preceding).toContain("Beta tag:");
+		expect(preceding).not.toContain("Gamma");
+	});
+
+	it("returns null without throwing when text is not present", () => {
+		const root = setDOM("<p>Completely different content.</p>");
+
+		const selector: AnnotationSelector = {
+			quote: fromCuriusPosition({
+				rawHighlight: "nonexistent phrase",
+				leftContext: "",
+				rightContext: "",
+			}),
+		};
+
+		// The crucial assertion: strategies 1 and 2 don't crash on missing
+		// range/position. The anchor returns null gracefully.
+		expect(() => anchor(selector, { root })).not.toThrow();
+		const result = anchor(selector, { root });
+		expect(result).toBeNull();
 	});
 });

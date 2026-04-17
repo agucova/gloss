@@ -39,7 +39,7 @@ export default defineConfig({
 		description:
 			"Highlight text on any webpage and share with friends. See what your friends are reading and highlighting across the web.",
 		version: "0.1.0",
-		permissions: ["storage", "activeTab", "cookies", "offscreen"],
+		permissions: ["storage", "activeTab", "offscreen"],
 		host_permissions: ["<all_urls>"],
 		chrome_url_overrides: {
 			newtab: "newtab.html",
