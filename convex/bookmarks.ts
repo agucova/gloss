@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { cascadeDeleteBookmark } from "./lib/cascade";
 import { extractDomain, hashUrl, normalizeUrl } from "./lib/url";
@@ -217,6 +217,18 @@ export const update = mutation({
 	},
 });
 
+// Internal variant for API-key-authenticated HTTP actions.
+export const listByUserInternal = internalQuery({
+	args: { userId: v.id("users"), paginationOpts: v.any() },
+	handler: async (ctx, args) => {
+		return ctx.db
+			.query("bookmarks")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.order("desc")
+			.paginate(args.paginationOpts);
+	},
+});
+
 export const listTags = query({
 	args: { limit: v.optional(v.number()) },
 	handler: async (ctx, args) => {
@@ -240,6 +252,34 @@ export const listTags = query({
 		);
 
 		// Sort: system tags first, then by count desc
+		tagsWithCounts.sort((a, b) => {
+			if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1;
+			return b.bookmarkCount - a.bookmarkCount;
+		});
+
+		return args.limit ? tagsWithCounts.slice(0, args.limit) : tagsWithCounts;
+	},
+});
+
+// Internal variant for API-key-authenticated HTTP actions.
+export const listTagsByUserInternal = internalQuery({
+	args: { userId: v.id("users"), limit: v.optional(v.number()) },
+	handler: async (ctx, args) => {
+		const tags = await ctx.db
+			.query("tags")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
+			.collect();
+
+		const tagsWithCounts = await Promise.all(
+			tags.map(async (tag) => {
+				const bookmarkTags = await ctx.db
+					.query("bookmarkTags")
+					.withIndex("by_tagId", (q) => q.eq("tagId", tag._id))
+					.collect();
+				return { ...tag, bookmarkCount: bookmarkTags.length };
+			})
+		);
+
 		tagsWithCounts.sort((a, b) => {
 			if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1;
 			return b.bookmarkCount - a.bookmarkCount;

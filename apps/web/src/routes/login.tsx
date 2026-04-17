@@ -4,6 +4,13 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
 
+// Only allow relative, same-origin paths for returnTo to avoid open redirects.
+function sanitizeReturnTo(raw: string | null): string | null {
+	if (!raw) return null;
+	if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+	return raw;
+}
+
 import Loader from "@/components/loader";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -37,6 +44,7 @@ function RouteComponent() {
 	// Get error from URL search params (optional, for OAuth error callbacks)
 	const urlParams = new URLSearchParams(window.location.search);
 	const error = urlParams.get("error");
+	const returnTo = sanitizeReturnTo(urlParams.get("returnTo"));
 	const { data: session, isPending } = authClient.useSession();
 	const [magicLinkSent, setMagicLinkSent] = useState(false);
 	const [socialLoading, setSocialLoading] = useState<string | null>(null);
@@ -45,9 +53,13 @@ function RouteComponent() {
 	// Redirect if already logged in
 	useEffect(() => {
 		if (session?.user) {
-			navigate({ to: "/" });
+			if (returnTo) {
+				window.location.replace(returnTo);
+			} else {
+				navigate({ to: "/" });
+			}
 		}
-	}, [session, navigate]);
+	}, [session, navigate, returnTo]);
 
 	// Show error toast from OAuth callback
 	useEffect(() => {
@@ -70,13 +82,18 @@ function RouteComponent() {
 		);
 	}
 
+	const callbackURL = `${window.location.origin}${returnTo ?? "/"}`;
+	const errorCallbackURL = returnTo
+		? `${window.location.origin}/login?error=auth_failed&returnTo=${encodeURIComponent(returnTo)}`
+		: `${window.location.origin}/login?error=auth_failed`;
+
 	const handleSocialLogin = async (provider: "google" | "apple") => {
 		setSocialLoading(provider);
 		try {
 			await authClient.signIn.social({
 				provider,
-				callbackURL: `${window.location.origin}/`,
-				errorCallbackURL: `${window.location.origin}/login?error=auth_failed`,
+				callbackURL,
+				errorCallbackURL,
 			});
 		} catch {
 			toast.error("Failed to connect. Please try again.");
@@ -90,6 +107,8 @@ function RouteComponent() {
 			const result = await authClient.signIn.passkey();
 			if (result?.error) {
 				toast.error(result.error.message ?? "Passkey authentication failed.");
+			} else if (returnTo) {
+				window.location.replace(returnTo);
 			} else {
 				navigate({ to: "/" });
 			}
@@ -187,7 +206,10 @@ function RouteComponent() {
 				</div>
 
 				{/* Magic Link Form */}
-				<MagicLinkForm onSuccess={() => setMagicLinkSent(true)} />
+				<MagicLinkForm
+					callbackURL={callbackURL}
+					onSuccess={() => setMagicLinkSent(true)}
+				/>
 
 				{/* Passkey Login */}
 				<div className="mt-6 border-t border-border pt-6">
@@ -218,7 +240,13 @@ function RouteComponent() {
 	);
 }
 
-function MagicLinkForm({ onSuccess }: { onSuccess: () => void }) {
+function MagicLinkForm({
+	callbackURL,
+	onSuccess,
+}: {
+	callbackURL: string;
+	onSuccess: () => void;
+}) {
 	const form = useForm({
 		defaultValues: {
 			email: "",
@@ -226,7 +254,7 @@ function MagicLinkForm({ onSuccess }: { onSuccess: () => void }) {
 		onSubmit: async ({ value }) => {
 			const result = await authClient.signIn.magicLink({
 				email: value.email,
-				callbackURL: `${window.location.origin}/`,
+				callbackURL,
 			});
 			if (result?.error) {
 				toast.error(result.error.message ?? "Failed to send magic link.");

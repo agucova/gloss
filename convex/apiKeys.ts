@@ -1,7 +1,31 @@
 import { v } from "convex/values";
 
-import { internalQuery, mutation, query } from "./_generated/server";
+import {
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 import { requireAuth } from "./lib/auth";
+
+async function hashApiKey(plaintext: string): Promise<string> {
+	const data = new TextEncoder().encode(plaintext);
+	const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+	return Array.from(new Uint8Array(hashBuffer))
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+function generatePlaintextKey(): { plaintext: string; keyPrefix: string } {
+	const bytes = new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	const randomHex = Array.from(bytes)
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
+	const plaintext = `gloss_sk_${randomHex}`;
+	const keyPrefix = plaintext.slice(0, 17);
+	return { plaintext, keyPrefix };
+}
 
 export const create = mutation({
 	args: {
@@ -12,23 +36,8 @@ export const create = mutation({
 	handler: async (ctx, args) => {
 		const { userId } = await requireAuth(ctx);
 
-		// Generate key: gloss_sk_ + 32 random hex chars
-		const bytes = new Uint8Array(16);
-		crypto.getRandomValues(bytes);
-		const randomHex = Array.from(bytes)
-			.map((b) => b.toString(16).padStart(2, "0"))
-			.join("");
-		const plaintext = `gloss_sk_${randomHex}`;
-		const keyPrefix = plaintext.slice(0, 17); // "gloss_sk_" + first 8 hex chars
-
-		// Hash for storage
-		const encoder = new TextEncoder();
-		const data = encoder.encode(plaintext);
-		const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-		const hashArray = Array.from(new Uint8Array(hashBuffer));
-		const keyHash = hashArray
-			.map((b) => b.toString(16).padStart(2, "0"))
-			.join("");
+		const { plaintext, keyPrefix } = generatePlaintextKey();
+		const keyHash = await hashApiKey(plaintext);
 
 		const id = await ctx.db.insert("apiKeys", {
 			userId,
@@ -40,7 +49,34 @@ export const create = mutation({
 			revoked: false,
 		});
 
-		// Return plaintext only on creation (never stored)
+		return { id, key: plaintext, keyPrefix };
+	},
+});
+
+// Mints a key for a userId without requiring a session. Only callable from
+// trusted server-side code (the CLI token-exchange httpAction after PKCE
+// verification succeeds).
+export const createForUser = internalMutation({
+	args: {
+		userId: v.id("users"),
+		name: v.string(),
+		scope: v.union(v.literal("read"), v.literal("write")),
+		expiresAt: v.optional(v.float64()),
+	},
+	handler: async (ctx, args) => {
+		const { plaintext, keyPrefix } = generatePlaintextKey();
+		const keyHash = await hashApiKey(plaintext);
+
+		const id = await ctx.db.insert("apiKeys", {
+			userId: args.userId,
+			name: args.name,
+			keyHash,
+			keyPrefix,
+			scope: args.scope,
+			expiresAt: args.expiresAt,
+			revoked: false,
+		});
+
 		return { id, key: plaintext, keyPrefix };
 	},
 });

@@ -19,7 +19,7 @@
 		"@gloss/anchoring": "workspace:*",
 		"@gloss/dashboard": "workspace:*",
 		"clsx": "^2.1.1",
-		"convex": "^1.32.0",
+		"convex": "^1.35.1",
 		"lucide-react": "^0.473.0",
 		"react": "^19.2.3",
 		"react-dom": "^19.2.3",

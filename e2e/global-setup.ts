@@ -1,18 +1,35 @@
 /**
- * Playwright global setup: verifies Convex dev deployment has seed data.
- *
- * If the seed data is missing, the test suite aborts early with a clear
- * message rather than producing confusing auth failures.
+ * Playwright global setup: verifies Convex dev deployment has seed data, and
+ * ensures the CLI package is built (dist/cli.js + dist/mcp.js exist) before
+ * e2e/cli specs spawn it as a subprocess.
  */
 
 import { ConvexHttpClient } from "convex/browser";
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { SEED_USERS } from "./fixtures/seed-ids";
 
 const CONVEX_URL =
 	process.env.VITE_CONVEX_URL || "https://glorious-toad-644.convex.cloud";
 
+function ensureCliBuilt() {
+	const repoRoot = resolve(__dirname, "..");
+	const cliDist = resolve(repoRoot, "packages/cli/dist/cli.js");
+	const mcpDist = resolve(repoRoot, "packages/cli/dist/mcp.js");
+
+	if (existsSync(cliDist) && existsSync(mcpDist)) return;
+
+	console.log("[global-setup] Building @gloss-space/cli…");
+	execSync("bun run build", {
+		cwd: resolve(repoRoot, "packages/cli"),
+		stdio: "inherit",
+	});
+}
+
 async function globalSetup() {
+	ensureCliBuilt();
 	const client = new ConvexHttpClient(CONVEX_URL);
 
 	try {

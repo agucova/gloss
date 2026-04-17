@@ -38,6 +38,14 @@ export default defineConfig({
 				baseURL: "http://localhost:3001",
 			},
 		},
+		{
+			name: "cli",
+			testDir: "e2e/cli",
+			use: {
+				...devices["Desktop Chrome"],
+				baseURL: "http://localhost:3001",
+			},
+		},
 	],
 
 	// Only the web dev server needs to run locally.

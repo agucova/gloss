@@ -8,7 +8,7 @@ Install and authenticate the Gloss CLI:
 
 ```bash
 # Install globally
-npm install -g @gloss/cli
+npm install -g @gloss-space/cli
 
 # Authenticate via browser
 gloss auth login
@@ -69,7 +69,7 @@ For LLM integration via MCP, run the MCP server:
 gloss-mcp
 
 # Or with npx
-npx @gloss/cli mcp
+npx @gloss-space/cli mcp
 ```
 
 Configure in Claude Desktop or other MCP clients:
@@ -79,7 +79,7 @@ Configure in Claude Desktop or other MCP clients:
 	"mcpServers": {
 		"gloss": {
 			"command": "npx",
-			"args": ["@gloss/cli", "mcp"],
+			"args": ["@gloss-space/cli", "mcp"],
 			"env": { "GLOSS_API_KEY": "gloss_sk_..." }
 		}
 	}

@@ -17,6 +17,7 @@ import { Route as LibraryRouteImport } from './routes/library'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as USetupRouteImport } from './routes/u/setup'
 import { Route as UUsernameRouteImport } from './routes/u/$username'
+import { Route as CliAuthorizeRouteImport } from './routes/cli/authorize'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -58,6 +59,11 @@ const UUsernameRoute = UUsernameRouteImport.update({
   path: '/u/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CliAuthorizeRoute = CliAuthorizeRouteImport.update({
+  id: '/cli/authorize',
+  path: '/cli/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/read-later': typeof ReadLaterRoute
   '/settings': typeof SettingsRoute
+  '/cli/authorize': typeof CliAuthorizeRoute
   '/u/$username': typeof UUsernameRoute
   '/u/setup': typeof USetupRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/read-later'
     | '/settings'
+    | '/cli/authorize'
     | '/u/$username'
     | '/u/setup'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ReadLaterRoute: typeof ReadLaterRoute
   SettingsRoute: typeof SettingsRoute
+  CliAuthorizeRoute: typeof CliAuthorizeRoute
   UUsernameRoute: typeof UUsernameRoute
   USetupRoute: typeof USetupRoute
 }
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cli/authorize': {
+      id: '/cli/authorize'
+      path: '/cli/authorize'
+      fullPath: '/cli/authorize'
+      preLoaderRoute: typeof CliAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ReadLaterRoute: ReadLaterRoute,
   SettingsRoute: SettingsRoute,
+  CliAuthorizeRoute: CliAuthorizeRoute,
   UUsernameRoute: UUsernameRoute,
   USetupRoute: USetupRoute,
 }

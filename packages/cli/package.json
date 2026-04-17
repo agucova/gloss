@@ -1,15 +1,32 @@
 {
-	"name": "@gloss/cli",
-	"version": "0.0.1",
-	"description": "Gloss CLI client for highlights, bookmarks, and comments",
+	"name": "@gloss-space/cli",
+	"version": "0.1.0",
+	"description": "Gloss CLI + MCP server: search and list your highlights, bookmarks, and tags from the command line or a local MCP client.",
+	"keywords": [
+		"annotations",
+		"bookmarks",
+		"cli",
+		"gloss",
+		"highlights",
+		"mcp",
+		"model-context-protocol"
+	],
+	"homepage": "https://gloss.space",
 	"license": "MIT",
 	"author": "Agustín Covarrubias",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agucova/gloss.git",
+		"directory": "packages/cli"
+	},
 	"bin": {
 		"gloss": "dist/cli.js",
 		"gloss-mcp": "dist/mcp.js"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"README.md",
+		"LICENSE"
 	],
 	"type": "module",
 	"exports": {
@@ -18,10 +35,14 @@
 			"import": "./dist/index.js"
 		}
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "tsup",
 		"dev": "tsup --watch",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "bun test"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.0.0",

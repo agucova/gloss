@@ -2,7 +2,7 @@ import { v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { cascadeDeleteHighlight } from "./lib/cascade";
 import { getFriendIds } from "./lib/friends";
@@ -117,6 +117,19 @@ export const listMine = query({
 		return ctx.db
 			.query("highlights")
 			.withIndex("by_userId", (q) => q.eq("userId", auth.userId))
+			.order("desc")
+			.paginate(args.paginationOpts);
+	},
+});
+
+// Internal variant for API-key-authenticated HTTP actions. Caller must have
+// already validated the bearer token and resolved the userId.
+export const listByUserInternal = internalQuery({
+	args: { userId: v.id("users"), paginationOpts: v.any() },
+	handler: async (ctx, args) => {
+		return ctx.db
+			.query("highlights")
+			.withIndex("by_userId", (q) => q.eq("userId", args.userId))
 			.order("desc")
 			.paginate(args.paginationOpts);
 	},

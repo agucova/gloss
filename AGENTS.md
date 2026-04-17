@@ -88,7 +88,7 @@ convex/         # Convex backend: schema, queries/mutations/actions, HTTP routes
 
 packages/
   anchoring/    # W3C Web Annotation selectors (range/text-position/text-quote)
-  cli/          # @gloss/cli + MCP server (tsup build, unpublished)
+  cli/          # @gloss-space/cli + MCP server (tsup build, read-only API key access)
   config/       # Shared tsconfig
   curius/       # Reverse-engineered Curius client (highlight import)
   dashboard/    # Shared dashboard UI components

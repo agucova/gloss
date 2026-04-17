@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { getAuthenticatedUser, requireAuth } from "./lib/auth";
 import { areFriends, getFriendIds } from "./lib/friends";
 
@@ -42,6 +42,14 @@ export const getMe = query({
 			bookmarkCount: bookmarks.length,
 			friendCount: friendIds.length,
 		};
+	},
+});
+
+// Internal variant for API-key-authenticated HTTP actions.
+export const getByUserInternal = internalQuery({
+	args: { userId: v.id("users") },
+	handler: async (ctx, args) => {
+		return ctx.db.get(args.userId);
 	},
 });
 

@@ -20,7 +20,7 @@ apps/
 convex/         # Convex functions, schema, HTTP routes, seed, unit tests
 packages/
   anchoring/    # W3C Web Annotation selectors (range/text-position/text-quote)
-  cli/          # @gloss/cli + MCP server (unpublished, untested end-to-end)
+  cli/          # @gloss-space/cli + MCP server
   config/       # Shared TypeScript configs
   curius/       # Reverse-engineered Curius client (highlight import)
   dashboard/    # Shared dashboard UI pieces

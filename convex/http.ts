@@ -50,6 +50,93 @@ async function validateApiKeyFromRequest(
 	return result ?? null;
 }
 
+// ─── CLI OAuth (PKCE) endpoints ─────────────────────
+// Browser-initiated PKCE flow that mints an API key without the CLI ever
+// holding the user's session. See packages/cli/src/lib/oauth.ts for the
+// client side.
+
+http.route({
+	path: "/api/auth/cli/authorize",
+	method: "GET",
+	handler: httpAction(async (ctx, request) => {
+		const url = new URL(request.url);
+		const codeChallenge = url.searchParams.get("code_challenge");
+		const redirectUri = url.searchParams.get("redirect_uri");
+		const state = url.searchParams.get("state");
+
+		if (!codeChallenge || !redirectUri || !state) {
+			return json({ error: "Missing required parameters" }, 400);
+		}
+
+		let requestId: string;
+		try {
+			const result = await ctx.runMutation(
+				internal.cliAuth.createPendingRequest,
+				{ codeChallenge, redirectUri, state }
+			);
+			requestId = result.requestId;
+		} catch (err) {
+			return json(
+				{ error: err instanceof Error ? err.message : "invalid_request" },
+				400
+			);
+		}
+
+		const siteUrl = process.env.SITE_URL;
+		if (!siteUrl) {
+			return json({ error: "Server misconfigured: SITE_URL unset" }, 500);
+		}
+		const consentUrl = new URL("/cli/authorize", siteUrl);
+		consentUrl.searchParams.set("request", requestId);
+		return new Response(null, {
+			status: 302,
+			headers: { Location: consentUrl.toString() },
+		});
+	}),
+});
+
+http.route({
+	path: "/api/auth/cli/token",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		let body: { code?: string; code_verifier?: string; auth_id?: string };
+		try {
+			body = (await request.json()) as typeof body;
+		} catch {
+			return json({ error: "Invalid JSON body" }, 400);
+		}
+
+		const { code, code_verifier, auth_id } = body;
+		if (!code || !code_verifier || !auth_id) {
+			return json({ error: "Missing code, code_verifier, or auth_id" }, 400);
+		}
+
+		try {
+			const result = await ctx.runMutation(internal.cliAuth.exchangeForApiKey, {
+				requestId: auth_id as any,
+				authCode: code,
+				codeVerifier: code_verifier,
+			});
+			return json({
+				api_key: result.apiKey,
+				key_id: result.keyId,
+				scope: result.scope,
+			});
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "invalid_grant";
+			return json({ error: message }, 400);
+		}
+	}),
+});
+
+http.route({
+	path: "/api/auth/cli/token",
+	method: "OPTIONS",
+	handler: httpAction(async () => {
+		return new Response(null, { status: 204, headers: corsHeaders() });
+	}),
+});
+
 // ─── CLI API endpoints ──────────────────────────────
 // These provide REST-like access for the CLI and MCP server,
 // authenticated via API key Bearer tokens.
@@ -65,8 +152,8 @@ http.route({
 		const q = url.searchParams.get("q");
 		if (!q) return json({ error: "Query parameter 'q' is required" }, 400);
 
-		const { api } = await import("./_generated/api");
-		const results = await ctx.runQuery(api.search.search, {
+		const results = await ctx.runQuery(internal.search.searchByUserInternal, {
+			userId: auth.userId as any,
 			q,
 			limit: Number(url.searchParams.get("limit")) || 20,
 			types: url.searchParams.get("types")?.split(","),
@@ -114,8 +201,8 @@ http.route({
 		const url = new URL(request.url);
 		const limit = Number(url.searchParams.get("limit")) || 20;
 
-		const { api } = await import("./_generated/api");
-		const result = await ctx.runQuery(api.highlights.listMine, {
+		const result = await ctx.runQuery(internal.highlights.listByUserInternal, {
+			userId: auth.userId as any,
 			paginationOpts: { numItems: limit, cursor: null },
 		});
 
@@ -143,8 +230,8 @@ http.route({
 		const url = new URL(request.url);
 		const limit = Number(url.searchParams.get("limit")) || 20;
 
-		const { api } = await import("./_generated/api");
-		const result = await ctx.runQuery(api.bookmarks.list, {
+		const result = await ctx.runQuery(internal.bookmarks.listByUserInternal, {
+			userId: auth.userId as any,
 			paginationOpts: { numItems: limit, cursor: null },
 		});
 
@@ -169,8 +256,9 @@ http.route({
 		const auth = await validateApiKeyFromRequest(ctx, request);
 		if (!auth) return json({ error: "Authentication required" }, 401);
 
-		const { api } = await import("./_generated/api");
-		const tags = await ctx.runQuery(api.bookmarks.listTags, {});
+		const tags = await ctx.runQuery(internal.bookmarks.listTagsByUserInternal, {
+			userId: auth.userId as any,
+		});
 
 		return json({
 			tags: (tags as any[]).map((t: any) => ({
@@ -190,8 +278,9 @@ http.route({
 		const auth = await validateApiKeyFromRequest(ctx, request);
 		if (!auth) return json({ error: "Authentication required" }, 401);
 
-		const { api } = await import("./_generated/api");
-		const user = await ctx.runQuery(api.users.getMe);
+		const user = await ctx.runQuery(internal.users.getByUserInternal, {
+			userId: auth.userId as any,
+		});
 		if (!user) return json({ error: "User not found" }, 404);
 
 		return json({

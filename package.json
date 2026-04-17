@@ -37,12 +37,13 @@
 		"format:check": "oxfmt --check .",
 		"test": "bun run test:convex && bun run test:packages",
 		"test:convex": "vitest run --config convex/vitest.config.ts --dir convex",
-		"test:packages": "bun --filter '@gloss/anchoring' --filter '@gloss/curius' test",
+		"test:packages": "bun --filter '@gloss/anchoring' --filter '@gloss/curius' --filter '@gloss-space/cli' test",
 		"test:watch": "vitest --config convex/vitest.config.ts --dir convex",
 		"test:coverage": "vitest run --config convex/vitest.config.ts --dir convex --coverage",
 		"e2e": "bunx playwright test",
 		"e2e:extension": "bunx playwright test --project=extension",
 		"e2e:web": "bunx playwright test --project=web",
+		"e2e:cli": "bunx playwright test --project=cli",
 		"e2e:headed": "bunx playwright test --headed",
 		"e2e:ui": "bunx playwright test --ui",
 		"e2e:report": "bunx playwright show-report"
@@ -51,7 +52,7 @@
 		"@better-auth/passkey": "^1.4.19",
 		"@convex-dev/better-auth": "^0.10.12",
 		"better-auth": "1.4.19",
-		"convex": "^1.32.0",
+		"convex": "^1.35.1",
 		"dotenv": "^17.2.3",
 		"resend": "^6.9.2",
 		"zod": "^4.3.6"

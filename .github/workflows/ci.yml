@@ -168,6 +168,84 @@ jobs:
             test-results
           retention-days: 14
 
+  e2e-cli:
+    name: e2e-cli
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+
+      - name: Compute preview name
+        id: preview
+        run: |
+          raw="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          sanitized="ci-cli-$(echo "$raw" | tr '/' '-' | tr -cd 'a-zA-Z0-9-' | cut -c1-46)"
+          echo "name=$sanitized" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Convex preview + export URL
+        run: |
+          # shellcheck disable=SC2016
+          bunx convex deploy \
+            --preview-create "${{ steps.preview.outputs.name }}" \
+            --cmd 'echo VITE_CONVEX_URL=$VITE_CONVEX_URL >> $GITHUB_ENV' \
+            --cmd-url-env-var-name VITE_CONVEX_URL
+
+      - name: Derive Convex site URL
+        run: |
+          echo "VITE_CONVEX_SITE_URL=${VITE_CONVEX_URL/.convex.cloud/.convex.site}" >> "$GITHUB_ENV"
+
+      - name: Set backend env on preview (incl. ALLOW_DEV_MINT for test helper)
+        run: |
+          bunx convex env set --preview-name "${{ steps.preview.outputs.name }}" \
+            BETTER_AUTH_SECRET "${{ secrets.BETTER_AUTH_SECRET_CI }}"
+          bunx convex env set --preview-name "${{ steps.preview.outputs.name }}" \
+            SITE_URL "http://localhost:3001"
+          bunx convex env set --preview-name "${{ steps.preview.outputs.name }}" \
+            ALLOW_DEV_MINT "true"
+
+      - name: Seed preview
+        run: |
+          bunx convex run --preview-name "${{ steps.preview.outputs.name }}" seed:run
+
+      - name: Build CLI (dist/cli.js + dist/mcp.js)
+        run: bun --cwd packages/cli run build
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps chromium
+
+      - name: Run CLI E2E
+        env:
+          CONVEX_PREVIEW_NAME: ${{ steps.preview.outputs.name }}
+        run: bun run e2e:cli
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-cli
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
   # TODO(extension-e2e): apps/extension/utils/api.ts hardcodes
   # DEFAULT_CONVEX_URL, so extension E2E cannot target a CI preview deployment.
   # Wire extension to read VITE_CONVEX_URL at build time, then add an
