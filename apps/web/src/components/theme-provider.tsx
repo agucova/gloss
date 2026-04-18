@@ -1,5 +1,5 @@
 import { api } from "@convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { Authenticated, useMutation, useQuery } from "convex/react";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import { useCallback, useEffect, useRef, type ComponentProps } from "react";
 
@@ -9,7 +9,9 @@ export function ThemeProvider({
 }: ComponentProps<typeof NextThemesProvider>) {
 	return (
 		<NextThemesProvider {...props}>
-			<ThemeSync />
+			<Authenticated>
+				<ThemeSync />
+			</Authenticated>
 			{children}
 		</NextThemesProvider>
 	);

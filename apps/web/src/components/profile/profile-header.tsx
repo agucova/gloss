@@ -2,7 +2,7 @@ import type { Id } from "@convex/_generated/dataModel";
 
 import { api } from "@convex/_generated/api";
 import { useMutation } from "convex/react";
-import { Github, Globe, Twitter } from "lucide-react";
+import { Globe } from "lucide-react";
 import Markdown from "react-markdown";
 import { toast } from "sonner";
 
@@ -10,6 +10,36 @@ import { Button } from "@/components/ui/button";
 
 const WWW_REGEX = /^www\./;
 const WHITESPACE_RE = /\s+/;
+
+function Github({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			fill="currentColor"
+			role="img"
+			viewBox="0 0 24 24"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<title>GitHub</title>
+			<path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.42-4.04-1.42-.55-1.4-1.34-1.77-1.34-1.77-1.1-.75.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.08 1.85 2.83 1.32 3.52 1 .11-.78.42-1.32.76-1.62-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.1-3.17 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6.01 0c2.3-1.55 3.3-1.23 3.3-1.23.65 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" />
+		</svg>
+	);
+}
+
+function Twitter({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			fill="currentColor"
+			role="img"
+			viewBox="0 0 24 24"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<title>X</title>
+			<path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+		</svg>
+	);
+}
 
 const AVATAR_COLORS = [
 	{

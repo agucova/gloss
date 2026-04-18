@@ -9,7 +9,7 @@ import { convex } from "./utils/api";
 
 const router = createRouter({
 	routeTree,
-	defaultPreload: "intent",
+	defaultPreload: "viewport",
 	defaultPendingComponent: () => <Loader />,
 	context: {},
 });

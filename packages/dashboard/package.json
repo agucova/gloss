@@ -1,6 +1,7 @@
 {
 	"name": "@gloss/dashboard",
 	"type": "module",
+	"sideEffects": false,
 	"exports": {
 		".": {
 			"default": "./src/index.ts"
@@ -12,7 +13,7 @@
 	"scripts": {},
 	"dependencies": {
 		"clsx": "^2.1.1",
-		"lucide-react": "^0.473.0",
+		"lucide-react": "^1.8.0",
 		"tailwind-merge": "^3.3.1"
 	},
 	"devDependencies": {

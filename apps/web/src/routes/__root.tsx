@@ -3,8 +3,8 @@ import {
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Authenticated } from "convex/react";
+import { lazy, Suspense } from "react";
 
 import Header from "@/components/header";
 import { PasskeyPrompt } from "@/components/passkey-prompt";
@@ -12,6 +12,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 import "../index.css";
+
+const TanStackRouterDevtools = import.meta.env.PROD
+	? () => null
+	: lazy(() =>
+			import("@tanstack/react-router-devtools").then((m) => ({
+				default: m.TanStackRouterDevtools,
+			}))
+		);
 
 export const Route = createRootRouteWithContext()({
 	component: RootComponent,
@@ -47,7 +55,9 @@ function RootComponent() {
 				<Toaster richColors />
 				<PasskeyPrompt />
 			</ThemeProvider>
-			<TanStackRouterDevtools position="bottom-left" />
+			<Suspense fallback={null}>
+				<TanStackRouterDevtools position="bottom-left" />
+			</Suspense>
 		</>
 	);
 }

@@ -3,9 +3,15 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { defineConfig } from "vite";
+import lucidePreprocess from "vite-plugin-lucide-preprocess";
 
 export default defineConfig(() => ({
-	plugins: [tailwindcss(), tanstackRouter({}), react()],
+	plugins: [
+		lucidePreprocess(),
+		tailwindcss(),
+		tanstackRouter({ autoCodeSplitting: true }),
+		react(),
+	],
 	// Load .env from monorepo root
 	envDir: path.resolve(__dirname, "../.."),
 	resolve: {
